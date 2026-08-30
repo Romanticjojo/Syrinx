@@ -107,14 +107,21 @@ const back = await evalJs(`(() => {
 console.log('re-hover(+150ms):', JSON.stringify(back))
 
 /* ---------- 2/3/4. 演奏页 ---------- */
+await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: card.x, y: 40 }) // 先移开 hover
 await evalJs(`document.querySelector('.home-hero')?.click(); 1`)
 await sleep(2500)
-const play = await evalJs(`(() => {
-  const b = [...document.querySelectorAll('button')].find(x => x.innerText.includes('开始演奏'))
-  if (b) { b.click(); return 'clicked' }
+const toPerform = await evalJs(`(() => {
+  const b = document.querySelector('[aria-label="开始演奏"], .btn-play-big')
+  if (b) { b.click(); return 'preview-clicked' }
   return 'not-found'
 })()`)
-console.log('start:', play)
+await sleep(2000)
+const play = await evalJs(`(() => {
+  const b = [...document.querySelectorAll('button')].find(x => x.innerText.includes('开始演奏'))
+  if (b) { b.click(); return 'perform-ready' }
+  return 'not-found'
+})()`)
+console.log('start:', toPerform, play)
 // 4 拍倒数（90bpm ≈ 2.67s）+ 启动余量
 await sleep(5000)
 
@@ -125,18 +132,20 @@ for (let k = 0; k < 6; k++) {
     const hud = [...document.querySelectorAll('.hud-stat .num')].map(e => e.textContent)
     // accent 色符头：OSMD setColor 直接写 fill 属性
     const lit = document.querySelectorAll('[fill="#5fb8a8"]').length
-    // 视频可见性：取谱面面板外的边缘点，看顶到的是不是视频层/透明层
+    // 视频可见性：元素有尺寸且在视口内；面板半透（0.45）所以谱面区也能透出视频
     const corner = document.elementFromPoint(6, 400)
     let vis = 'unknown'
     if (v) {
       const cs = getComputedStyle(v)
       const r = v.getBoundingClientRect()
-      vis = { display: cs.display, opacity: cs.opacity, w: r.width, h: r.height, inView: r.bottom > 0 && r.right > 0 }
+      vis = { display: cs.display, opacity: cs.opacity, w: r.width, h: r.height,
+              inView: r.top < innerHeight && r.bottom > 0 && r.width > 100 }
     }
     return {
       video: v ? { paused: v.paused, t: +v.currentTime.toFixed(2), vis } : null,
       hud,
       litHeads: lit,
+      measure: hud[0],
       corner: corner ? corner.className?.toString?.().slice(0, 40) ?? corner.tagName : null,
     }
   })()`)
@@ -148,14 +157,16 @@ for (let k = 0; k < 6; k++) {
 
 // 变色符头应随播放移动：至少两个采样点的 litHeads > 0，且期间 HUD 时间在推进
 const litOk = samples.filter(s => s.litHeads > 0).length
-const times = samples.map(s => s.hud.find(t => t.includes('/')) ?? '')
-const timeAdvancing = new Set(times).size > 1
+const times = samples.map(s => s.measure ?? '')
+const timeAdvancing = new Set(samples.map(s => s.hud[1])).size > 1
+const measureAdvancing = new Set(times).size > 1
 const videoOk = samples.every(s => s.video && !s.video.paused && s.video.vis.display === 'block' && s.video.vis.inView)
 console.log('---')
 console.log('RESULT video playing+visible:', videoOk)
 console.log('RESULT note coloring active:', litOk >= 3, `(${litOk}/6 samples lit)`)
-console.log('RESULT hud time advancing:', timeAdvancing, times.join(' → '))
-console.log('RESULT hud total (expect 4:29):', times[0]?.split('/')[1]?.trim())
+console.log('RESULT hud time advancing:', timeAdvancing, samples.map(s => s.hud[1]).join(' → '))
+console.log('RESULT measure hud advancing:', measureAdvancing, times.join(' → '))
+console.log('RESULT hud total (expect 4:29):', samples[0]?.hud[1]?.split('/')[1]?.trim())
 console.log('CONSOLE ERRORS:', consoleErrors.length ? JSON.stringify(consoleErrors.slice(0, 6)) : 'none')
 child.kill()
-process.exit(videoOk && litOk >= 3 && timeAdvancing ? 0 : 1)
+process.exit(videoOk && litOk >= 3 && timeAdvancing && measureAdvancing ? 0 : 1)

@@ -19,6 +19,8 @@ export class OSMDScore {
   private totalMeasures = 0
   private accent: string
   private baseNoteColor: string
+  /** dispose 后作废在途 load：StrictMode 双挂载下防僵尸渲染（容器里出现两份谱面） */
+  private disposed = false
   /** 上一帧被染色的 GraphicalNote：一帧至多一个当前音，离开时恢复 */
   private highlighted: { setColor: (c: string, o?: unknown) => void } | null = null
   /** 小节变化回调（rAF 中触发，直接操作 DOM，勿 setState） */
@@ -53,6 +55,7 @@ export class OSMDScore {
 
   async load(xml: string, timeline: Timeline): Promise<void> {
     await this.osmd.load(xml)
+    if (this.disposed) return
     this.osmd.render()
     this.secPerQuarter = timeline.secPerQuarter
     this.measureTimes = timeline.measureTimes
@@ -125,6 +128,7 @@ export class OSMDScore {
   }
 
   dispose(): void {
+    this.disposed = true
     // OSMD 无 dispose API；清空容器释放 DOM
     this.containerEl.innerHTML = ''
   }
