@@ -39,24 +39,27 @@ const VOICES_XML = `<?xml version="1.0" encoding="UTF-8"?>
   </part>
 </score-partwise>`
 
-describe('parseMusicXml 多声部（backup/forward）', () => {
+describe('parseMusicXml 多声部（backup/forward + 单声部过滤）', () => {
   const tl = parseMusicXml(VOICES_XML)
 
-  it('backup 回退游标：voice2 的音落在正确时间', () => {
-    // voice1: C5 @0s(2拍) + rest 2拍；backup 回到 0；voice2: rest 1拍 + forward 1拍 + E4 @2s(2拍)
-    const c5 = tl.notes.find((n) => n.midi === 72)
-    const e4 = tl.notes.find((n) => n.midi === 64)
-    expect(c5).toMatchObject({ time: 0, measure: 1 })
-    expect(e4).toMatchObject({ time: 2, duration: 2, measure: 1 })
+  it('主声部（首个出现的 voice）正常发声', () => {
+    // voice1: C5 @0s(2拍) + rest 2拍
+    expect(tl.notes.find((n) => n.midi === 72)).toMatchObject({ time: 0, measure: 1 })
   })
 
-  it('backup 不推进小节总时长：measureTimes[1] 不存在，durationSec=4s', () => {
+  it('单声部保险：其他 voice 只占时不发声（t_d02450b9 假声部双保险）', () => {
+    // backup 后 voice2 的 E4 不产生音符事件
+    expect(tl.notes.find((n) => n.midi === 64)).toBeUndefined()
+  })
+
+  it('过滤不影响游标数学：backup 不推进小节总时长，小节网格仍是 4s', () => {
     // 单小节 4 拍 @60bpm = 4s；backup/forward 不应使游标溢出到 8 拍
     expect(tl.measureTimes).toEqual([
       { measure: 1, time: 0, quarters: 0 },
       { measure: 2, time: 4, quarters: 4, end: true },
     ])
-    expect(tl.durationSec).toBe(4)
+    // durationSec 按发声末音（voice2 过滤后只剩 C5，2s 处收束）
+    expect(tl.durationSec).toBe(2)
   })
 })
 

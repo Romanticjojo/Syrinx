@@ -8,8 +8,8 @@ const STEP_SEMITONE: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A:
  * 为什么展开而不是让光标跳：OSMD cursor iterator 默认不跳 repeat，跳段需要自定义路径，
  * 且展开后 timeline 小节序与谱面渲染序一一对应，音符变色（accent 高亮）顺序天然一致。
  * 约定：单层反复、每段演奏两遍（标准写法）；检测到 D.C./D.S./Coda 不支持，原样返回。
- * luv-letter 的伴奏经时长论证为线性贯穿版（线性 269.4s ≈ 伴奏 270.4s，展开反而 308s），
- * 其谱面的 OMR 噪声 repeat 标记已在清洗时摘除，本函数对其是 no-op（见 clean-flute-score.py）。
+ * luv-letter 的伴奏经时长论证为线性覆盖版（反复段按印刷顺序物化为独立小节，
+ * 73 小节完整谱，t_d02450b9），谱面无 repeat 标记，本函数对其是 no-op。
  */
 export function expandRepeats(xml: string): string {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
@@ -73,8 +73,10 @@ export function expandRepeats(xml: string): string {
 
 /**
  * MusicXML → 统一时间轴（纯函数）。
- * 约定：取第一个 part 的第一个 voice；全曲恒速（首个 tempo）；
+ * 约定：取第一个 part 的首个 voice（长笛独奏谱 = voice 1）；全曲恒速（首个 tempo）；
  * 支持中途 direction 变速累计；休止符/和弦备选音占时值但不产生音符事件。
+ * 单声部保险（t_d02450b9）：OMR 假声部（voice 2/3）不再产生音符事件——
+ * 游标仍按全部音符推进（backup/forward 数学不变），只过滤发声，双保险防假音污染。
  */
 export function parseMusicXml(xml: string): Timeline {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
@@ -94,6 +96,8 @@ export function parseMusicXml(xml: string): Timeline {
 
   const notes: NoteEvent[] = []
   const measureTimes: { measure: number; time: number; quarters: number; end?: true }[] = []
+  // 首个出现的 voice 为主声部；其后其他 voice 的音符只占时不发声
+  let mainVoice: string | null = null
 
   // 以"四分音符数"为游标，最后统一乘 secPerQuarter
   let cursorQuarters = 0
@@ -147,7 +151,11 @@ export function parseMusicXml(xml: string): Timeline {
       const isRest = !!el.querySelector('rest')
       const isChordExtra = !!el.querySelector('chord')
       const pitch = el.querySelector('pitch')
-      if (pitch && !isRest) {
+      const voiceEl = el.querySelector('voice')
+      const voice = voiceEl?.textContent ?? null
+      if (mainVoice === null && voice !== null && !isRest) mainVoice = voice
+      const isMainVoice = voice === null || mainVoice === null || voice === mainVoice
+      if (pitch && !isRest && isMainVoice) {
         const step = pitch.querySelector('step')?.textContent ?? 'C'
         const alter = Number(pitch.querySelector('alter')?.textContent ?? '0') || 0
         const octave = Number(pitch.querySelector('octave')?.textContent ?? '4')

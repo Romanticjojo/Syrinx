@@ -17,9 +17,9 @@ export interface BeatsFile {
 /**
  * 伴奏锚点重写时间轴（方案 B：伴奏驱动光标）。
  *
- * 为什么需要：luv-letter 的 OMR 谱缺失约 36 个伴奏小节，XML 里用假 tempo
- * （50/56.5/50）把 62 小节撑到 269.4s 凑伴奏总长——总长对但逐拍错位，光标
- * 越走越快于伴奏乐句。锚点给出每个谱面小节在伴奏里的真实起始时刻。
+ * 为什么需要：luv-letter 伴奏含反复段，恒速谱面时间轴与伴奏乐句天然错位；
+ * 锚点给出每个谱面小节在伴奏里的真实起始时刻（73 小节完整谱 + 伴奏实测，
+ * 任务 t_d02450b9；早期 62 小节谱的假 tempo 凑长方案已废弃）。
  *
  * 改写内容：
  * - measureTimes[].time → 锚点时刻（有锚点的小节直接用；缺锚点的按四分音符
@@ -76,10 +76,20 @@ export function applyBeats(timeline: Timeline, beats: BeatsFile): Timeline {
     return { ...n, time, duration }
   })
 
+  // durationSec 同步重映射到锚定系（t_d02450b9）：恒速网格的旧值在诚实 bpm 谱上
+  // 会远小于伴奏锚点终点，导致演奏主循环提前判定结束。取「末音结束」与
+  // 「终点标记锚定时刻」的较大者（末小节整小节休止时仅后者有效）。
+  const anchoredEnd = Math.max(...anchored.map((t) => t ?? 0))
+  const durationSec = Math.max(
+    notes.reduce((end, n) => Math.max(end, n.time + n.duration), 0),
+    anchoredEnd,
+  )
+
   return {
     ...timeline,
     tempo: beats.bpm,
     secPerQuarter: spq,
+    durationSec,
     measureTimes: mt.map((e, i) => ({ ...e, time: Math.max(0, anchored[i]!) })),
     notes,
   }

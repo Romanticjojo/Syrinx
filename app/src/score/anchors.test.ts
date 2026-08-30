@@ -75,21 +75,28 @@ describe('applyBeats 伴奏锚点重写', () => {
     expect(applyBeats(tl, beats)).toBe(tl)
   })
 
-  it('luv-letter 真实数据：62 小节锚点落地，m1≈0.2s、m62≈261.75s（t_3b9cfc25）', () => {
+  it('luv-letter 真实数据：73 小节锚点落地，m1≈0.2s、m73≈256s（t_d02450b9）', () => {
     const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8')
     const beats = JSON.parse(
       readFileSync('public/songs/luv-letter/beats.json', 'utf-8'),
     ) as BeatsFile
-    expect(beats.anchors).toHaveLength(62)
+    expect(beats.anchors).toHaveLength(73)
     const out = applyBeats(parseMusicXml(xml), beats)
     expect(out.tempo).toBe(90)
     expect(out.measureTimes[0].time).toBeCloseTo(beats.anchors[0].t, 2)
-    expect(out.measureTimes[61].time).toBeCloseTo(beats.anchors[61].t, 2)
-    // 逐拍错位修复的直接体现：m20 锚点 ≈70s 量级（假 tempo 时间轴是 87.7s，差 17s）
-    expect(out.measureTimes[19].time).toBeLessThan(75)
-    // 音符重映射后不早于其小节锚点
-    const m20 = out.notes.filter((n) => n.measure === 20)
-    expect(m20.length).toBeGreaterThan(0)
-    expect(Math.min(...m20.map((n) => n.time))).toBeGreaterThanOrEqual(out.measureTimes[19].time - 0.01)
+    expect(out.measureTimes[72].time).toBeCloseTo(beats.anchors[72].t, 2)
+    // 终点标记：末锚点 + 4 拍 @90bpm 外推
+    expect(out.measureTimes[73].time).toBeCloseTo(beats.anchors[72].t + 4 * (60 / 90), 2)
+    // durationSec 同步重映射到锚定系（t_d02450b9）：否则恒速网格旧值（≈194.7s）
+    // 会让演奏主循环在 ~197s 提前判定结束
+    expect(out.durationSec).toBeCloseTo(beats.anchors[72].t + 4 * (60 / 90), 2)
+    // 音符重映射后不早于其小节锚点（抽查补全小节 m62 与末小节 m73）
+    for (const mno of [62, 73]) {
+      const ns = out.notes.filter((n) => n.measure === mno)
+      expect(ns.length).toBeGreaterThan(0)
+      expect(Math.min(...ns.map((n) => n.time))).toBeGreaterThanOrEqual(
+        out.measureTimes[mno - 1].time - 0.01,
+      )
+    }
   })
 })
