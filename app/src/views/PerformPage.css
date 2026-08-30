@@ -281,6 +281,25 @@
   color: var(--ink-dim);
 }
 
+/* 降级提示 toast（麦克风不可用等），悬于控制条上方 */
+.perform-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: 10px 20px;
+  border-radius: var(--pill);
+  background: rgba(24, 22, 22, 0.9);
+  border: 1px solid rgba(243, 114, 127, 0.4);
+  color: var(--rec);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  box-shadow: var(--shadow-lg);
+  animation: ov-in 0.2s ease;
+  white-space: nowrap;
+}
+
 @media (max-width: 640px) {
   .hud-top {
     padding: 12px 16px 8px;

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
+import { startRecording, type Recorder } from '../audio/recorder'
 import { synthAccompaniment } from '../audio/synth'
 import { LumiereScene } from '../background/LumiereScene'
 import ControlBar from '../components/ControlBar'
@@ -35,6 +36,7 @@ export default function PerformPage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [xml, setXml] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<Timeline | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   // rAF 循环用的 ref 镜像（避开闭包过期）
   const timelineRef = useRef<Timeline | null>(null)
@@ -43,6 +45,9 @@ export default function PerformPage() {
   const finishedRef = useRef(false)
   const countdownRef = useRef({ t0: 0, beat: 0.7 })
   const idleTimer = useRef(0)
+  const toastTimer = useRef(0)
+  const recRef = useRef<Recorder | null>(null)
+  const takeStartedAt = useRef(0)
 
   const scoreRef = useRef<OSMDScore | null>(null)
   const shellRef = useRef<HTMLDivElement>(null)
@@ -65,7 +70,14 @@ export default function PerformPage() {
     }, IDLE_MS)
   }, [])
 
-  /** 演奏结束：收音、出结束浮层、稍候去回放页 */
+  /** 轻提示（麦克风不可用等降级场景），3 秒自动消失 */
+  const showToast = useCallback((msg: string) => {
+    setToast(msg)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  /** 演奏结束：收音、封存 Take（录音 + 占位统计）、稍候去回放页 */
   const finish = useCallback(() => {
     if (finishedRef.current) return
     finishedRef.current = true
@@ -74,8 +86,31 @@ export default function PerformPage() {
     setPlaying(false)
     shellRef.current?.classList.remove('idle')
     setPhase('ended')
+
+    // 停录音并封存本次 Take（音高分析在回放页按需进行）
+    const rec = recRef.current
+    recRef.current = null
+    const durationSec = audioEngine.time
+    if (rec) {
+      rec
+        .stop()
+        .then(({ url, mime }) => {
+          const prev = useAppStore.getState().lastTake
+          if (prev?.audioUrl) URL.revokeObjectURL(prev.audioUrl)
+          useAppStore.getState().setTake({
+            songId: song.id,
+            startedAt: takeStartedAt.current || Date.now(),
+            durationSec,
+            audioUrl: url,
+            mimeType: mime,
+            pitchTrack: null,
+            stats: null,
+          })
+        })
+        .catch(() => showToast('录音保存失败，回放页将无录音'))
+    }
     window.setTimeout(() => go('result'), 1200)
-  }, [go])
+  }, [go, showToast, song.id])
 
   // 进入即装配：曲谱解析 → 伴奏合成 → 装入主时钟（就绪前由浮层遮罩）
   useEffect(() => {
@@ -105,6 +140,16 @@ export default function PerformPage() {
       audioEngine.onEnd = undefined
       audioEngine.pause()
       clearTimeout(idleTimer.current)
+      clearTimeout(toastTimer.current)
+      // 中途退出：停掉进行中的录音并丢弃（只封存完整演奏的 Take）
+      const rec = recRef.current
+      recRef.current = null
+      if (rec) {
+        rec
+          .stop()
+          .then(({ url }) => URL.revokeObjectURL(url))
+          .catch(() => {})
+      }
     }
     // song 由 currentSongId 派生，进入本页才加载一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,6 +217,13 @@ export default function PerformPage() {
         playingRef.current = true
         setPlaying(true)
         setPhase('performing')
+        // 起奏即开录；麦克风不可用则提示后继续演奏（不阻断）
+        takeStartedAt.current = Date.now()
+        startRecording()
+          .then((r) => {
+            recRef.current = r
+          })
+          .catch(() => showToast('麦克风不可用，本次演奏不录音'))
         return
       }
       if (countEl.current)
@@ -180,7 +232,7 @@ export default function PerformPage() {
     }
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [phase])
+  }, [phase, showToast])
 
   // 演奏主循环：唯一时间源 audioEngine.time → 光标推进 + HUD 直写 + 结束判定
   useEffect(() => {
@@ -375,6 +427,12 @@ export default function PerformPage() {
             <div className="ov-title big">演奏完成 ♪</div>
             <div className="ov-sub">正在前往回放…</div>
           </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="perform-toast" role="status">
+          {toast}
         </div>
       )}
     </div>

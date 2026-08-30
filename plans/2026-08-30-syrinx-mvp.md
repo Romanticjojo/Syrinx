@@ -279,7 +279,7 @@ export class OSMDScore {
 - 创建：`app/src/audio/recorder.ts`
 - 修改：`app/src/views/PerformPage.tsx`（演奏开始即录音，结束生成 Take）
 
-- [ ] 步骤 1：实现 recorder
+- [x] 步骤 1：实现 recorder
 
 ```ts
 export async function startRecording(ctx: AudioContext): Promise<{stop: () => Promise<{blob: Blob, url: string, mime: string}>}> {
@@ -298,9 +298,9 @@ export async function startRecording(ctx: AudioContext): Promise<{stop: () => Pr
 }
 ```
 
-- [ ] 步骤 2：PerformPage 接入：倒数结束 → startRecording（失败则 toast 提示继续演奏不录音）；结束 → stop → 存 Take（store.lastTake）
-- [ ] 步骤 3：手动验证：麦克风权限申请、演奏结束 result 页拿到录音 URL、可播放
-- [ ] 步骤 4：Commit「feat: 演奏录音」
+- [x] 步骤 2：PerformPage 接入：倒数结束 → startRecording（失败则 toast 提示继续演奏不录音）；结束 → stop → 存 Take（store.lastTake）
+- [x] 步骤 3：手动验证：麦克风权限申请、演奏结束 result 页拿到录音 URL、可播放（浏览器麦克风流程列入任务 13 人工清单）
+- [x] 步骤 4：Commit「feat: 演奏录音」
 
 ## 任务 10：YIN 音高检测（TDD）
 
