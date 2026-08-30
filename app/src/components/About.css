@@ -1,4 +1,4 @@
-/* 关于页：极简品牌位 —— 灰阶 + 细线 + 大留白，暖金仅点缀字标分隔点 */
+/* 关于页：极简品牌位 —— 灰阶 + 细线 + 大留白，暖金仅点缀 */
 .about {
   position: fixed;
   inset: 0;
@@ -11,16 +11,12 @@
   animation: about-in 0.2s ease;
 }
 @keyframes about-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .about-card {
-  width: min(400px, calc(100vw - 48px));
-  padding: 40px 36px 28px;
+  width: min(460px, calc(100vw - 48px));
+  padding: 44px 44px 26px;
   text-align: center;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -28,35 +24,46 @@
   box-shadow: var(--shadow-md);
 }
 .about-emblem {
-  width: 168px;
+  width: 150px;
   aspect-ratio: 1;
   border-radius: 50%;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 .about-brand {
   font-family: var(--serif);
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.about-brand span {
-  color: var(--brand-gold);
-  font-style: normal;
+  letter-spacing: 0.14em;      /* 品牌字距：S y r i n x 的呼吸感 */
+  text-indent: 0.14em;         /* 平衡 letter-spacing 尾部偏移 */
 }
 .about-line {
-  margin-top: 12px;
-  font-size: 13px;
+  margin-top: 14px;
+  font-size: 12.5px;
   color: var(--ink-dim);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.08em;
+}
+/* 分隔细线：品牌区与叙事区之间 */
+.about-line::after {
+  content: '';
+  display: block;
+  width: 36px;
+  height: 1px;
+  margin: 18px auto 0;
+  background: var(--line-strong);
 }
 .about-sub {
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 1.7;
+  margin-top: 18px;
+  font-size: 12.5px;
+  line-height: 2;              /* 神话叙事需要更松的行距 */
   color: var(--ink-faint);
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+.about-sub + .about-sub {
+  margin-top: 10px;
 }
 .about-foot {
-  margin-top: 26px;
+  margin-top: 28px;
   padding-top: 16px;
   border-top: 1px solid var(--line);
   display: flex;
@@ -81,4 +88,10 @@
 }
 .about-close:hover {
   border-color: var(--ink);
+}
+
+@media (max-width: 480px) {
+  .about-card { padding: 36px 26px 22px; }
+  .about-emblem { width: 120px; }
+  .about-sub { text-align: left; }
 }
