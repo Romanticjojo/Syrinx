@@ -1,8 +1,20 @@
-/* 3D 长笛画布与 CSS 回退长笛条 */
+/* 真实长笛实拍图（细线边框面板）与 CSS 回退长笛条 */
 .flute-view {
   display: block;
   width: 100%;
   height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0d1412;
+}
+.flute-view img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* 压低饱和/亮度，让蓝晒底色融入暗色 UI */
+  filter: saturate(0.8) brightness(0.9);
 }
 
 /* 回退：金属渐变长笛条 + 三个按键圆点 + 泛音符号 */

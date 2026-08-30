@@ -1,7 +1,52 @@
-/* 预览页：Decide 面 —— 专辑式 hero（封面主导 + 主题色渗出）+ 元数据行 + 开始演奏 */
+/* 预览页：Decide 面 —— 全屏曲意背景 + 专辑式 hero + 元数据行 + 开始演奏 */
 .preview {
   min-height: 100%;
   overflow-y: auto;
+  position: relative;
+}
+
+/* 全屏背景层：动画视频/封面铺满全屏，accent 青绿调模糊垫底，边缘延展不露黑边 */
+.preview-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #0a0d0c;
+}
+.preview-bg-pad {
+  position: absolute;
+  inset: -6%;
+  filter: blur(46px) saturate(1.05);
+}
+.preview-bg-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* 暗部纱罩：保证前景文字对比度，同时保留动画氛围 */
+.preview-bg-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(9, 12, 11, 0.66) 0%,
+    rgba(9, 12, 11, 0.42) 38%,
+    rgba(9, 12, 11, 0.58) 68%,
+    rgba(9, 12, 11, 0.88) 100%
+  );
+}
+
+/* 前景内容整体浮于背景层之上 */
+.preview-topbar,
+.album-hero,
+.info-list,
+.score-section,
+.more-songs,
+.preview-footer {
+  position: relative;
+  z-index: 1;
 }
 
 .preview-topbar {
@@ -18,10 +63,14 @@
   background: var(--surface-2);
   border: none;
   color: var(--ink);
-  width: 38px;
   height: 38px;
-  border-radius: var(--circ);
-  font-size: 16px;
+  padding: 0 18px 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--pill);
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -230,12 +279,14 @@
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-/* 曲谱预览区 */
+/* 曲谱预览区：玻璃谱面板（方案 A），悬浮于曲意背景之上 */
 .score-section {
   margin: 34px 32px 0;
   padding: 22px 26px;
-  background: rgba(18, 18, 20, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(14, 18, 17, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
 }
 .score-section-title {
@@ -250,6 +301,63 @@
   color: var(--ink-dim);
   font-size: 13px;
   padding: 16px 0;
+}
+
+/* 更多曲目：详情 ↔ 目录双向打通的横向卡片条 */
+.more-songs {
+  margin: 34px 32px 0;
+}
+.more-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+.more-card {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.more-art {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 8px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+.more-card:hover .more-art,
+.more-card:focus-visible .more-art {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.more-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.more-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 55%, rgba(8, 8, 8, 0.45));
+  pointer-events: none;
+}
+.more-name {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.more-meta {
+  font-size: 12px;
+  color: var(--ink-dim);
+  margin-top: 2px;
 }
 
 @media (max-width: 720px) {
@@ -268,6 +376,9 @@
   }
   .info-list {
     margin: 20px 16px 0;
+  }
+  .more-songs {
+    margin: 24px 16px 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {

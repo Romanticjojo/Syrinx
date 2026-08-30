@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import FluteView from './FluteView'
 import './Intro.css'
 
 const SKIP_KEY = 'syrinx_skip_intro'
@@ -9,7 +8,7 @@ interface Props {
 }
 
 /**
- * 入场动画覆盖层：品牌字 + 3D 长笛 + 跳过。
+ * 入场动画覆盖层：极简品牌位 —— 女神吹笛图形（logo 暗色版）+ 字标 + 跳过。
  * 「下次不再播放」写 localStorage，App 启动时读取直接跳过。
  */
 export default function Intro({ onDone }: Props) {
@@ -41,11 +40,10 @@ export default function Intro({ onDone }: Props) {
     <div className={`intro${leaving ? ' leaving' : ''}`} role="dialog" aria-label="Syrinx 入场">
       <div className="intro-beam" aria-hidden="true" />
       <div className="intro-center">
-        <FluteView className="intro-flute" accent="#3ddfae" />
+        <img className="intro-emblem" src="/brand/syrinx-logo-dark.jpg" alt="" aria-hidden="true" />
         <h1 className="intro-brand">
           Syrinx<span className="dot">·</span>长笛流光
         </h1>
-        <p className="intro-tagline">谱面跟随 · 沉浸演奏 · 音准回望</p>
       </div>
       <div className="intro-actions">
         <label className="intro-noshow">

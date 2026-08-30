@@ -1,10 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import FluteView from '../components/FluteView'
 import ScoreSheet from '../components/ScoreSheet'
 import { DIFFICULTY_LABEL, getSong, loadSong, SONGS } from '../songs'
 import { useAppStore } from '../store'
-import type { Timeline } from '../types'
+import type { SongManifest, Timeline } from '../types'
 import './PreviewPage.css'
+
+/** 封面占位渐变（与目录页一致，正式封面由 Song Pack 提供） */
+function placeholderStyle(accent: string) {
+  return {
+    background: `radial-gradient(80% 70% at 30% 25%, ${accent}66, transparent 65%),
+      linear-gradient(150deg, ${accent}33, #0c1010 72%)`,
+  }
+}
+
+/** 构图锚点：封面裁切时保持人物/主体可见（缺省居中） */
+const positionOf = (s: SongManifest): React.CSSProperties =>
+  s.coverPosition ? { objectPosition: s.coverPosition } : {}
 
 export default function PreviewPage() {
   const songId = useAppStore((s) => s.currentSongId)
@@ -18,6 +30,7 @@ export default function PreviewPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   // 切曲时重置加载状态（渲染期间调整状态，避免 effect 内 setState 级联渲染）
   const [lastSongId, setLastSongId] = useState(song.id)
+  const bgVideoRef = useRef<HTMLVideoElement>(null)
   if (lastSongId !== song.id) {
     setLastSongId(song.id)
     setXml(null)
@@ -47,6 +60,14 @@ export default function PreviewPage() {
       radial-gradient(90% 80% at 75% 85%, ${song.accent}73, transparent 65%),
       linear-gradient(150deg, ${song.accent}2e, #0c1210 70%)`,
   }
+
+  // 全屏背景视频：挂载即静音循环播放，切曲/卸载时暂停（muted 满足自动播放策略）
+  useEffect(() => {
+    const v = bgVideoRef.current
+    if (!v) return
+    v.play().catch(() => {})
+    return () => v.pause()
+  }, [song.backgroundVideoUrl])
   const rows: [string, string, string][] = [
     ['调性', song.keyLabel, 'Key'],
     ['拍号', `${song.bpm} BPM`, 'Tempo'],
@@ -60,9 +81,34 @@ export default function PreviewPage() {
 
   return (
     <div className="preview">
+      {/* 全屏背景层：动画视频/封面铺满（object-fit cover）+ accent 青绿调模糊垫底 + 暗部纱罩 */}
+      <div className="preview-bg" aria-hidden="true">
+        <div
+          className="preview-bg-pad"
+          style={{
+            background: `radial-gradient(75% 60% at 32% 28%, ${song.accent}59, transparent 72%),
+              linear-gradient(160deg, #10201c, #0a0d0c 70%)`,
+          }}
+        />
+        {song.backgroundVideoUrl ? (
+          <video
+            className="preview-bg-media"
+            ref={bgVideoRef}
+            src={song.backgroundVideoUrl}
+            muted
+            loop
+            playsInline
+            autoPlay
+          />
+        ) : song.coverUrl ? (
+          <img className="preview-bg-media" src={song.coverUrl} alt="" style={positionOf(song)} />
+        ) : null}
+        <div className="preview-bg-scrim" />
+      </div>
+
       <header className="preview-topbar">
         <button className="back-pill" onClick={() => go('home')} aria-label="返回曲库">
-          ‹
+          ‹ 曲库
         </button>
         <div className="logo">
           Syrinx<i style={{ fontStyle: 'normal', color: song.accent }}>·</i>长笛流光
@@ -134,6 +180,25 @@ export default function PreviewPage() {
         {xml && timeline && (
           <ScoreSheet xml={xml} timeline={timeline} accent={song.accent} zoomControls />
         )}
+      </section>
+
+      {/* 更多曲目：详情页 ↔ 目录页双向打通 */}
+      <section className="more-songs" aria-label="更多曲目">
+        <h3 className="score-section-title">继续浏览</h3>
+        <div className="more-strip">
+          {SONGS.filter((x) => x.id !== song.id).map((x) => (
+            <button key={x.id} className="more-card" onClick={() => go('preview', x.id)} title={x.title}>
+              <div className="more-art" style={x.coverUrl ? undefined : placeholderStyle(x.accent)}>
+                {x.coverUrl && <img src={x.coverUrl} alt="" loading="lazy" style={positionOf(x)} />}
+                <span className="more-veil" aria-hidden="true" />
+              </div>
+              <div className="more-name">{x.title}</div>
+              <div className="more-meta">
+                {x.composer} · {x.durationLabel}
+              </div>
+            </button>
+          ))}
+        </div>
       </section>
 
       <footer className="preview-footer">

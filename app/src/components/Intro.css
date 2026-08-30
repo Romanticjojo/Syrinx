@@ -57,12 +57,25 @@
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 6px;
+  gap: 18px;
   padding: 0 24px;
 }
-.intro-flute {
-  width: min(560px, 76vw);
-  height: clamp(150px, 26vh, 240px);
+/* 女神吹笛图形（logo 暗色版）：黑底与舞台融为一体，圆形裁切 + 缓慢浮现 */
+.intro-emblem {
+  width: min(400px, 64vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  animation: emblem-in 1.2s ease both;
+}
+@keyframes emblem-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 .intro-brand {
   font-family: var(--serif);
@@ -85,13 +98,6 @@
     opacity: 1;
     transform: translateY(0);
   }
-}
-.intro-tagline {
-  font-size: 13px;
-  letter-spacing: 0.5em;
-  text-indent: 0.5em; /* 抵消最后一字间距，视觉居中 */
-  color: var(--ink-dim);
-  animation: brand-rise 0.9s ease both 0.35s;
 }
 
 .intro-actions {
