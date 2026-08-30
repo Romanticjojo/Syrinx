@@ -90,17 +90,7 @@ export default function PreviewPage() {
               linear-gradient(160deg, #10201c, #0a0d0c 70%)`,
           }}
         />
-        {song.previewVideoUrl ? (
-          <video
-            className="preview-bg-media"
-            ref={bgVideoRef}
-            src={song.previewVideoUrl}
-            muted
-            loop
-            playsInline
-            autoPlay
-          />
-        ) : song.backgroundVideoUrl ? (
+        {song.backgroundVideoUrl ? (
           <video
             className="preview-bg-media"
             ref={bgVideoRef}
@@ -133,7 +123,19 @@ export default function PreviewPage() {
         </div>
         <div className="album-row">
           <div className="cover playing" style={cover}>
-            {song.coverUrl && <img className="cover-img" src={song.coverUrl} alt={`${song.title} 封面`} />}
+            {song.previewVideoUrl ? (
+              <video
+                className="cover-img"
+                src={song.previewVideoUrl}
+                muted
+                loop
+                playsInline
+                autoPlay
+                aria-label={`${song.title} 封面动画`}
+              />
+            ) : song.coverUrl ? (
+              <img className="cover-img" src={song.coverUrl} alt={`${song.title} 封面`} />
+            ) : null}
             <div className="vinyl-mark">♪</div>
             <div className="cover-note">{song.coverUrl ? '正式封面 · Song Pack' : '预览占位 · 每曲 preview.mp4'}</div>
           </div>
