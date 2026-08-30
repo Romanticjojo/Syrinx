@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import FluteView from '../components/FluteView'
 import ScoreSheet from '../components/ScoreSheet'
 import { DIFFICULTY_LABEL, getSong, loadSong, SONGS } from '../songs'
 import { useAppStore } from '../store'
@@ -118,9 +117,6 @@ export default function PreviewPage() {
       <section className="album-hero">
         <div className="glow" style={{ background: `radial-gradient(60% 90% at 28% 40%, ${song.accent}4d, transparent 70%)` }} />
         {/* hero 右侧：3D 长笛展示（加载失败自动回退 CSS 长笛条） */}
-        <div className="hero-flute" aria-hidden="true">
-          <FluteView accent={song.accent} />
-        </div>
         <div className="album-row">
           <div className="cover playing" style={cover}>
             {song.previewVideoUrl ? (

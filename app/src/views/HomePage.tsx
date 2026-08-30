@@ -72,10 +72,10 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
           ...(song.coverPosition ? { ['--cover-pos' as string]: song.coverPosition } : {}),
         }}
       >
-        {song.coverUrl && (
+        {(
           <img
             className="art-img"
-            src={song.coverUrl}
+            src={song.coverUrl ?? '/brand/flute.jpg'}
             alt=""
             loading="lazy"
             style={positionOf(song)}

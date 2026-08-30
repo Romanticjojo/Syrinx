@@ -221,8 +221,9 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: var(--cover-pos, 26% 40%);
+  object-fit: contain;
+  object-position: center;
+  background: #1fb8a8; /* 原版视频青绿底：contain 留边与画面融合 */
   animation: preview-in 0.25s ease both;
 }
 @keyframes preview-in {
