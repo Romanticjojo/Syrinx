@@ -122,6 +122,11 @@ class AudioEngine {
     if (this.ctx.state === 'suspended') await this.ctx.resume()
   }
 
+  /** 解码音频数据（录音 → AudioBuffer 供音高分析） */
+  async decode(data: ArrayBuffer): Promise<AudioBuffer> {
+    return this.ctx.decodeAudioData(data)
+  }
+
   private stopSource(): void {
     if (this.endRaf) {
       cancelAnimationFrame(this.endRaf)

@@ -46,6 +46,21 @@
   pointer-events: none;
   filter: blur(10px);
 }
+/* hero 右侧 3D 长笛：随主题色打光；窄屏隐藏避免与文字重叠 */
+.hero-flute {
+  position: absolute;
+  right: 24px;
+  top: 34%;
+  width: min(380px, 34vw);
+  height: clamp(130px, 22vh, 210px);
+  pointer-events: none;
+  z-index: 1;
+}
+@media (max-width: 1020px) {
+  .hero-flute {
+    display: none;
+  }
+}
 .album-row {
   position: relative;
   display: flex;

@@ -1,0 +1,65 @@
+/* 3D 长笛画布与 CSS 回退长笛条 */
+.flute-view {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 回退：金属渐变长笛条 + 三个按键圆点 + 泛音符号 */
+.flute-fallback {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+.fb-body {
+  position: relative;
+  width: 82%;
+  height: 26px;
+  border-radius: var(--pill);
+  background: linear-gradient(100deg, #6d757c 0%, #d9e2e8 22%, #8b949c 48%, #cfd8de 74%, #5f676e 100%);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  padding-right: 34px;
+  transform: rotate(-7deg);
+}
+.fb-body::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  background: #2b2f33;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.fb-body i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0.9;
+}
+.fb-note {
+  position: absolute;
+  right: 6%;
+  top: 4%;
+  font-size: 26px;
+  color: var(--ink-faint);
+  animation: fb-note-float 3s ease-in-out infinite;
+}
+@keyframes fb-note-float {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}

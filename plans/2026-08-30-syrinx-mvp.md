@@ -337,11 +337,11 @@ export async function startRecording(ctx: AudioContext): Promise<{stop: () => Pr
 - 创建：`app/src/views/ResultPage.tsx`、`app/src/components/PitchChart.tsx`、`app/src/components/Intro.tsx`、`app/src/background/FluteModel.ts`
 - 修改：`app/src/views/PreviewPage.tsx`、`app/src/App.tsx`（挂 Intro）
 
-- [ ] 步骤 1：ResultPage：录音 `<audio>` 回放（可同时播伴奏对照：audioEngine seek 到 0 同步播——共享时间轴）、重新演奏、返回曲库；PitchChart canvas：x=时间、y=音高（半音刻度），目标音符画半透明色块、实测轨迹画点线（超 ±50 音分偏红、内为青），双击下载 webm
-- [ ] 步骤 2：FluteModel：GLTFLoader（three/examples/jsm）加载 `/resources/flute.glb`（public 下复制）→ 缓慢自转 + 微浮动 + 环境光/点光；加载失败 fallback CSS 长笛条
-- [ ] 步骤 3：Intro 覆盖层：品牌字 + FluteModel 3D 长笛 + 「跳过」「下次不再播放」（localStorage `syrinx_skip_intro`）；PreviewPage hero 右侧嵌同一 3D 长笛
-- [ ] 步骤 4：手动验证：录音回放、图表渲染与统计数字合理、3D 长笛显示、跳过记忆生效
-- [ ] 步骤 5：Commit「feat: 回放页/音高图表/3D 长笛入场」
+- [x] 步骤 1：ResultPage：录音 `<audio>` 回放（可同时播伴奏对照：audioEngine seek 到 0 同步播——共享时间轴）、重新演奏、返回曲库；PitchChart canvas：x=时间、y=音高（半音刻度），目标音符画半透明色块、实测轨迹画点线（超 ±50 音分偏红、内为青），双击下载 webm
+- [x] 步骤 2：FluteModel：GLTFLoader（three/examples/jsm）加载 `/resources/flute.glb`（public 下复制）→ 缓慢自转 + 微浮动 + 环境光/点光；加载失败 fallback CSS 长笛条
+- [x] 步骤 3：Intro 覆盖层：品牌字 + FluteModel 3D 长笛 + 「跳过」「下次不再播放」（localStorage `syrinx_skip_intro`）；PreviewPage hero 右侧嵌同一 3D 长笛
+- [x] 步骤 4：手动验证：录音回放、图表渲染与统计数字合理、3D 长笛显示、跳过记忆生效（build/test/dev+资源可达自动验证通过；视觉与回放效果列入任务 13 人工清单）
+- [x] 步骤 5：Commit「feat: 回放页/音高图表/3D 长笛入场」
 
 ## 任务 13：全量验证与收尾（verification-before-completion）
 
