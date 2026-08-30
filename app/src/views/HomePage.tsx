@@ -28,10 +28,13 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
   const [warmed, setWarmed] = useState(false)
   const timer = useRef(0)
   const videoRef = useRef<HTMLVideoElement>(null)
+  // play() 被浏览器静默拒绝（首次挂载视频未就绪）时置位，canplay 后补播
+  const pendingPlay = useRef(false)
 
   const stopPreview = () => {
     clearTimeout(timer.current)
     timer.current = 0
+    pendingPlay.current = false
     setPreviewing(false)
     videoRef.current?.pause()
   }
@@ -50,9 +53,21 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
-    if (previewing) v.play().catch(() => {})
-    else v.pause()
+    if (previewing) {
+      v.play().catch(() => {
+        pendingPlay.current = true
+      })
+    } else {
+      v.pause()
+    }
   }, [previewing, warmed])
+  // 首次 hover 时 <video> 才挂载、视频未缓冲，play()/autoPlay 都会被浏览器静默拒绝；
+  // 等到 canplay（缓冲可播）再补播，二次 hover 走预热续播不受影响
+  const handleCanPlay = () => {
+    if (!pendingPlay.current || !previewing) return
+    pendingPlay.current = false
+    videoRef.current?.play().catch(() => {})
+  }
   useEffect(() => () => clearTimeout(timer.current), [])
 
   return (
@@ -92,6 +107,7 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
             loop
             playsInline
             autoPlay
+            onCanPlay={handleCanPlay}
             aria-hidden="true"
           />
         )}

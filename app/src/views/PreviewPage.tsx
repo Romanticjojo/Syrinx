@@ -133,7 +133,6 @@ export default function PreviewPage() {
               <img className="cover-img" src={song.coverUrl} alt={`${song.title} 封面`} />
             ) : null}
             <div className="vinyl-mark">♪</div>
-            <div className="cover-note">{song.coverUrl ? '正式封面 · Song Pack' : '预览占位 · 每曲 preview.mp4'}</div>
           </div>
           <div className="album-info">
             <div className="kicker">{song.tags.join(' · ')}</div>
