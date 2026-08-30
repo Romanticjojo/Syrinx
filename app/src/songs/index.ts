@@ -1,5 +1,5 @@
 import type { SongManifest, Timeline } from '../types'
-import { parseMusicXml } from '../score/musicxml'
+import { expandRepeats, parseMusicXml } from '../score/musicxml'
 import luvLetterManifest from '../../public/songs/luv-letter/manifest.json'
 
 /**
@@ -76,11 +76,13 @@ export function getSong(id: string | null): SongManifest | undefined {
   return SONGS.find((s) => s.id === id)
 }
 
-/** 加载曲目：拉取 MusicXML 并解析时间轴（伴奏合成在演奏页进行） */
+/** 加载曲目：拉取 MusicXML → 反复段展开为实体小节 → 解析时间轴（伴奏合成在演奏页进行）。
+ * 展开后的 xml 同时喂给 OSMD 与 timeline，光标/变色顺序与播放序严格一致 */
 export async function loadSong(manifest: SongManifest): Promise<{ xml: string; timeline: Timeline }> {
   const res = await fetch(manifest.scoreUrl)
   if (!res.ok) throw new Error(`曲谱加载失败：${manifest.scoreUrl}（HTTP ${res.status}）`)
-  const xml = await res.text()
+  const raw = await res.text()
+  const xml = expandRepeats(raw)
   const timeline = parseMusicXml(xml)
   return { xml, timeline }
 }

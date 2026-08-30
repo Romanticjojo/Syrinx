@@ -18,24 +18,41 @@ function coverStyle(accent: string) {
 const positionOf = (s: SongManifest): React.CSSProperties =>
   s.coverPosition ? { objectPosition: s.coverPosition } : {}
 
-/** hover 预览延迟：停留超过此时长才挂载 <video>（避免快速滑过时全量拉流） */
-const PREVIEW_DELAY_MS = 500
+/** hover 预览延迟：停留超过此时长才开播（避免快速滑过时全量拉流）；已预热的视频直接续播 */
+const PREVIEW_DELAY_MS = 200
 
 /** Netflix 式单卡：hover 放大提亮 + 停留后静音视频预览 + 迷你播放按钮 */
 function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) {
   const [previewing, setPreviewing] = useState(false)
+  // 首次预览后 <video> 保留预热（暂停而非销毁），再次 hover 直接续播，避免重新拉流
+  const [warmed, setWarmed] = useState(false)
   const timer = useRef(0)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   const stopPreview = () => {
     clearTimeout(timer.current)
     timer.current = 0
     setPreviewing(false)
+    videoRef.current?.pause()
   }
   const startPreview = () => {
     if (!song.backgroundVideoUrl) return
     clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => setPreviewing(true), PREVIEW_DELAY_MS)
+    timer.current = window.setTimeout(
+      () => {
+        setPreviewing(true)
+        setWarmed(true)
+      },
+      warmed ? 0 : PREVIEW_DELAY_MS,
+    )
   }
+  // 预览态驱动播放：挂载/续播统一走这里（mouseleave 只暂停不卸载）
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    if (previewing) v.play().catch(() => {})
+    else v.pause()
+  }, [previewing, warmed])
   useEffect(() => () => clearTimeout(timer.current), [])
 
   return (
@@ -58,10 +75,12 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
             style={positionOf(song)}
           />
         )}
-        {/* 预览片段：静音自动播放（muted 满足 WebView 自动播放策略），离开即卸载 */}
-        {previewing && song.backgroundVideoUrl && (
+        {/* 预览片段：静音自动播放（muted 满足 WebView 自动播放策略）；预热后隐藏保活 */}
+        {warmed && song.backgroundVideoUrl && (
           <video
+            ref={videoRef}
             className="art-preview"
+            style={{ visibility: previewing ? 'visible' : 'hidden' }}
             src={song.backgroundVideoUrl}
             muted
             loop

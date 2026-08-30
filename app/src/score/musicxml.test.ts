@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { parseMusicXml } from './musicxml'
+import { expandRepeats, parseMusicXml } from './musicxml'
 
 /** 构造最小 MusicXML：divisions=2（八分音符=1）、3/4 拍、tempo=60 */
 const XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -100,5 +100,55 @@ describe('parseMusicXml', () => {
     expect(t.notes.length).toBeGreaterThan(0)
     expect(t.measureTimes.length).toBeGreaterThan(0)
     expect(t.durationSec).toBeGreaterThan(0)
+  })
+})
+
+describe('expandRepeats 反复展开', () => {
+  /** 两小节段落带 forward@1 / backward@2 反复（每段演奏两遍） */
+  const REPEAT_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>60</per-minute></metronome></direction-type></direction>
+      <barline location="right"><repeat direction="forward"/></barline>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+      <barline location="right"><repeat direction="backward"/></barline>
+    </measure>
+    <measure number="3">
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`
+
+  it('forward→backward 段展开成实体小节并顺序重编号', () => {
+    const expanded = expandRepeats(REPEAT_XML)
+    const tl = parseMusicXml(expanded)
+    // C D C D E：演奏序 5 小节
+    expect(tl.measureTimes.map((m) => m.measure)).toEqual([1, 2, 3, 4, 5])
+    expect(tl.notes.map((n) => n.midi)).toEqual([72, 74, 72, 74, 76])
+    expect(tl.durationSec).toBe(20)
+  })
+
+  it('展开后不含 repeat 标记（语义已物化，OSMD 渲染线性谱）', () => {
+    const expanded = expandRepeats(REPEAT_XML)
+    expect(expanded).not.toContain('<repeat')
+  })
+
+  it('无反复的谱原样返回（luv-letter 清洗谱 no-op）', () => {
+    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8')
+    expect(expandRepeats(xml)).toBe(xml)
+  })
+
+  it('含 D.C. 的谱不支持展开，原样返回', () => {
+    const dcXml = REPEAT_XML.replace(
+      '<note><pitch><step>E</step>',
+      '<direction><direction-type><words>D.C. al Fine</words></direction-type></direction><note><pitch><step>E</step>',
+    )
+    expect(expandRepeats(dcXml)).toBe(dcXml)
   })
 })

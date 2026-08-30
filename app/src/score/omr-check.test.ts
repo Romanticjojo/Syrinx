@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { parseMusicXml } from './musicxml'
 
 /**
- * Luv Letter OMR 产物（任务 t_54968084）回归测试：
- * 图片谱 OMR → MusicXML 的 timeline 必须与 4:29（269.4s）伴奏对齐。
+ * Luv Letter OMR 产物（任务 t_54968084）+ 单声部清洗（任务 t_a857b79e）回归测试：
+ * 图片谱 OMR → 单声部长笛谱的 timeline 必须与 4:29（270.4s）伴奏对齐。
  * 注：OSMD 真实渲染验证用浏览器 e2e（happy-dom 无 canvas，OSMD 文字测量会崩）。
  */
 const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8')
 
 describe('luv-letter OMR 谱 timeline', () => {
-  it('parseMusicXml：62 小节、durationSec≈4:29（269.4s）', () => {
+  it('parseMusicXml：62 小节、durationSec≈4:29（270.4s 伴奏）', () => {
     const tl = parseMusicXml(xml)
     expect(tl.tempo).toBe(50)
     expect(tl.measureTimes).toHaveLength(62)
@@ -21,14 +21,34 @@ describe('luv-letter OMR 谱 timeline', () => {
     expect(Math.abs(tl.measureTimes[5].time - 24)).toBeLessThan(0.01)
     // m57 恢复 50
     expect(Math.abs(tl.measureTimes[56].time - (24 + 51 * 4 * (60 / 56.5)))).toBeLessThan(0.01)
-    // 总时长与伴奏 269.4s 对齐（±1s）
+    // 总时长与伴奏 270.4s 对齐（±2s）
     expect(tl.durationSec).toBeGreaterThan(268)
-    expect(tl.durationSec).toBeLessThan(271)
+    expect(tl.durationSec).toBeLessThan(272)
   })
 
-  it('多声部 backup/forward 已正确处理（不产生游标溢出）', () => {
+  it('单声部清洗到位：仅 voice 1，无 backup/chord/repeat 残留', () => {
+    expect(xml).not.toContain('<backup')
+    expect(xml).not.toContain('<chord/>')
+    expect(xml).not.toContain('<repeat')
+    // 长笛谱单音单声部：voice 标签只出现 voice 1
+    const voices = new Set(xml.match(/<voice>[^<]*<\/voice>/g) ?? [])
+    expect(voices).toEqual(new Set(['<voice>1</voice>']))
+  })
+
+  it('每小节严格 4 拍（OMR 超拍噪声已截齐）', () => {
     const tl = parseMusicXml(xml)
-    // 每小节 4/4：若 backup 被误当前进，62 小节会溢出到 >290s
-    expect(tl.durationSec / tl.measureTimes.length).toBeLessThan(4.8)
+    // 62 小节全部 4/4：任意小节时长 = 4 拍 × 该小节生效的秒/拍
+    // tempo 分段（direction 在小节首生效）：m1-5→50，m6-56→56.5，m57-62→50；
+    // 末小节用 timeline 网格终点（= durationSec，末音正好收在小节线上）
+    const gridEnd = tl.measureTimes[61].time + 4 * (60 / 50)
+    for (let i = 0; i < tl.measureTimes.length; i++) {
+      const measureNo = i + 1
+      const tempo = measureNo >= 6 && measureNo <= 56 ? 56.5 : 50
+      const expected = 4 * (60 / tempo)
+      const delta = (tl.measureTimes[i + 1]?.time ?? gridEnd) - tl.measureTimes[i].time
+      expect(Math.abs(delta - expected)).toBeLessThan(0.01)
+    }
+    // 网格终点 ≈ 伴奏 270.4s（durationSec 末音口径同点）
+    expect(Math.abs(gridEnd - 269.44)).toBeLessThan(0.1)
   })
 })

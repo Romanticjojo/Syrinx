@@ -4,6 +4,74 @@ import type { NoteEvent, Timeline } from '../types'
 const STEP_SEMITONE: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
 
 /**
+ * 反复记号展开：把 forward→backward 之间的段落复制成实体小节，光标/高亮即可线性走谱。
+ * 为什么展开而不是让光标跳：OSMD cursor iterator 默认不跳 repeat，跳段需要自定义路径，
+ * 且展开后 timeline 小节序与谱面渲染序一一对应，音符变色（accent 高亮）顺序天然一致。
+ * 约定：单层反复、每段演奏两遍（标准写法）；检测到 D.C./D.S./Coda 不支持，原样返回。
+ * luv-letter 的伴奏经时长论证为线性贯穿版（线性 269.4s ≈ 伴奏 270.4s，展开反而 308s），
+ * 其谱面的 OMR 噪声 repeat 标记已在清洗时摘除，本函数对其是 no-op（见 clean-flute-score.py）。
+ */
+export function expandRepeats(xml: string): string {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  if (doc.querySelector('parsererror')) return xml
+
+  // D.C./D.S./Coda 一律不展开（展开语义需要 coda 跳转表，超出本需求）
+  for (const words of doc.querySelectorAll('words')) {
+    if (/D\.C\.|D\.S\.|Coda|To Coda|da capo|dal segno/i.test(words.textContent ?? '')) return xml
+  }
+
+  const parts = Array.from(doc.querySelectorAll('part'))
+  let expandedAny = false
+  for (const part of parts) {
+    const measures = Array.from(part.querySelectorAll('measure'))
+    // 每小节标记：右 barline 上的 forward / backward repeat
+    const hasForward = measures.map(
+      (m) => !!Array.from(m.querySelectorAll('barline repeat')).find((r) => r.getAttribute('direction') === 'forward'),
+    )
+    const hasBackward = measures.map(
+      (m) => !!Array.from(m.querySelectorAll('barline repeat')).find((r) => r.getAttribute('direction') === 'backward'),
+    )
+    if (!hasBackward.some(Boolean)) continue
+
+    // 模拟演奏序：遇到未跳过的 backward 回退到最近的 forward（没有则回开头），每处最多跳一次
+    const order: number[] = []
+    const jumped = new Set<number>()
+    const forwardStack: number[] = []
+    let i = 0
+    let guard = 0
+    while (i < measures.length && guard < measures.length * 4) {
+      guard++
+      order.push(i)
+      if (hasForward[i]) forwardStack.push(i)
+      if (hasBackward[i] && !jumped.has(i)) {
+        jumped.add(i)
+        i = forwardStack.length > 0 ? (forwardStack.pop() as number) : 0
+        continue
+      }
+      i++
+    }
+
+    // 无实际反复（backward 都没生效）则不动
+    if (order.length === measures.length) continue
+
+    // 按演奏序重建小节：克隆 + 顺序重编号 + 摘除 repeat 标记（语义已物化）
+    const frag = doc.createDocumentFragment()
+    order.forEach((idx, seq) => {
+      const clone = measures[idx].cloneNode(true) as Element
+      clone.setAttribute('number', String(seq + 1))
+      clone.querySelectorAll('repeat').forEach((r) => r.remove())
+      frag.appendChild(clone)
+    })
+    measures.forEach((m) => m.remove())
+    part.appendChild(frag)
+    expandedAny = true
+  }
+
+  if (!expandedAny) return xml
+  return new XMLSerializer().serializeToString(doc)
+}
+
+/**
  * MusicXML → 统一时间轴（纯函数）。
  * 约定：取第一个 part 的第一个 voice；全曲恒速（首个 tempo）；
  * 支持中途 direction 变速累计；休止符/和弦备选音占时值但不产生音符事件。
@@ -38,6 +106,8 @@ export function parseMusicXml(xml: string): Timeline {
     measureNo = Number(measure.getAttribute('number')) || measureNo + 1
     measureTimes.push({ measure: measureNo, time: secCursor })
     let measureStartQuarters = cursorQuarters
+    // 小节内游标曾到达的最远位置：小节时长按最远位置算（backup 回退不能缩短小节）
+    let measureMaxQuarters = cursorQuarters
 
     // 小节内备份/恢复：秒游标按当前 tempo 换算
     measure.querySelectorAll('note, direction, attributes, backup, forward').forEach((el) => {
@@ -95,9 +165,10 @@ export function parseMusicXml(xml: string): Timeline {
         }
       }
       if (!isChordExtra) cursorQuarters += durQuarters
+      if (cursorQuarters > measureMaxQuarters) measureMaxQuarters = cursorQuarters
     })
-    // 小节结束：把游标折算为秒
-    secCursor += (cursorQuarters - measureStartQuarters) * secPerQuarterNow
+    // 小节结束：按本小节最远游标位置折算为秒（多声部 backup 后游标停在半途，不能按停点算小节长）
+    secCursor += (measureMaxQuarters - measureStartQuarters) * secPerQuarterNow
   })
 
   const secPerQuarter = 60 / tempo

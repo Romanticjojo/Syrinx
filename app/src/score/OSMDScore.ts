@@ -5,6 +5,8 @@ import type { Timeline } from '../types'
  * OSMD 曲谱渲染封装：
  * - 暗色谱面（白色音符、透明背景，融入暗色界面）
  * - 主题色光标（每曲 accent）
+ * - 音符高亮：光标所在音符染成 accent 色（演奏主视觉），离开恢复白色——
+ *   「吹到哪个音，哪个音符变色」（任务 t_a857b79e Bug 4）
  * - syncToTime(t)：由伴奏音频时钟每帧驱动，光标推进到时间 t
  * - followCursor 自动滚动；小节变化通过 onMeasureChange 回调（不进响应式 store）
  */
@@ -15,11 +17,17 @@ export class OSMDScore {
   private measureTimes: { measure: number; time: number }[] = []
   private lastMeasure = 0
   private totalMeasures = 0
+  private accent: string
+  private baseNoteColor: string
+  /** 上一帧被染色的 GraphicalNote：一帧至多一个当前音，离开时恢复 */
+  private highlighted: { setColor: (c: string, o?: unknown) => void } | null = null
   /** 小节变化回调（rAF 中触发，直接操作 DOM，勿 setState） */
   onMeasureChange?: (measure: number, total: number) => void
 
   constructor(container: HTMLElement, accent = '#3ddfae') {
     this.containerEl = container
+    this.accent = accent
+    this.baseNoteColor = '#fdfdf8'
     this.osmd = new OpenSheetMusicDisplay(container, {
       autoResize: true,
       backend: 'svg',
@@ -33,11 +41,11 @@ export class OSMDScore {
       drawMeasureNumbers: true,
       drawTimeSignatures: true,
       defaultColorMusic: '#f2f2ee',
-      defaultColorNotehead: '#fdfdf8',
+      defaultColorNotehead: this.baseNoteColor,
       defaultColorRest: '#9a9a90',
       defaultColorLabel: '#b3b3b3',
       cursorsOptions: [
-        { type: 1, color: accent, follow: true, alpha: 0.9 }, // ThinLeft 细竖线
+        { type: 1, color: accent, follow: true, alpha: 0.35 }, // ThinLeft 细竖线（辅助）
       ],
     })
     this.osmd.FollowCursor = true
@@ -50,6 +58,7 @@ export class OSMDScore {
     this.measureTimes = timeline.measureTimes
     this.totalMeasures = timeline.measureTimes.length
     this.lastMeasure = 0
+    this.highlighted = null
   }
 
   /** 显示光标并置于起点 */
@@ -65,16 +74,44 @@ export class OSMDScore {
     this.lastMeasure = 0
   }
 
+  /** 把当前光标下的音符染成 accent 色，上一帧的恢复原色 */
+  private updateHighlight(): void {
+    const gnotes = this.osmd.cursor.GNotesUnderCursor()
+    const next = (gnotes.find((g) => !g.sourceNote?.isRest?.()) ?? null) as
+      | { setColor: (c: string, o?: unknown) => void; sourceNote?: unknown }
+      | null
+    if (next === this.highlighted) return
+    if (this.highlighted) {
+      try {
+        this.highlighted.setColor(this.baseNoteColor)
+      } catch {
+        /* 渲染层可能已重排，忽略单帧恢复失败 */
+      }
+    }
+    this.highlighted = null
+    if (next) {
+      try {
+        next.setColor(this.accent)
+        this.highlighted = next
+      } catch {
+        /* 同上 */
+      }
+    }
+  }
+
   /** 每帧调用：把光标推进到曲目时间 t（秒）。由 rAF 驱动，只前进不后退 */
   syncToTime(t: number): void {
     const cursor = this.osmd.cursor
     const it = cursor.iterator
     // currentTimeStamp.RealValue 单位 = 四分音符数
     let guard = 0
+    let advanced = false
     while (!it.EndReached && it.currentTimeStamp.RealValue * this.secPerQuarter <= t && guard < 512) {
       cursor.next()
+      advanced = true
       guard++
     }
+    if (advanced) this.updateHighlight()
     // 当前小节：由 measureTimes 反查（iterator.currentMeasure 是私有成员）
     let m = 1
     for (let i = 0; i < this.measureTimes.length; i++) {

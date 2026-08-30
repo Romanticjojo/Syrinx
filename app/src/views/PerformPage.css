@@ -105,8 +105,10 @@
 }
 .perform-stage .sheet-container {
   height: 100%;
-  background: rgba(12, 13, 14, 0.66); /* 谱面近黑面板：压住背景保可读（双保险之一） */
+  /* 谱面半透面板：压谱可读，但背景动画必须透出来可见（t_a857b79e：0.66 压暗过重） */
+  background: rgba(12, 13, 14, 0.45);
   border-radius: 14px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.35);
 }
 
 /* ---------- 进度细轨 ---------- */
