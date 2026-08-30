@@ -103,7 +103,6 @@ export default function HomePage() {
     <div className="home">
       <header className="home-topbar">
         <div className="home-logo">
-          <img className="home-mark" src="/brand/syrinx-logo-dark.jpg" alt="" aria-hidden="true" />
           Syrinx<i>·</i>长笛流光
         </div>
         <nav className="home-nav">
@@ -166,7 +165,6 @@ export default function HomePage() {
 
       <footer className="home-footer">
         <div className="footer-brand">
-          <img src="/brand/syrinx-logo-dark.jpg" alt="" aria-hidden="true" />
           <span>Syrinx · 长笛演奏辅助 —— 曲谱跟随 · 伴奏同步 · 录音回放 · 音高反馈</span>
         </div>
         <div className="footer-meta">

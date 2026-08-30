@@ -16,19 +16,9 @@
 }
 
 .home-logo {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
   font-weight: 700;
   font-size: 19px;
   letter-spacing: 0.02em;
-}
-/* 品牌图形位：logo 女神吹笛圆形小标 */
-.home-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
 }
 .home-logo i {
   font-style: normal;
@@ -318,13 +308,6 @@
 .footer-brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-}
-.footer-brand img {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
 }
 .footer-meta {
   display: inline-flex;
