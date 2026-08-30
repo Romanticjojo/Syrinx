@@ -36,9 +36,7 @@ export default function Intro({ onDone }: Props) {
       <div className="intro-beam" aria-hidden="true" />
       <div className="intro-center">
         <img className="intro-emblem" src="/brand/syrinx-logo-dark.jpg" alt="" aria-hidden="true" />
-        <h1 className="intro-brand">
-          Syrinx<span className="dot">·</span>长笛流光
-        </h1>
+        <h1 className="intro-brand">Syrinx</h1>
       </div>
       <div className="intro-actions">
         <button className="intro-enter" onClick={close}>

@@ -54,22 +54,16 @@ video.perform-bg {
   justify-content: space-between;
   gap: 16px;
   padding: 14px 28px;
+  background: rgba(11, 12, 12, 0.82);   /* 半透黑 bar：与背景隔离但不突兀 */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
 /* 可读性底座（t_bf0d76ec）：顶缘向下渐变 scrim，压住背景视频/canvas 亮部。
    挂在 .hud-top::before（z-index:-1）——父级是 z-index:3 的 flex item，自带
    stacking context，scrim 落在视频层(z0)之上、HUD 内容之下，且随 idle 一起淡出；
    纯渐变不用 backdrop-filter：背景视频在动，blur 每帧重采样太贵 */
-.hud-top::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  pointer-events: none;
-  background: #0b0c0c;
-}
+
 /* 左组：幽灵返回钮 + 歌名/作者纵向组（t_4a4c84a0 顶栏重设计）
    返回是导航动作不放大按钮——细线小圆钮融入顶栏；歌名层级提升（衬线加大），
    作者弱化为 --ink-dim 小字跟随其下。
