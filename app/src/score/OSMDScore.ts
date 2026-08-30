@@ -103,8 +103,11 @@ export class OSMDScore {
     }
   }
 
-  /** 四分音符位置 → 曲目时间（秒）：按 measureTimes（含伴奏锚点，t_3b9cfc25）分段线性插值 */
-  private timeAtQuarters(rv: number): number {
+  /** 四分音符位置 → 曲目时间（秒）：按 measureTimes（含伴奏锚点，t_3b9cfc25）分段线性插值。
+   *  注意 OSMD iterator 的 RealValue 单位是全音符（实测 62 小节 4/4 全谱 0→61.75，
+   *  t_b22f5467 项 5 联调定位），×4 换算成四分音符数后再对锚点表插值 */
+  private timeAtQuarters(rvWhole: number): number {
+    const rv = rvWhole * 4
     const mt = this.measureTimes
     if (mt.length === 0) return rv * this.secPerQuarter
     let k = 0
@@ -121,7 +124,7 @@ export class OSMDScore {
     const it = cursor.iterator
     let guard = 0
     let advanced = false
-    while (!it.EndReached && this.timeAtQuarters(it.currentTimeStamp.RealValue) <= t && guard < 512) {
+    while (!it.EndReached && this.timeAtQuarters(it.currentTimeStamp.RealValue) <= t && guard < 2048) {
       cursor.next()
       advanced = true
       guard++

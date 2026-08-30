@@ -314,8 +314,10 @@
   color: var(--ink-dim);
 }
 
-/* 降级提示 toast（麦克风不可用等），悬于控制条上方 */
+/* 降级提示 toast（麦克风不可用等），悬于控制条上方。
+   纯提示不吞指针事件：悬停位置恰在进度轨中央上方，挡住拖拽点击（t_b22f5467 项 5 实测） */
 .perform-toast {
+  pointer-events: none;
   position: absolute;
   left: 50%;
   bottom: 96px;
