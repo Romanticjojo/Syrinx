@@ -147,10 +147,15 @@ export default function PreviewPage() {
               >
                 ▶
               </button>
-              <button className={`btn-pill${fav ? ' added' : ''}`} onClick={() => toggleFavorite(song.id)}>
-                {fav ? '✓ 已收藏' : '＋ 收藏'}
-              </button>
-              <span className="listen-state">预览伴奏将在演奏页自动播放</span>
+              {/* 收藏与伴奏提示：暂时隐藏（功能未上线） */}
+              {false && (
+                <>
+                  <button className={`btn-pill${fav ? ' added' : ''}`} onClick={() => toggleFavorite(song.id)}>
+                    {fav ? '✓ 已收藏' : '＋ 收藏'}
+                  </button>
+                  <span className="listen-state">预览伴奏将在演奏页自动播放</span>
+                </>
+              )}
             </div>
           </div>
         </div>
