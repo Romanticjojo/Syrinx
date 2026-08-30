@@ -22,13 +22,13 @@ export default function About({ onClose }: Props) {
         <h2 className="about-brand">Syrinx</h2>
         <p className="about-line">曲谱跟随 · 伴奏同步 · 录音回放 · 音高反馈</p>
         <p className="about-sub">
-          神话中，仙女绪任克斯为摆脱牧神潘的追逐，化作河边一丛芦苇。潘循声而至，只见苇影摇曳——
-          风过苇孔，呜咽如歌。他将芦苇截成长短，以蜡相联，制成排箫，以她的名字为之命名：Syrinx。
-          每一个音，都是她的呼吸。
+          神话里，仙女绪任克斯为了摆脱牧神潘的追逐，化作河边的一丛芦苇。潘循着风声寻来，只见苇影
+          摇曳，风穿过苇孔，呜咽如歌。他将芦苇截成长短不一的几截，以蜡相联，做成一支排箫，用仙女
+          的名字为它命名，叫做 Syrinx。从此每一个音，都是她的呼吸。
         </p>
         <p className="about-sub">
-          1913 年，德彪西以一支现代长笛写下独奏曲《Syrinx》，以缥缈忧伤的音色追忆这段山林旧梦——
-          也让这个名字，与长笛从此相连。
+          1913 年，德彪西以一支现代长笛写下独奏曲《Syrinx》，用缥缈而忧伤的音色追忆这段山林旧梦。
+          也是从这首曲子开始，Syrinx 这个名字与现代长笛紧紧连在了一起。
         </p>
         <div className="about-foot">
           <span className="about-ver">v0.1.0</span>
