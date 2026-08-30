@@ -1,0 +1,49 @@
+﻿
+ RUN  v4.1.11 D:/flute_app/app
+
+ ✓ src/score/musicxml.test.ts > parseMusicXml > 解析 tempo 与 secPerQuarter 2ms
+ ✓ src/score/musicxml.test.ts > parseMusicXml > 按 divisions 换算时间：quarter=1s，half=2s 1ms
+ × src/score/musicxml.test.ts > parseMusicXml > 休止符占时值但不进 notes；小节时间累积正确 8ms
+   → expected { Object (time, duration, ...) } to match object { time: 4, midi: 59, measure: 2 }
+(1 matching property omitted from actual)
+ ✓ src/score/musicxml.test.ts > parseMusicXml > durationSec 为末音结束时间 0ms
+ ✓ src/score/musicxml.test.ts > parseMusicXml > 解析真实 lumiere 曲谱（3/4、84bpm、16 小节、divisions=16） 12ms
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/score/musicxml.test.ts > parseMusicXml > 休止符占时值但不进 notes；小节时间累积正确
+AssertionError: expected { Object (time, duration, ...) } to match object { time: 4, midi: 59, measure: 2 }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "measure": 2,
+-   "midi": 59,
++   "midi": 56,
+    "time": 4,
+  }
+
+ ❯ src/score/musicxml.test.ts:43:25
+     41|       { measure: 2, time: 3 },
+     42|     ])
+     43|     expect(tl.notes[2]).toMatchObject({ time: 4, midi: 59, measure: 2 …
+       |                         ^
+     44|     expect(tl.notes[3]).toMatchObject({ time: 5, midi: 71 })
+     45|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  11:07:26
+   Duration  990ms (transform 25ms, setup 0ms, import 53ms, tests 26ms, environment 634ms)
+
