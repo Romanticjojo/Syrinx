@@ -1,4 +1,4 @@
-import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
+﻿import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
 import type { Timeline } from '../types'
 
 /**
@@ -125,6 +125,46 @@ export class OSMDScore {
       this.lastMeasure = m
       this.onMeasureChange?.(m, this.totalMeasures)
     }
+  }
+
+  /** 点击反查小节号（t_b22f5467 项 4）：谱面视口坐标 → 命中小节。
+   *  距离策略：y 最近的小节行内取 x 最近的小节——点行首/行尾空白也能命中，
+   *  谱面无谱或未渲染返回 null。 */
+  measureAtPoint(clientX: number, clientY: number): number | null {
+    const svg = this.containerEl.querySelector('svg')
+    if (!svg) return null
+    // OSMD 图形坐标 unitInPixels=10，zoom 叠加缩放；svg 无 viewBox，px 1:1
+    const unitPx = 10 * (this.osmd.Zoom || 1)
+    const svgRect = svg.getBoundingClientRect()
+    const x = clientX - svgRect.left
+    const y = clientY - svgRect.top
+    const ml = (this.osmd.GraphicSheet ?? this.osmd.graphic)?.MeasureList
+    if (!ml) return null
+    // y 最近的小节行
+    let bestSystem: { m: (typeof ml)[number][number]; d: number } | null = null
+    for (const systemMeasures of ml) {
+      if (!systemMeasures?.length) continue
+      let top = Infinity
+      let bottom = -Infinity
+      for (const m of systemMeasures) {
+        const ps = m.PositionAndShape
+        top = Math.min(top, ps.AbsolutePosition.y * unitPx)
+        bottom = Math.max(bottom, (ps.AbsolutePosition.y + ps.Size.height) * unitPx)
+      }
+      const dy = y < top ? top - y : y > bottom ? y - bottom : 0
+      if (bestSystem && dy >= bestSystem.d) continue
+      // 行内 x 最近的小节
+      let best: { num: number; d: number } | null = null
+      for (const m of systemMeasures) {
+        const ps = m.PositionAndShape
+        const left = ps.AbsolutePosition.x * unitPx
+        const right = left + ps.Size.width * unitPx
+        const dx = x < left ? left - x : x > right ? x - right : 0
+        if (!best || dx < best.d) best = { num: m.MeasureNumber, d: dx }
+      }
+      if (best) bestSystem = { m: best, d: dy }
+    }
+    return bestSystem ? bestSystem.m.num : null
   }
 
   dispose(): void {

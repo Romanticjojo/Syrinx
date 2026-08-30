@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
 import { openMic, type MicSession } from '../audio/recorder'
 import { synthAccompaniment } from '../audio/synth'
@@ -384,6 +384,77 @@ export default function PerformPage() {
     wake()
   }, [wake, startCapture, showToast])
 
+  /** 跳转到伴奏时间 t（t_b22f5467 项 4）：
+   *  - OSMD 光标只前进：先 resetCursor，下一帧 syncToTime 从头快进到新位置
+   *  - 当前 Take 作废重开（与「回开头重录」同语义）：录音起点跟到新位置 */
+  const seekTo = useCallback(
+    (t: number) => {
+      if (phaseRef.current !== 'performing') return
+      const tl = timelineRef.current
+      if (!tl) return
+      const clamped = Math.max(0, Math.min(t, tl.durationSec))
+      audioEngine.seek(clamped)
+      scoreRef.current?.resetCursor()
+      liveTrackerRef.current.reset()
+      pitchMeterRef.current?.reset()
+      if (recOnRef.current) {
+        startCapture(clamped, !audioEngine.playing)
+        showToast('已跳转，本段重新录音')
+      }
+      playingRef.current = audioEngine.playing
+      setPlaying(audioEngine.playing)
+      wake()
+    },
+    [startCapture, showToast, wake],
+  )
+
+  // 进度轨点击/拖拽：rAF 节流，拖拽全程每帧至多 seek 一次
+  const railRef = useRef<HTMLDivElement>(null)
+  const railRafRef = useRef(0)
+  const onRailDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (phaseRef.current !== 'performing') return
+      const tl = timelineRef.current
+      const rail = railRef.current
+      if (!tl || !rail) return
+      e.currentTarget.setPointerCapture(e.pointerId)
+      const seekFromX = (clientX: number) => {
+        const rect = rail.getBoundingClientRect()
+        const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+        seekTo(ratio * tl.durationSec)
+      }
+      seekFromX(e.clientX)
+      const move = (ev: PointerEvent) => {
+        cancelAnimationFrame(railRafRef.current)
+        railRafRef.current = requestAnimationFrame(() => seekFromX(ev.clientX))
+      }
+      const up = () => {
+        cancelAnimationFrame(railRafRef.current)
+        rail.removeEventListener('pointermove', move)
+        rail.removeEventListener('pointerup', up)
+        rail.removeEventListener('pointercancel', up)
+      }
+      rail.addEventListener('pointermove', move)
+      rail.addEventListener('pointerup', up)
+      rail.addEventListener('pointercancel', up)
+    },
+    [seekTo],
+  )
+
+  /** 点谱面小节 → 从该小节头继续：小节号经 measureTimes（伴奏锚点表）反查时间。
+   *  终点标记的 measure 号是虚构的末小节+1，点击反查不会命中，无需特判 */
+  const seekToMeasure = useCallback(
+    (m: number) => {
+      if (phaseRef.current !== 'performing') return
+      const tl = timelineRef.current
+      if (!tl) return
+      const entry = tl.measureTimes.find((e) => e.measure === m)
+      if (!entry) return
+      seekTo(entry.time)
+    },
+    [seekTo],
+  )
+
   /** 录音开关：只控采集支路，实时音准反馈不受影响；关=丢当前段，开=从头录这段 */
   const toggleRec = useCallback(() => {
     if (phaseRef.current !== 'performing') return
@@ -466,11 +537,18 @@ export default function PerformPage() {
             accent={song.accent}
             scoreRef={scoreRef}
             onMeasureChange={handleMeasure}
+            onMeasureClick={seekToMeasure}
           />
         )}
       </div>
 
-      <div className="progress-rail" aria-hidden="true">
+      <div
+        className="progress-rail"
+        ref={railRef}
+        role="slider"
+        aria-label="演奏进度"
+        onPointerDown={onRailDown}
+      >
         <span className="played" ref={playedEl} />
       </div>
 

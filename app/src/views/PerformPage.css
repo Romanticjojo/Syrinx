@@ -1,4 +1,4 @@
-/* 演奏页：全屏沉浸。层级：背景(任务8) < 谱面层 < HUD < 浮层
+﻿/* 演奏页：全屏沉浸。层级：背景(任务8) < 谱面层 < HUD < 浮层
    fixed 定位脱离文档流：谱面滚动只发生在 .sheet-container 内，OSMD 的
    scrollIntoView 不会把整个窗口卷走（t_a857b79e：修谱面跟随错乱） */
 .perform {
@@ -114,16 +114,30 @@
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.35);
 }
 
-/* ---------- 进度细轨 ---------- */
+/* ---------- 进度细轨（可点击/拖拽 seek，t_b22f5467 项 4） ---------- */
 .progress-rail {
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  position: relative;
+  height: 16px; /* 视觉仍是 3px 细线，容器加高兜住点击热区 */
+  cursor: pointer;
+  touch-action: none;
   z-index: 3;
   transition: opacity 0.5s ease;
 }
+.progress-rail::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 3px;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.08);
+}
 .progress-rail .played {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: block;
-  height: 100%;
+  height: 3px;
   width: 0;
   background: var(--song-accent, var(--accent));
   box-shadow: 0 0 12px var(--song-accent, var(--accent));
