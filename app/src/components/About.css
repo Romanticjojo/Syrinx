@@ -5,7 +5,9 @@
   z-index: 60;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.86);
+  background: rgba(8, 9, 9, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   animation: about-in 0.2s ease;
 }
 @keyframes about-in {
@@ -16,7 +18,7 @@
   width: min(460px, calc(100vw - 48px));
   padding: 44px 44px 26px;
   text-align: center;
-  background: var(--surface);
+  background: #0a0b0b;
   border: 1px solid var(--line);
   border-radius: var(--radius, 10px);
   box-shadow: var(--shadow-md);
