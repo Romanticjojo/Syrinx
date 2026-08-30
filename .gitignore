@@ -1,0 +1,5 @@
+node_modules
+dist
+*.zip
+resources/_cgi-bin*
+*.local
