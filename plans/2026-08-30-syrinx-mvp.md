@@ -307,10 +307,10 @@ export async function startRecording(ctx: AudioContext): Promise<{stop: () => Pr
 **文件：**
 - 创建：`app/src/pitch/yin.ts`、`app/src/pitch/yin.test.ts`
 
-- [ ] 步骤 1：写失败测试：441Hz/220Hz 正弦波 Float32Array（44100Hz, 2048 样本）→ `yinDetect(buf, 44100)` 返回 ±2Hz 内；白噪声 → null 或极低清晰度；静音 → null
-- [ ] 步骤 2：`npx vitest run` FAIL
-- [ ] 步骤 3：实现 YIN：差分函数 → 累积均值归一化 → 绝对阈值 0.12 找首个局部最小 → 抛物线插值精化 → `sampleRate/tau`；清晰度低于阈值返回 null
-- [ ] 步骤 4：PASS；Commit「feat: YIN 音高检测（TDD）」
+- [x] 步骤 1：写失败测试：441Hz/220Hz 正弦波 Float32Array（44100Hz, 2048 样本）→ `yinDetect(buf, 44100)` 返回 ±2Hz 内；白噪声 → null 或极低清晰度；静音 → null
+- [x] 步骤 2：`npx vitest run` FAIL
+- [x] 步骤 3：实现 YIN：差分函数 → 累积均值归一化 → 绝对阈值 0.12 找首个局部最小 → 抛物线插值精化 → `sampleRate/tau`；清晰度低于阈值返回 null
+- [x] 步骤 4：PASS；Commit「feat: YIN 音高检测（TDD）」
 
 ## 任务 11：音高轨迹对比与统计（TDD）
 
