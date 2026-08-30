@@ -1,4 +1,5 @@
 import type { SongManifest, Timeline } from '../types'
+import { applyBeats, type BeatsFile } from '../score/anchors'
 import { expandRepeats, parseMusicXml } from '../score/musicxml'
 import luvLetterManifest from '../../public/songs/luv-letter/manifest.json'
 
@@ -76,14 +77,23 @@ export function getSong(id: string | null): SongManifest | undefined {
   return SONGS.find((s) => s.id === id)
 }
 
-/** 加载曲目：拉取 MusicXML → 反复段展开为实体小节 → 解析时间轴（伴奏合成在演奏页进行）。
+/** 加载曲目：拉取 MusicXML → 反复段展开为实体小节 → 解析时间轴 → 应用伴奏锚点。
  * 展开后的 xml 同时喂给 OSMD 与 timeline，光标/变色顺序与播放序严格一致 */
 export async function loadSong(manifest: SongManifest): Promise<{ xml: string; timeline: Timeline }> {
   const res = await fetch(manifest.scoreUrl)
   if (!res.ok) throw new Error(`曲谱加载失败：${manifest.scoreUrl}（HTTP ${res.status}）`)
   const raw = await res.text()
   const xml = expandRepeats(raw)
-  const timeline = parseMusicXml(xml)
+  let timeline = parseMusicXml(xml)
+  // 伴奏锚点（可选）：谱面缺段/假 tempo 时把逐拍时间对齐到伴奏（t_3b9cfc25）
+  if (manifest.beatsUrl) {
+    try {
+      const beats = await fetch(manifest.beatsUrl)
+      if (beats.ok) timeline = applyBeats(timeline, (await beats.json()) as BeatsFile)
+    } catch (e: unknown) {
+      console.warn(`[syrinx] 伴奏锚点加载失败，回退恒速时间轴：${e instanceof Error ? e.message : e}`)
+    }
+  }
   return { xml, timeline }
 }
 

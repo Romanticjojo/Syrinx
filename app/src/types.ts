@@ -19,8 +19,12 @@ export interface Timeline {
   /** 四分音符速度（BPM） */
   tempo: number
   notes: NoteEvent[]
-  /** 每小节起始时间表 */
-  measureTimes: { measure: number; time: number }[]
+  /**
+   * 每小节起始时间表。quarters = 小节起点的四分音符位置（与 OSMD cursor
+   * RealValue 同单位），供光标按小节分段插值推进；末项为全曲终点标记
+   * （end: true，measure 号为虚构的末小节+1），不是真实小节。
+   */
+  measureTimes: { measure: number; time: number; quarters: number; end?: true }[]
 }
 
 /** 一次演奏会话的产出（录音 + 音高分析） */
@@ -74,6 +78,8 @@ export interface SongManifest {
   backgroundVideoUrl?: string
   /** 每曲封面图（可选；缺省用 accent 渐变） */
   coverUrl?: string
+  /** 伴奏锚点文件（可选；离线分析伴奏生成，供伴奏驱动光标，见 score/anchors.ts） */
+  beatsUrl?: string
   /** 封面构图锚点（object-position，宽幅裁切时保持人物/主体可见；缺省居中） */
   coverPosition?: string
   /** 每曲主题色：驱动背景/光标/高亮/强调元素 */

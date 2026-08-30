@@ -52,7 +52,10 @@ describe('parseMusicXml 多声部（backup/forward）', () => {
 
   it('backup 不推进小节总时长：measureTimes[1] 不存在，durationSec=4s', () => {
     // 单小节 4 拍 @60bpm = 4s；backup/forward 不应使游标溢出到 8 拍
-    expect(tl.measureTimes).toEqual([{ measure: 1, time: 0 }])
+    expect(tl.measureTimes).toEqual([
+      { measure: 1, time: 0, quarters: 0 },
+      { measure: 2, time: 4, quarters: 4, end: true },
+    ])
     expect(tl.durationSec).toBe(4)
   })
 })
@@ -73,8 +76,9 @@ describe('parseMusicXml', () => {
   it('休止符占时值但不进 notes；小节时间累积正确', () => {
     // 第 2 小节从 3s 开始：休止 1s + bA3(56，含 alter=-1) 1s + B4(71) 1s
     expect(tl.measureTimes).toEqual([
-      { measure: 1, time: 0 },
-      { measure: 2, time: 3 },
+      { measure: 1, time: 0, quarters: 0 },
+      { measure: 2, time: 3, quarters: 3 },
+      { measure: 3, time: 6, quarters: 6, end: true },
     ])
     expect(tl.notes[2]).toMatchObject({ time: 4, midi: 56, measure: 2 })
     expect(tl.notes[3]).toMatchObject({ time: 5, midi: 71 })
@@ -88,7 +92,7 @@ describe('parseMusicXml', () => {
     const xml = readFileSync('public/songs/lumiere/score.musicxml', 'utf-8')
     const t = parseMusicXml(xml)
     expect(t.tempo).toBe(84)
-    expect(t.measureTimes).toHaveLength(16)
+    expect(t.measureTimes.filter((m) => !m.end)).toHaveLength(16)
     expect(t.measureTimes[1]).toMatchObject({ measure: 2, time: 3 * (60 / 84) })
     expect(t.notes.length).toBeGreaterThan(20)
     expect(t.durationSec).toBeGreaterThan(30)
@@ -128,8 +132,9 @@ describe('expandRepeats 反复展开', () => {
   it('forward→backward 段展开成实体小节并顺序重编号', () => {
     const expanded = expandRepeats(REPEAT_XML)
     const tl = parseMusicXml(expanded)
-    // C D C D E：演奏序 5 小节
-    expect(tl.measureTimes.map((m) => m.measure)).toEqual([1, 2, 3, 4, 5])
+    // C D C D E：演奏序 5 小节（+终点标记）
+    expect(tl.measureTimes.filter((m) => !m.end).map((m) => m.measure)).toEqual([1, 2, 3, 4, 5])
+    expect(tl.measureTimes[5]).toMatchObject({ end: true })
     expect(tl.notes.map((n) => n.midi)).toEqual([72, 74, 72, 74, 76])
     expect(tl.durationSec).toBe(20)
   })

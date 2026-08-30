@@ -93,7 +93,7 @@ export function parseMusicXml(xml: string): Timeline {
   if (firstDiv) divisions = Number(firstDiv.textContent) || 1
 
   const notes: NoteEvent[] = []
-  const measureTimes: { measure: number; time: number }[] = []
+  const measureTimes: { measure: number; time: number; quarters: number; end?: true }[] = []
 
   // 以"四分音符数"为游标，最后统一乘 secPerQuarter
   let cursorQuarters = 0
@@ -104,7 +104,9 @@ export function parseMusicXml(xml: string): Timeline {
   const measures = part.querySelectorAll('measure')
   measures.forEach((measure) => {
     measureNo = Number(measure.getAttribute('number')) || measureNo + 1
-    measureTimes.push({ measure: measureNo, time: secCursor })
+    // 小节起点（含四分音符位置：光标按小节锚点插值要用，t_3b9cfc25）
+    const measureStartQuartersAbs = cursorQuarters
+    measureTimes.push({ measure: measureNo, time: secCursor, quarters: measureStartQuartersAbs })
     let measureStartQuarters = cursorQuarters
     // 小节内游标曾到达的最远位置：小节时长按最远位置算（backup 回退不能缩短小节）
     let measureMaxQuarters = cursorQuarters
@@ -170,6 +172,8 @@ export function parseMusicXml(xml: string): Timeline {
     // 小节结束：按本小节最远游标位置折算为秒（多声部 backup 后游标停在半途，不能按停点算小节长）
     secCursor += (measureMaxQuarters - measureStartQuarters) * secPerQuarterNow
   })
+  // 终点标记：measureTimes 末项不是真实小节，供 quarters→时间 插值覆盖到最后一个音符
+  measureTimes.push({ measure: measureNo + 1, time: secCursor, quarters: cursorQuarters, end: true })
 
   const secPerQuarter = 60 / tempo
   const durationSec = notes.reduce((end, n) => Math.max(end, n.time + n.duration), 0)

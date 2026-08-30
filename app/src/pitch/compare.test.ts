@@ -23,8 +23,9 @@ const timeline: Timeline = {
     { time: 2, duration: 1, midi: 45, measure: 2 }, // A2 = 110Hz
   ],
   measureTimes: [
-    { measure: 1, time: 0 },
-    { measure: 2, time: 2 },
+    { measure: 1, time: 0, quarters: 0 },
+    { measure: 2, time: 2, quarters: 4 },
+    { measure: 3, time: 3, quarters: 6, end: true },
   ],
 }
 

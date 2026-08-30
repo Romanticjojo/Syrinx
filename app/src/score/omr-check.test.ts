@@ -10,10 +10,11 @@ import { parseMusicXml } from './musicxml'
 const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8')
 
 describe('luv-letter OMR 谱 timeline', () => {
-  it('parseMusicXml：62 小节、durationSec≈4:29（270.4s 伴奏）', () => {
+  it('parseMusicXml：62 小节（+终点标记）、durationSec≈4:29（270.4s 伴奏）', () => {
     const tl = parseMusicXml(xml)
     expect(tl.tempo).toBe(50)
-    expect(tl.measureTimes).toHaveLength(62)
+    expect(tl.measureTimes).toHaveLength(63)
+    expect(tl.measureTimes[62]).toMatchObject({ measure: 63, end: true })
     expect(tl.notes.length).toBeGreaterThan(500)
     // 4/4，第 2 小节从 4 拍后开始（60/50=1.2s per quarter）
     expect(tl.measureTimes[1]).toMatchObject({ measure: 2, time: 4 * (60 / 50) })
@@ -39,13 +40,13 @@ describe('luv-letter OMR 谱 timeline', () => {
     const tl = parseMusicXml(xml)
     // 62 小节全部 4/4：任意小节时长 = 4 拍 × 该小节生效的秒/拍
     // tempo 分段（direction 在小节首生效）：m1-5→50，m6-56→56.5，m57-62→50；
-    // 末小节用 timeline 网格终点（= durationSec，末音正好收在小节线上）
-    const gridEnd = tl.measureTimes[61].time + 4 * (60 / 50)
-    for (let i = 0; i < tl.measureTimes.length; i++) {
+    // 终点标记（measureTimes[62]）给出网格终点
+    const gridEnd = tl.measureTimes[62].time
+    for (let i = 0; i < 62; i++) {
       const measureNo = i + 1
       const tempo = measureNo >= 6 && measureNo <= 56 ? 56.5 : 50
       const expected = 4 * (60 / tempo)
-      const delta = (tl.measureTimes[i + 1]?.time ?? gridEnd) - tl.measureTimes[i].time
+      const delta = tl.measureTimes[i + 1].time - tl.measureTimes[i].time
       expect(Math.abs(delta - expected)).toBeLessThan(0.01)
     }
     // 网格终点 ≈ 伴奏 270.4s（durationSec 末音口径同点）

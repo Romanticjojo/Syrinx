@@ -1,4 +1,4 @@
-﻿import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
+import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
 import type { Timeline } from '../types'
 
 /**
@@ -14,7 +14,7 @@ export class OSMDScore {
   private osmd: OpenSheetMusicDisplay
   private containerEl: HTMLElement
   private secPerQuarter = 0.5
-  private measureTimes: { measure: number; time: number }[] = []
+  private measureTimes: { measure: number; time: number; quarters: number; end?: true }[] = []
   private lastMeasure = 0
   private totalMeasures = 0
   private accent: string
@@ -29,7 +29,7 @@ export class OSMDScore {
   constructor(container: HTMLElement, accent = '#3ddfae') {
     this.containerEl = container
     this.accent = accent
-    this.baseNoteColor = '#fdfdf8'
+    this.baseNoteColor = '#e8e8e2' // 暗底下降一档对比：纯白刺眼（t_3b9cfc25）
     this.osmd = new OpenSheetMusicDisplay(container, {
       autoResize: true,
       backend: 'svg',
@@ -42,7 +42,7 @@ export class OSMDScore {
       drawMetronomeMarks: false,
       drawMeasureNumbers: true,
       drawTimeSignatures: true,
-      defaultColorMusic: '#f2f2ee',
+      defaultColorMusic: '#dedbd3', // 谱线/符杆同步降对比（t_3b9cfc25）
       defaultColorNotehead: this.baseNoteColor,
       defaultColorRest: '#9a9a90',
       defaultColorLabel: '#b3b3b3',
@@ -59,7 +59,8 @@ export class OSMDScore {
     this.osmd.render()
     this.secPerQuarter = timeline.secPerQuarter
     this.measureTimes = timeline.measureTimes
-    this.totalMeasures = timeline.measureTimes.length
+    // 终点标记不是真实小节
+    this.totalMeasures = timeline.measureTimes.filter((e) => !e.end).length
     this.lastMeasure = 0
     this.highlighted = null
   }
@@ -102,24 +103,36 @@ export class OSMDScore {
     }
   }
 
+  /** 四分音符位置 → 曲目时间（秒）：按 measureTimes（含伴奏锚点，t_3b9cfc25）分段线性插值 */
+  private timeAtQuarters(rv: number): number {
+    const mt = this.measureTimes
+    if (mt.length === 0) return rv * this.secPerQuarter
+    let k = 0
+    while (k + 1 < mt.length && mt[k + 1].quarters <= rv) k++
+    if (k + 1 >= mt.length) return mt[k].time + (rv - mt[k].quarters) * this.secPerQuarter
+    const dq = mt[k + 1].quarters - mt[k].quarters
+    if (dq <= 0) return mt[k].time
+    return mt[k].time + ((rv - mt[k].quarters) * (mt[k + 1].time - mt[k].time)) / dq
+  }
+
   /** 每帧调用：把光标推进到曲目时间 t（秒）。由 rAF 驱动，只前进不后退 */
   syncToTime(t: number): void {
     const cursor = this.osmd.cursor
     const it = cursor.iterator
-    // currentTimeStamp.RealValue 单位 = 四分音符数
     let guard = 0
     let advanced = false
-    while (!it.EndReached && it.currentTimeStamp.RealValue * this.secPerQuarter <= t && guard < 512) {
+    while (!it.EndReached && this.timeAtQuarters(it.currentTimeStamp.RealValue) <= t && guard < 512) {
       cursor.next()
       advanced = true
       guard++
     }
     if (advanced) this.updateHighlight()
-    // 当前小节：由 measureTimes 反查（iterator.currentMeasure 是私有成员）
+    // 当前小节：由 measureTimes 反查（iterator.currentMeasure 是私有成员）；终点标记不计
     let m = 1
     for (let i = 0; i < this.measureTimes.length; i++) {
-      if (this.measureTimes[i].time <= t) m = this.measureTimes[i].measure
-      else break
+      const e = this.measureTimes[i]
+      if (!e.end && e.time <= t) m = e.measure
+      else if (e.end) break
     }
     if (m !== this.lastMeasure) {
       this.lastMeasure = m
