@@ -39,7 +39,7 @@
 .about-line {
   margin-top: 14px;
   font-size: 12.5px;
-  color: var(--ink-dim);
+  color: var(--ink);
   letter-spacing: 0.08em;
 }
 /* 分隔细线：品牌区与叙事区之间 */
@@ -55,7 +55,7 @@
   margin-top: 18px;
   font-size: 12.5px;
   line-height: 2;              /* 神话叙事需要更松的行距 */
-  color: var(--ink-faint);
+  color: var(--ink);
   text-align: justify;
   text-justify: inter-ideograph;
 }
