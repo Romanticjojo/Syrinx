@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import About from '../components/About'
 import { DIFFICULTY_LABEL, SONGS } from '../songs'
 import type { SongManifest } from '../types'
 import { useAppStore } from '../store'
-import { getTheme, setTheme } from '../theme'
 import './HomePage.css'
 
 /** 封面占位：由曲目主题色生成的渐变（正式封面由 Song Pack 提供 cover 字段） */
@@ -130,13 +130,8 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
 export default function HomePage() {
   const go = useAppStore((s) => s.go)
   const featured = SONGS[0]
-  const [theme, setThemeState] = useState(() => getTheme())
+  const [aboutOpen, setAboutOpen] = useState(false)
 
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    setTheme(next)
-    setThemeState(next)
-  }
 
   return (
     <div className="home">
@@ -147,10 +142,8 @@ export default function HomePage() {
         </div>
         <nav className="home-nav">
           <button className="nav-pill on">曲库</button>
-          <button className="nav-pill">收藏</button>
-          <button className="nav-pill">我的录音</button>
-          <button className="nav-pill ghost" onClick={toggleTheme} aria-label="切换深浅主题" title="切换深浅主题">
-            {theme === 'dark' ? '☀' : '☾'}
+          <button className="nav-pill" onClick={() => setAboutOpen(true)}>
+            关于
           </button>
         </nav>
       </header>
@@ -199,6 +192,7 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+      {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
     </div>
   )
 }
