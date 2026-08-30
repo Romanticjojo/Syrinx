@@ -31,6 +31,8 @@ export interface Take {
   /** 录音回放地址（ObjectURL） */
   audioUrl: string
   mimeType: string
+  /** 录音起点对应的伴奏时间（秒）：起奏即录为 0；回开头重录/中途开录为当时进度 */
+  startSec: number
   /** 演奏时长内实测的音高轨迹（时间 → 频率/音分偏移） */
   pitchTrack: PitchPoint[] | null
   /** 音准统计（无法分析时为 null） */

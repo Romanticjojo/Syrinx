@@ -57,6 +57,18 @@ export function parseMusicXml(xml: string): Timeline {
         }
         return
       }
+      if (el.tagName === 'backup') {
+        // 多声部：回退游标（重写当前小节的时间位置）
+        const durEl = el.querySelector('duration')
+        if (durEl) cursorQuarters -= Number(durEl.textContent) / divisions
+        return
+      }
+      if (el.tagName === 'forward') {
+        // 多声部：前移游标
+        const durEl = el.querySelector('duration')
+        if (durEl) cursorQuarters += Number(durEl.textContent) / divisions
+        return
+      }
       // note 元素
       const durEl = el.querySelector('duration')
       const durQuarters = durEl ? Number(durEl.textContent) / divisions : 0

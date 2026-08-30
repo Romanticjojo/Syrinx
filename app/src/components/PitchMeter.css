@@ -1,0 +1,97 @@
+/* 实时音准表：默认隐没，有期望音时浮现；准=点缀色 / 偏=警示红 */
+.pitch-meter {
+  position: absolute;
+  top: 76px;
+  right: 24px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: var(--pill);
+  border: 1px solid var(--line);
+  background: rgba(14, 15, 15, 0.72);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease,
+    border-color 0.15s ease;
+  pointer-events: none;
+}
+.pitch-meter.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 期望音名 */
+.pm-note {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  min-width: 2.4em;
+  text-align: center;
+}
+
+/* ±50 音分量规：中线为 0，中央绿区即 ±50 音分 */
+.pm-gauge {
+  position: relative;
+  display: block;
+  width: 132px;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.pm-zone {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 90%; /* ±45% 与指针映射一致 */
+  height: 100%;
+  transform: translateX(-50%);
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.pm-needle {
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--ink);
+  transform: translateX(-50%);
+  transition: transform 0.08s linear;
+}
+
+/* 实测偏差读数 */
+.pm-cents {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  min-width: 3.2em;
+  text-align: right;
+}
+
+/* 在准/偏两态间整体着色（音名、指针、读数联动） */
+.pitch-meter.good .pm-note,
+.pitch-meter.good .pm-cents {
+  color: var(--accent);
+}
+.pitch-meter.good .pm-needle {
+  background: var(--accent);
+}
+.pitch-meter.off .pm-note,
+.pitch-meter.off .pm-cents {
+  color: var(--rec);
+}
+.pitch-meter.off .pm-needle {
+  background: var(--rec);
+}
+.pitch-meter.off {
+  border-color: color-mix(in srgb, var(--rec) 45%, transparent);
+}

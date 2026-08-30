@@ -19,16 +19,18 @@ export interface ExtractOptions {
   hopSec?: number
   /** 低于此清晰度的帧丢弃 */
   clarityMin?: number
+  /** 轨迹时间整体平移（秒）：录音自伴奏中段开始时传入 Take.offsetSec */
+  offsetSec?: number
 }
 
-/** 长笛基频范围（略放宽以覆盖气声发音与测试音） */
-const MIN_HZ = 180
-const MAX_HZ = 2500
+/** 长笛基频范围（略放宽以覆盖气声发音与测试音）；实时分析共用 */
+export const MIN_HZ = 180
+export const MAX_HZ = 2500
 
 /** 逐帧 YIN：静音/低清晰度/超长笛音域的帧不产出轨迹点 */
 export function extractPitchTrack(
   buffer: PitchAudioBuffer,
-  { frameSec = 0.0464, hopSec = 0.0232, clarityMin = 0.6 }: ExtractOptions = {},
+  { frameSec = 0.0464, hopSec = 0.0232, clarityMin = 0.6, offsetSec = 0 }: ExtractOptions = {},
 ): PitchPoint[] {
   const sr = buffer.sampleRate
   const data = buffer.getChannelData(0)
@@ -41,7 +43,7 @@ export function extractPitchTrack(
     const r = yinDetect(seg, sr)
     if (!r || r.clarity < clarityMin) continue
     if (r.hz < MIN_HZ || r.hz > MAX_HZ) continue
-    points.push({ time: start / sr, hz: r.hz, cents: 0 })
+    points.push({ time: start / sr + offsetSec, hz: r.hz, cents: 0 })
   }
   return points
 }
@@ -75,8 +77,8 @@ function medianHz(points: PitchPoint[]): number | null {
   return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
 }
 
-/** 该时刻发声的目标音符（最后一个 time ≤ t 且未结束的） */
-function noteAt(notes: NoteEvent[], t: number): NoteEvent | null {
+/** 该时刻发声的目标音符（最后一个 time ≤ t 且未结束的）；实时反馈共用 */
+export function noteAt(notes: NoteEvent[], t: number): NoteEvent | null {
   let hit: NoteEvent | null = null
   for (const n of notes) {
     if (n.time <= t && t < n.time + n.duration) hit = n

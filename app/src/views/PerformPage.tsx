@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
-import { startRecording, type Recorder } from '../audio/recorder'
+import { openMic, type MicSession } from '../audio/recorder'
 import { synthAccompaniment } from '../audio/synth'
 import { LumiereScene } from '../background/LumiereScene'
 import ControlBar from '../components/ControlBar'
+import PitchMeter, { type PitchMeterHandle } from '../components/PitchMeter'
+import { noteAt } from '../pitch/compare'
+import { LivePitchTracker } from '../pitch/live'
+import { yinDetect } from '../pitch/yin'
 import ScoreSheet from '../components/ScoreSheet'
 import type { OSMDScore } from '../score/OSMDScore'
 import { getSong, loadSong, SONGS } from '../songs'
@@ -13,16 +17,23 @@ import './PerformPage.css'
 
 /**
  * 页内阶段机：加载 → 就绪 → 倒数 → 演奏（含暂停）→ 结束。
- * 高频数据（当前时间/小节/进度）由 rAF 直写 DOM，不进 store（已定决策 5）。
+ * 高频数据（当前时间/小节/进度/实时音准）由 rAF 直写 DOM，不进 store（已定决策 5）。
  */
 type Phase = 'loading' | 'ready' | 'countdown' | 'performing' | 'ended' | 'error'
 
 const IDLE_MS = 3200
 const COUNT_BEATS = 4
 const TAIL_GRACE = 0.6 // 末音后留给混响的余韵再收
+const LIVE_EVERY = 3 // 实时音高检测隔帧跑（≈20Hz），YIN O(W²) 控制开销
 
 const fmt = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
+
+/** 采集段起点：伴奏时间轴位置 + 墙钟（Take.startedAt 用） */
+interface CaptureStart {
+  t: number
+  wall: number
+}
 
 export default function PerformPage() {
   const songId = useAppStore((s) => s.currentSongId)
@@ -31,7 +42,7 @@ export default function PerformPage() {
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [playing, setPlaying] = useState(false)
-  const [zoom, setZoom] = useState(1)
+  const [recOn, setRecOn] = useState(false)
   const [volume, setVolume] = useState(1)
   const [errorMsg, setErrorMsg] = useState('')
   const [xml, setXml] = useState<string | null>(null)
@@ -46,10 +57,17 @@ export default function PerformPage() {
   const countdownRef = useRef({ t0: 0, beat: 0.7 })
   const idleTimer = useRef(0)
   const toastTimer = useRef(0)
-  const recRef = useRef<Recorder | null>(null)
-  const takeStartedAt = useRef(0)
+
+  // 麦克风会话（实时音高反馈 + 采集两条支路）与录音开关镜像
+  const micRef = useRef<MicSession | null>(null)
+  const micOpeningRef = useRef<Promise<MicSession> | null>(null)
+  const recOnRef = useRef(false)
+  const recStartedRef = useRef<CaptureStart | null>(null)
+  const liveTrackerRef = useRef(new LivePitchTracker())
+  const frameIdxRef = useRef(0)
 
   const scoreRef = useRef<OSMDScore | null>(null)
+  const pitchMeterRef = useRef<PitchMeterHandle | null>(null)
   const shellRef = useRef<HTMLDivElement>(null)
   const bgCanvasRef = useRef<HTMLCanvasElement>(null)
   const bgVideoRef = useRef<HTMLVideoElement>(null)
@@ -78,7 +96,34 @@ export default function PerformPage() {
     toastTimer.current = window.setTimeout(() => setToast(null), 3000)
   }, [])
 
-  /** 演奏结束：收音、封存 Take（录音 + 占位统计）、稍候去回放页 */
+  /** 确保麦克风会话存在（只开一次；实时音准反馈不受录音开关影响） */
+  const ensureMic = useCallback((): Promise<MicSession> => {
+    if (micRef.current) return Promise.resolve(micRef.current)
+    if (!micOpeningRef.current) {
+      micOpeningRef.current = openMic(audioEngine.audioCtx)
+        .then((mic) => {
+          micRef.current = mic
+          micOpeningRef.current = null
+          return mic
+        })
+        .catch((e: unknown) => {
+          micOpeningRef.current = null
+          throw e
+        })
+    }
+    return micOpeningRef.current
+  }, [])
+
+  /** 开一段新采集（丢弃旧段）；paused=true 时新采集立即暂停（跟伴奏暂停态对齐） */
+  const startCapture = useCallback((tSec: number, paused: boolean): boolean => {
+    const mic = micRef.current
+    if (!mic) return false
+    mic.restartCapture()
+    if (paused) mic.pauseCapture()
+    recStartedRef.current = { t: tSec, wall: Date.now() }
+    return true
+  }, [])
+
   const finish = useCallback(() => {
     if (finishedRef.current) return
     finishedRef.current = true
@@ -88,27 +133,42 @@ export default function PerformPage() {
     shellRef.current?.classList.remove('idle')
     setPhase('ended')
 
-    // 停录音并封存本次 Take（音高分析在回放页按需进行）
-    const rec = recRef.current
-    recRef.current = null
+    // 停麦克风并封存 Take（音高分析在回放页按需进行）；录音关着则丢弃采集
+    const mic = micRef.current
+    micRef.current = null
+    micOpeningRef.current = null
+    const started = recStartedRef.current
+    recStartedRef.current = null
+    const discard = !recOnRef.current || !started
+    recOnRef.current = false
+    setRecOn(false)
     const durationSec = audioEngine.time
-    if (rec) {
-      rec
+    if (mic) {
+      mic
         .stop()
-        .then(({ url, mime }) => {
+        .then((r) => {
+          if (discard) {
+            URL.revokeObjectURL(r.url)
+            return
+          }
           const prev = useAppStore.getState().lastTake
           if (prev?.audioUrl) URL.revokeObjectURL(prev.audioUrl)
           useAppStore.getState().setTake({
             songId: song.id,
-            startedAt: takeStartedAt.current || Date.now(),
+            startedAt: started!.wall,
             durationSec,
-            audioUrl: url,
-            mimeType: mime,
+            audioUrl: r.url,
+            mimeType: r.mime,
+            startSec: started!.t,
             pitchTrack: null,
             stats: null,
           })
         })
-        .catch(() => showToast('录音保存失败，回放页将无录音'))
+        .catch(() => {
+          if (!discard) showToast('录音保存失败，回放页将无录音')
+        })
+    } else if (!discard) {
+      showToast('麦克风不可用，本次演奏无录音')
     }
     window.setTimeout(() => go('result'), 1200)
   }, [go, showToast, song.id])
@@ -154,15 +214,11 @@ export default function PerformPage() {
       audioEngine.pause()
       clearTimeout(idleTimer.current)
       clearTimeout(toastTimer.current)
-      // 中途退出：停掉进行中的录音并丢弃（只封存完整演奏的 Take）
-      const rec = recRef.current
-      recRef.current = null
-      if (rec) {
-        rec
-          .stop()
-          .then(({ url }) => URL.revokeObjectURL(url))
-          .catch(() => {})
-      }
+      // 中途退出：整个麦克风会话作废（含未封存的录音）
+      const mic = micRef.current
+      micRef.current = null
+      micOpeningRef.current = null
+      if (mic) mic.release()
     }
     // song 由 currentSongId 派生，进入本页才加载一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,12 +271,14 @@ export default function PerformPage() {
     }
   }, [])
 
-  /** 就绪 → 用户手势起奏：恢复音频上下文 + 调度 4 拍节拍音 */
+  /** 就绪 → 用户手势起奏：恢复音频上下文 + 预开麦克风 + 调度 4 拍节拍音 */
   const start = useCallback(async () => {
     if (phaseRef.current !== 'ready') return
     const tl = timelineRef.current
     if (!tl) return
     await audioEngine.resume()
+    // 麦克风在倒数期间申请（权限弹窗时间被倒数盖住）；失败不阻断演奏
+    ensureMic().catch(() => showToast('麦克风不可用，实时音准与录音不可用'))
     scoreRef.current?.showCursor()
     const beat = 60 / tl.tempo
     const t0 = audioEngine.ctxTime + 0.12
@@ -230,7 +288,7 @@ export default function PerformPage() {
     }
     countdownRef.current = { t0, beat }
     setPhase('countdown')
-  }, [])
+  }, [ensureMic, showToast])
 
   // 倒数：以 ctx.currentTime 为准（与节拍音同源），归零瞬间 play(0)
   useEffect(() => {
@@ -244,13 +302,14 @@ export default function PerformPage() {
         playingRef.current = true
         setPlaying(true)
         setPhase('performing')
-        // 起奏即开录；麦克风不可用则提示后继续演奏（不阻断）
-        takeStartedAt.current = Date.now()
-        startRecording()
-          .then((r) => {
-            recRef.current = r
-          })
-          .catch(() => showToast('麦克风不可用，本次演奏不录音'))
+        // 默认开录（录音开着才封存 Take）；麦克风没就绪时等它就绪后补开
+        recOnRef.current = true
+        setRecOn(true)
+        if (micRef.current) startCapture(0, false)
+        else void ensureMic().then((mic) => {
+          if (playingRef.current && recOnRef.current && micRef.current === mic && !recStartedRef.current)
+            startCapture(0, false)
+        }).catch(() => {})
         return
       }
       if (countEl.current)
@@ -259,9 +318,9 @@ export default function PerformPage() {
     }
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
-  }, [phase, showToast])
+  }, [phase, ensureMic, startCapture])
 
-  // 演奏主循环：唯一时间源 audioEngine.time → 光标推进 + HUD 直写 + 结束判定
+  // 演奏主循环：唯一时间源 audioEngine.time → 光标推进 + HUD 直写 + 实时音准 + 结束判定
   useEffect(() => {
     if (phase !== 'performing') return
     let raf = 0
@@ -273,6 +332,16 @@ export default function PerformPage() {
         if (timeEl.current) timeEl.current.textContent = `${fmt(t)} / ${fmt(tl.durationSec)}`
         if (playedEl.current)
           playedEl.current.style.width = `${Math.min(100, (t / tl.durationSec) * 100)}%`
+        // 实时音高检测：隔帧跑 YIN，与谱面期望音对比后直写 PitchMeter（暂停时冻结显示）
+        const mic = micRef.current
+        if (mic && playingRef.current) {
+          frameIdxRef.current += 1
+          if (frameIdxRef.current % LIVE_EVERY === 0) {
+            const r = yinDetect(mic.readFrame(), mic.sampleRate())
+            const fb = liveTrackerRef.current.update(r ? r.hz : null, noteAt(tl.notes, t))
+            pitchMeterRef.current?.update(fb)
+          }
+        }
         if (t >= Math.min(tl.durationSec + TAIL_GRACE, audioEngine.duration)) {
           finish()
           return
@@ -288,27 +357,52 @@ export default function PerformPage() {
     if (phaseRef.current !== 'performing') return
     if (audioEngine.playing) {
       audioEngine.pause()
+      micRef.current?.pauseCapture() // 采集随伴奏暂停，时间轴保持对齐
       playingRef.current = false
       setPlaying(false)
       shellRef.current?.classList.remove('idle')
     } else {
       audioEngine.play()
+      micRef.current?.resumeCapture()
       playingRef.current = true
       setPlaying(true)
       wake()
     }
   }, [wake])
 
-  /** 回开头：seek 0 + 光标 reset（下一帧 syncToTime 重新拉齐小节显示） */
+  /** 回开头：seek 0 + 光标 reset + 录音开着则丢弃旧段重录（录音起点回到 0） */
   const restart = useCallback(() => {
     if (phaseRef.current !== 'performing') return
     audioEngine.seek(0)
     scoreRef.current?.resetCursor()
+    liveTrackerRef.current.reset()
+    pitchMeterRef.current?.reset()
+    if (recOnRef.current) {
+      startCapture(0, !audioEngine.playing)
+      showToast('已回开头，重新录音')
+    }
     const p = audioEngine.playing
     playingRef.current = p
     setPlaying(p)
     wake()
-  }, [wake])
+  }, [wake, startCapture, showToast])
+
+  /** 录音开关：只控采集支路，实时音准反馈不受影响；关=丢当前段，开=从头录这段 */
+  const toggleRec = useCallback(() => {
+    if (phaseRef.current !== 'performing') return
+    const next = !recOnRef.current
+    recOnRef.current = next
+    setRecOn(next)
+    if (!next) {
+      micRef.current?.discardCapture()
+      recStartedRef.current = null
+      showToast('已关闭录音，重新开启即重录本段')
+    } else if (!startCapture(audioEngine.time, !audioEngine.playing)) {
+      showToast('麦克风不可用，无法录音')
+      recOnRef.current = false
+      setRecOn(false)
+    }
+  }, [startCapture, showToast])
 
   const exit = useCallback(() => go('preview'), [go])
 
@@ -332,14 +426,6 @@ export default function PerformPage() {
     events.forEach((e) => window.addEventListener(e, wake, { passive: true }))
     return () => events.forEach((e) => window.removeEventListener(e, wake))
   }, [wake])
-
-  const changeZoom = (delta: number) => {
-    setZoom((z) => {
-      const next = Math.min(1.6, Math.max(0.6, Math.round((z + delta) * 10) / 10))
-      scoreRef.current?.setZoom(next)
-      return next
-    })
-  }
 
   const changeVolume = (v: number) => {
     setVolume(v)
@@ -385,15 +471,17 @@ export default function PerformPage() {
         <span className="played" ref={playedEl} />
       </div>
 
+      <PitchMeter handleRef={pitchMeterRef} />
+
       <div className="perform-hud hud-bottom">
         <ControlBar
           playing={playing}
           ended={phase === 'ended'}
-          zoom={zoom}
+          recOn={recOn}
           volume={volume}
           onToggle={toggle}
+          onRecToggle={toggleRec}
           onRestart={restart}
-          onZoom={changeZoom}
           onVolume={changeVolume}
           onExit={exit}
         />
@@ -435,7 +523,7 @@ export default function PerformPage() {
             <button className="ov-start" onClick={() => void start()}>
               ▶ 开始演奏
             </button>
-            <div className="ov-tips">4 拍倒数起奏 · 空格 暂停/继续 · Esc 退出 · 静置自动隐藏控件</div>
+            <div className="ov-tips">4 拍倒数起奏 · 空格 暂停/继续 · ⏺ 录音开关 · Esc 退出</div>
           </div>
         </div>
       )}

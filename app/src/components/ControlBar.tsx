@@ -3,24 +3,25 @@ import './ControlBar.css'
 interface Props {
   playing: boolean
   ended: boolean
-  zoom: number
+  /** 录音采集开关状态（只控采集，实时音准反馈不受其影响） */
+  recOn: boolean
   volume: number
   onToggle: () => void
+  onRecToggle: () => void
   onRestart: () => void
-  onZoom: (delta: number) => void
   onVolume: (v: number) => void
   onExit: () => void
 }
 
-/** 演奏页底部控制条：播放/暂停、回开头、缩放、伴奏音量、退出（低频状态走 React，时间显示由演奏页 rAF 直写 DOM） */
+/** 演奏页底部控制条：播放/暂停、录音开关、回开头、伴奏音量、退出（低频状态走 React，时间显示由演奏页 rAF 直写 DOM） */
 export default function ControlBar({
   playing,
   ended,
-  zoom,
+  recOn,
   volume,
   onToggle,
+  onRecToggle,
   onRestart,
-  onZoom,
   onVolume,
   onExit,
 }: Props) {
@@ -35,19 +36,19 @@ export default function ControlBar({
       >
         {playing ? '❚❚' : '▶'}
       </button>
+      <button
+        className={`ctl rec${recOn ? ' on' : ''}`}
+        onClick={onRecToggle}
+        disabled={ended}
+        aria-label={recOn ? '关闭录音' : '开启录音'}
+        aria-pressed={recOn}
+        title={recOn ? '关闭录音（丢弃当前段，重新开启即重录）' : '开启录音（从头重录）'}
+      >
+        <i className="rec-dot" aria-hidden="true" />
+      </button>
       <button className="ctl" onClick={onRestart} aria-label="回开头" title="回开头">
         ↺
       </button>
-
-      <div className="ctl-group" aria-label="谱面缩放">
-        <button className="ctl" onClick={() => onZoom(-0.1)} aria-label="缩小谱面">
-          A−
-        </button>
-        <span className="zoom-read">{Math.round(zoom * 100)}%</span>
-        <button className="ctl" onClick={() => onZoom(0.1)} aria-label="放大谱面">
-          A+
-        </button>
-      </div>
 
       <label className="ctl-volume" aria-label="伴奏音量">
         <span className="vol-icon">♪</span>

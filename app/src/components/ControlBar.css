@@ -39,23 +39,39 @@
   background: var(--song-accent, var(--accent));
   filter: brightness(1.12);
 }
-.ctl.exit:hover {
+/* 录音开关：圆点指示，开着时红点呼吸 */
+.ctl.rec .rec-dot {
+  display: block;
+  width: 12px;
+  height: 12px;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.ctl.rec.on {
   color: var(--rec);
 }
-.ctl-group {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0 4px;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
+.ctl.rec.on .rec-dot {
+  background: var(--rec);
+  border-color: var(--rec);
+  animation: rec-pulse 1.6s ease-in-out infinite;
 }
-.zoom-read {
-  font-size: 11px;
-  color: var(--ink-faint);
-  min-width: 36px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+@keyframes rec-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.ctl.rec.on:hover {
+  background: rgba(243, 114, 127, 0.14);
+}
+.ctl.exit:hover {
+  color: var(--rec);
 }
 .ctl-volume {
   display: flex;
@@ -75,8 +91,5 @@
 @media (max-width: 640px) {
   .ctl-volume input[type='range'] {
     width: 56px;
-  }
-  .zoom-read {
-    display: none;
   }
 }

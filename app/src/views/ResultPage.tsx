@@ -51,7 +51,8 @@ export default function ResultPage() {
         const ab = await res.arrayBuffer()
         const buffer = await audioEngine.decode(ab)
         if (!alive) return
-        const track = extractPitchTrack(buffer)
+        // 录音起点对齐伴奏时间轴：中途开录/回开头重录时，轨迹时间整体平移 startSec
+        const track = extractPitchTrack(buffer, { offsetSec: take.startSec })
         const result = scoreAgainst(track, timeline)
         setAnalysis({ status: 'done', result })
         setTake({ ...take, pitchTrack: result.annotatedTrack, stats: result.stats })
@@ -87,19 +88,21 @@ export default function ResultPage() {
 
   const toggleSyncPlay = useCallback(async () => {
     const el = audioRef.current
-    if (!el || audioEngine.duration === 0) return
+    if (!el || audioEngine.duration === 0 || !take) return
     await audioEngine.resume()
     if (syncPlaying) {
       el.pause()
       audioEngine.pause()
       setSyncPlaying(false)
     } else {
-      el.currentTime = 0
+      // 录音与伴奏按起点对齐：起奏即录 startSec=0，回开头/中途重录则从 startSec 起播伴奏
+      const startSec = take.startSec
+      el.currentTime = startSec
       void el.play()
-      audioEngine.play(0)
+      audioEngine.play(startSec)
       setSyncPlaying(true)
     }
-  }, [syncPlaying])
+  }, [syncPlaying, take])
 
   /** 双击图表下载录音（webm/mp4 由 mime 决定扩展名） */
   const downloadTake = () => {

@@ -13,34 +13,6 @@
   scrollbar-width: thin;
 }
 
-.sheet-tools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.sheet-tools .tool-pill {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--ink-dim);
-  border-radius: var(--pill);
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.sheet-tools .tool-pill:hover {
-  color: var(--ink);
-  border-color: var(--ink);
-}
-.zoom-label {
-  font-size: 11px;
-  color: var(--ink-faint);
-  min-width: 38px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
 .sheet-error {
   color: var(--rec);
   font-size: 13px;

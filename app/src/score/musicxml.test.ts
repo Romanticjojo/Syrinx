@@ -21,6 +21,42 @@ const XML = `<?xml version="1.0" encoding="UTF-8"?>
   </part>
 </score-partwise>`
 
+/** 多声部 + backup/forward 的最小样例：divisions=1（四分音符=1）、tempo=60 */
+const VOICES_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>60</per-minute></metronome></direction-type></direction>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>half</type></note>
+      <note><rest/><duration>2</duration><voice>1</voice><type>half</type></note>
+      <backup><duration>4</duration></backup>
+      <note><rest/><duration>1</duration><voice>2</voice><type>quarter</type></note>
+      <forward><duration>1</duration><voice>2</voice></forward>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><voice>2</voice><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>`
+
+describe('parseMusicXml 多声部（backup/forward）', () => {
+  const tl = parseMusicXml(VOICES_XML)
+
+  it('backup 回退游标：voice2 的音落在正确时间', () => {
+    // voice1: C5 @0s(2拍) + rest 2拍；backup 回到 0；voice2: rest 1拍 + forward 1拍 + E4 @2s(2拍)
+    const c5 = tl.notes.find((n) => n.midi === 72)
+    const e4 = tl.notes.find((n) => n.midi === 64)
+    expect(c5).toMatchObject({ time: 0, measure: 1 })
+    expect(e4).toMatchObject({ time: 2, duration: 2, measure: 1 })
+  })
+
+  it('backup 不推进小节总时长：measureTimes[1] 不存在，durationSec=4s', () => {
+    // 单小节 4 拍 @60bpm = 4s；backup/forward 不应使游标溢出到 8 拍
+    expect(tl.measureTimes).toEqual([{ measure: 1, time: 0 }])
+    expect(tl.durationSec).toBe(4)
+  })
+})
+
 describe('parseMusicXml', () => {
   const tl = parseMusicXml(XML)
 

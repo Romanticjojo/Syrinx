@@ -117,6 +117,11 @@ class AudioEngine {
     return this.ctx.currentTime
   }
 
+  /** 麦克风分析支路挂载点：与主时钟/伴奏同一 AudioContext，避免双上下文漂移 */
+  get audioCtx(): AudioContext {
+    return this.ctx
+  }
+
   /** 恢复被浏览器自动挂起的音频上下文（用户手势里调用） */
   async resume(): Promise<void> {
     if (this.ctx.state === 'suspended') await this.ctx.resume()

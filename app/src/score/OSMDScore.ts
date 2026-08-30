@@ -87,20 +87,6 @@ export class OSMDScore {
     }
   }
 
-  setZoom(scale: number): void {
-    this.osmd.Zoom = scale
-    this.osmd.render()
-    // 重渲染后光标元素需重新出现
-    if (!this.osmd.cursor.Hidden) {
-      this.osmd.cursor.show()
-      this.osmd.cursor.update()
-    }
-  }
-
-  get zoom(): number {
-    return this.osmd.Zoom
-  }
-
   dispose(): void {
     // OSMD 无 dispose API；清空容器释放 DOM
     this.containerEl.innerHTML = ''
