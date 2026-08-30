@@ -510,13 +510,17 @@ export default function PerformPage() {
       <video className="perform-bg" ref={bgVideoRef} muted loop playsInline autoPlay aria-hidden="true" style={{ display: song.backgroundVideoUrl ? 'block' : 'none' }} />
       <header className="perform-hud hud-top">
         <div className="hud-song">
-          <b>{song.title}</b>
-          <span>{song.composer}</span>
+          <button className="back-ghost" onClick={exit} aria-label="返回曲库">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <div className="hud-song-text">
+            <b>{song.title}</b>
+            <span>{song.composer}</span>
+          </div>
         </div>
         <div className="hud-stats">
-          <button className="back-pill" onClick={exit} aria-label="返回曲库">
-            ‹ 曲库
-          </button>
           <div className="hud-stat">
             <span>小节</span>
             <span className="num" ref={measureEl}>
