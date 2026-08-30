@@ -53,7 +53,8 @@ video.perform-bg {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 28px 10px;
+  padding: 14px 28px;
+  border-bottom: 1px solid var(--line);
 }
 /* 可读性底座（t_bf0d76ec）：顶缘向下渐变 scrim，压住背景视频/canvas 亮部。
    挂在 .hud-top::before（z-index:-1）——父级是 z-index:3 的 flex item，自带
@@ -65,14 +66,9 @@ video.perform-bg {
   left: 0;
   right: 0;
   top: 0;
-  height: 150px;
+  bottom: 0;
   pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    rgba(11, 12, 12, 0.88) 0%,
-    rgba(11, 12, 12, 0.6) 55%,
-    rgba(11, 12, 12, 0) 100%
-  );
+  background: #0b0c0c;
 }
 /* 左组：幽灵返回钮 + 歌名/作者纵向组（t_4a4c84a0 顶栏重设计）
    返回是导航动作不放大按钮——细线小圆钮融入顶栏；歌名层级提升（衬线加大），
