@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './Intro.css'
 
-const SKIP_KEY = 'syrinx_skip_intro'
-
 interface Props {
   onDone: () => void
 }
