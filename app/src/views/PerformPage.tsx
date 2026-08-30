@@ -52,6 +52,7 @@ export default function PerformPage() {
   const scoreRef = useRef<OSMDScore | null>(null)
   const shellRef = useRef<HTMLDivElement>(null)
   const bgCanvasRef = useRef<HTMLCanvasElement>(null)
+  const bgVideoRef = useRef<HTMLVideoElement>(null)
   const measureEl = useRef<HTMLSpanElement>(null)
   const timeEl = useRef<HTMLSpanElement>(null)
   const playedEl = useRef<HTMLSpanElement>(null)
@@ -112,7 +113,7 @@ export default function PerformPage() {
     window.setTimeout(() => go('result'), 1200)
   }, [go, showToast, song.id])
 
-  // 进入即装配：曲谱解析 → 伴奏合成 → 装入主时钟（就绪前由浮层遮罩）
+  // 进入即装配：曲谱解析 → 伴奏装入（真实伴奏优先，缺省合成） → 装入主时钟（就绪前由浮层遮罩）
   useEffect(() => {
     let alive = true
     audioEngine.onEnd = finish
@@ -123,7 +124,19 @@ export default function PerformPage() {
         setXml(x)
         setTimeline(t)
         timelineRef.current = t
-        const buffer = await synthAccompaniment(t)
+        // 真实伴奏优先：Song Pack 有音频文件时解码装入；缺文件或解码失败回退程序化合成
+        let buffer: AudioBuffer | null = null
+        if (song.accompanimentUrl) {
+          try {
+            const res = await fetch(song.accompanimentUrl)
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            buffer = await audioEngine.decode(await res.arrayBuffer())
+          } catch (e: unknown) {
+            console.warn(`[luv] 伴奏加载失败，回退程序化合成：${e instanceof Error ? e.message : e}`)
+            buffer = null
+          }
+        }
+        if (!buffer) buffer = await synthAccompaniment(t)
         if (!alive) return
         await audioEngine.load(buffer)
         if (!alive) return
@@ -155,8 +168,22 @@ export default function PerformPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // three.js 主题背景：挂载即渲染，伴奏 analyser 驱动呼吸，卸载全量释放
+  // 每曲动态背景：有视频素材走 <video> 支路（静音循环），否则 three.js 主题背景
   useEffect(() => {
+    if (!song.backgroundVideoUrl) return
+    const v = bgVideoRef.current
+    if (!v) return
+    v.src = song.backgroundVideoUrl
+    v.play().catch(() => {})
+    return () => {
+      v.pause()
+      v.removeAttribute('src')
+    }
+  }, [song.backgroundVideoUrl])
+
+  // three.js 主题背景：挂载即渲染，伴奏 analyser 驱动呼吸，卸载全量释放（有视频时跳过）
+  useEffect(() => {
+    if (song.backgroundVideoUrl) return
     const canvas = bgCanvasRef.current
     if (!canvas) return
     const scene = new LumiereScene(canvas, song.accent)
@@ -326,6 +353,7 @@ export default function PerformPage() {
       style={{ '--song-accent': song.accent } as React.CSSProperties}
     >
       <canvas className="perform-bg" ref={bgCanvasRef} aria-hidden="true" />
+      <video className="perform-bg" ref={bgVideoRef} muted loop playsInline autoPlay aria-hidden="true" style={{ display: song.backgroundVideoUrl ? 'block' : 'none' }} />
       <header className="perform-hud hud-top">
         <div className="hud-song">
           <b>{song.title}</b>

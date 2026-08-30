@@ -57,4 +57,12 @@ describe('parseMusicXml', () => {
     expect(t.notes.length).toBeGreaterThan(20)
     expect(t.durationSec).toBeGreaterThan(30)
   })
+
+  it('解析 luv-letter Song Pack 曲谱（正式曲目接入格式）', () => {
+    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8')
+    const t = parseMusicXml(xml)
+    expect(t.notes.length).toBeGreaterThan(0)
+    expect(t.measureTimes.length).toBeGreaterThan(0)
+    expect(t.durationSec).toBeGreaterThan(0)
+  })
 })

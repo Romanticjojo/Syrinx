@@ -78,6 +78,14 @@
   overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
+/* 正式封面图（Song Pack cover 字段）：铺满封面区，黑胶标记与角注浮于其上 */
+.cover .cover-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .cover .vinyl-mark {
   position: absolute;
   left: 18px;

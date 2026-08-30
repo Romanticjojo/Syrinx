@@ -68,6 +68,10 @@ export interface SongManifest {
   scoreUrl: string
   /** 外部伴奏音频（可选；缺省用曲谱程序化合成） */
   accompanimentUrl?: string
+  /** 每曲动态背景视频（可选；缺省用 three.js 主题背景） */
+  backgroundVideoUrl?: string
+  /** 每曲封面图（可选；缺省用 accent 渐变） */
+  coverUrl?: string
   /** 每曲主题色：驱动背景/光标/高亮/强调元素 */
   accent: string
   backgroundTheme: 'lumiere' | 'aurora' | 'ember'

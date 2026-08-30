@@ -37,6 +37,7 @@ export default function HomePage() {
         aria-label={`进入 ${featured.title} 预览`}
       >
         <div className="hero-bg" style={coverStyle(featured.accent)} />
+        {featured.coverUrl && <img className="hero-bg-img" src={featured.coverUrl} alt="" />}
         <div className="hero-shade" />
         <div className="hero-body">
           <div className="kicker">{featured.tags.join(' · ')}</div>
@@ -70,7 +71,10 @@ export default function HomePage() {
               onClick={() => go('preview', s.id)}
               title={`${s.title} · ${s.composer}`}
             >
-              <div className="art" style={coverStyle(s.accent)}>
+              <div className="art" style={s.coverUrl ? undefined : coverStyle(s.accent)}>
+                {s.coverUrl && (
+                  <img className="art-img" src={s.coverUrl} alt="" loading="lazy" />
+                )}
                 <span
                   className="mini-play"
                   style={{ background: s.accent }}

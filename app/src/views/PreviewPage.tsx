@@ -49,8 +49,12 @@ export default function PreviewPage() {
   }
   const rows: [string, string, string][] = [
     ['调性', song.keyLabel, 'Key'],
-    ['拍号', `3/4 · ${song.bpm} BPM`, 'Tempo'],
-    ['伴奏', '程序化合成（正式伴奏由外部提供）', 'Audio'],
+    ['拍号', `${song.bpm} BPM`, 'Tempo'],
+    [
+      '伴奏',
+      song.accompanimentUrl ? '正式伴奏音频（Song Pack 提供）' : '程序化合成（正式伴奏由外部提供）',
+      'Audio',
+    ],
     ['技巧要求', song.difficulty === 1 ? '基础气息与指法' : '连奏气息 · 中音区 · 弱起处理', `Level ${song.difficulty}`],
   ]
 
@@ -73,8 +77,9 @@ export default function PreviewPage() {
         </div>
         <div className="album-row">
           <div className="cover playing" style={cover}>
+            {song.coverUrl && <img className="cover-img" src={song.coverUrl} alt={`${song.title} 封面`} />}
             <div className="vinyl-mark">♪</div>
-            <div className="cover-note">预览占位 · 每曲 preview.mp4</div>
+            <div className="cover-note">{song.coverUrl ? '正式封面 · Song Pack' : '预览占位 · 每曲 preview.mp4'}</div>
           </div>
           <div className="album-info">
             <div className="kicker">{song.tags.join(' · ')}</div>

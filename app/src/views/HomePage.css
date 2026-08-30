@@ -71,6 +71,18 @@
 .home-hero:hover .hero-bg {
   transform: scale(1.04);
 }
+/* 封面图（Song Pack cover 字段）铺满 hero，缩放动画与渐变占位一致 */
+.home-hero .hero-bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 8s ease;
+}
+.home-hero:hover .hero-bg-img {
+  transform: scale(1.04);
+}
 .home-hero .hero-shade {
   position: absolute;
   inset: 0;
@@ -173,6 +185,14 @@
   margin-bottom: 12px;
   position: relative;
   box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.song-card .art .art-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .song-card .art .mini-play {
   position: absolute;

@@ -1,11 +1,18 @@
 import type { SongManifest, Timeline } from '../types'
 import { parseMusicXml } from '../score/musicxml'
+import luvLetterManifest from '../../public/songs/luv-letter/manifest.json'
 
 /**
  * 内置曲库。占位曲目 2/3 复用 lumiere 曲谱（不同主题色/难度元数据），
  * 用户按 Song Pack 格式放入 public/songs/<id>/ 并在此登记即可扩展。
  */
 export const SONGS: SongManifest[] = [
+  // 首首正式曲：Luv Letter（DJ OKAWARI）——真实伴奏 + 动画背景 + 封面；谱面暂为占位（图片谱 OMR 转换中）
+  {
+    ...luvLetterManifest,
+    difficulty: luvLetterManifest.difficulty as 1 | 2 | 3,
+    backgroundTheme: luvLetterManifest.backgroundTheme as SongManifest['backgroundTheme'],
+  },
   {
     id: 'lumiere',
     title: 'Nocturne pour Lumière',
