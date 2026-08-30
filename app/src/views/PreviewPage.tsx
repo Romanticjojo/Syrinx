@@ -119,19 +119,7 @@ export default function PreviewPage() {
         {/* hero 右侧：3D 长笛展示（加载失败自动回退 CSS 长笛条） */}
         <div className="album-row">
           <div className="cover playing" style={cover}>
-            {song.previewVideoUrl ? (
-              <video
-                className="cover-img"
-                src={song.previewVideoUrl}
-                muted
-                loop
-                playsInline
-                autoPlay
-                aria-label={`${song.title} 封面动画`}
-              />
-            ) : song.coverUrl ? (
-              <img className="cover-img" src={song.coverUrl} alt={`${song.title} 封面`} />
-            ) : null}
+            {song.coverUrl && <img className="cover-img" src={song.coverUrl} alt={`${song.title} 封面`} />}
             <div className="vinyl-mark">♪</div>
           </div>
           <div className="album-info">
