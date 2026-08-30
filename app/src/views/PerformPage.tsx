@@ -258,19 +258,13 @@ export default function PerformPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [song.accent])
 
-  // 光标小节回调 → 直写 HUD。ScoreSheet 由 xml/timeline 条件渲染，挂载晚于本页首帧，
-  // 依赖带上 xml/timeline 才能在 scoreRef 就绪后补挂回调（空依赖会永远挂在 null 上）
-  useEffect(() => {
-    const score = scoreRef.current
-    if (!score) return
-    score.onMeasureChange = (m, total) => {
-      if (measureEl.current)
-        measureEl.current.textContent = `${String(m).padStart(2, '0')} / ${total}`
-    }
-    return () => {
-      score.onMeasureChange = undefined
-    }
-  }, [xml, timeline])
+  // 光标小节回调 → 直写 HUD。回调必须随 ScoreSheet 实例一起挂/摘（传 prop 由
+  // ScoreSheet 挂接）：演奏页侧自己往 scoreRef 挂会错过 StrictMode remount 换出的
+  // 新实例，HUD 永远停在 -- / --（t_b22f5467 项 3 根因）
+  const handleMeasure = useCallback((m: number, total: number) => {
+    if (measureEl.current)
+      measureEl.current.textContent = `${String(m).padStart(2, '0')} / ${total}`
+  }, [])
 
   /** 就绪 → 用户手势起奏：恢复音频上下文 + 预开麦克风 + 调度 4 拍节拍音 */
   const start = useCallback(async () => {
@@ -464,7 +458,13 @@ export default function PerformPage() {
 
       <div className="perform-stage">
         {xml && timeline && (
-          <ScoreSheet xml={xml} timeline={timeline} accent={song.accent} scoreRef={scoreRef} />
+          <ScoreSheet
+            xml={xml}
+            timeline={timeline}
+            accent={song.accent}
+            scoreRef={scoreRef}
+            onMeasureChange={handleMeasure}
+          />
         )}
       </div>
 
