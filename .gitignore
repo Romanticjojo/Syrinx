@@ -7,3 +7,16 @@ resources/_cgi-bin*
 # 安装的技能（非项目源码）
 .claude/
 .vitest-out.txt
+
+# 调试/临时脚本与 OMR 工作目录
+app/scripts/tmp-*
+app/scripts/cdp-debug*.mjs
+app/scripts/dom-debug.mjs
+app/scripts/fetch-debug.mjs
+app/scripts/server-debug.mjs
+app/scripts/gen-fake-mic.py
+app/scripts/fake-mic-440.wav
+app/scripts/tmp-*.*
+dev-server.log
+resources/luv-letter/score/omr-work/
+.kanban_check.py
