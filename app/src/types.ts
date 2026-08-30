@@ -72,6 +72,8 @@ export interface SongManifest {
   backgroundVideoUrl?: string
   /** 每曲封面图（可选；缺省用 accent 渐变） */
   coverUrl?: string
+  /** 封面构图锚点（object-position，宽幅裁切时保持人物/主体可见；缺省居中） */
+  coverPosition?: string
   /** 每曲主题色：驱动背景/光标/高亮/强调元素 */
   accent: string
   backgroundTheme: 'lumiere' | 'aurora' | 'ember'

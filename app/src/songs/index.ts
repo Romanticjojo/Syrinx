@@ -56,6 +56,20 @@ export const SONGS: SongManifest[] = [
     backgroundTheme: 'ember',
     bpm: 84,
   },
+  {
+    id: 'zephyr-etude',
+    title: '微风练习曲',
+    composer: '传统（占位）',
+    difficulty: 1,
+    durationLabel: '0:42',
+    keyLabel: 'C 大调',
+    description: '轻快明朗的连音热身曲占位，暖金主题色呼应「夜航晨光」设计基调。',
+    tags: ['练习曲', '入门'],
+    scoreUrl: '/songs/lumiere/score.musicxml',
+    accent: '#d9a441',
+    backgroundTheme: 'aurora',
+    bpm: 84,
+  },
 ]
 
 export function getSong(id: string | null): SongManifest | undefined {

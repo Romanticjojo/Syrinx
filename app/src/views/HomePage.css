@@ -152,40 +152,46 @@
   transform: scale(1.06);
 }
 
-/* 卡片网格 */
+/* 卡片流（Netflix 编辑感）：横向卡 + hover 放大提亮 + 预览片段 */
 .home-section {
   padding: 0 32px 44px;
 }
 .home-section h3 {
+  font-family: var(--serif);
   font-size: 22px;
   font-weight: 700;
   margin-bottom: 18px;
 }
 .song-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 22px;
 }
 .song-card {
-  background: var(--surface);
-  border-radius: 8px;
-  padding: 14px;
+  position: relative;
+  background: transparent;
+  padding: 0;
   cursor: pointer;
-  transition: background 0.2s ease;
   text-align: left;
   border: none;
   color: inherit;
+  border-radius: 10px;
+  transition: transform 0.25s ease;
 }
-.song-card:hover {
-  background: #202020;
+/* Netflix 式整卡放大：浮出网格层级压过邻卡 */
+.song-card:hover,
+.song-card:focus-visible {
+  transform: scale(1.05);
+  z-index: 2;
 }
 .song-card .art {
-  aspect-ratio: 1;
-  border-radius: 6px;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
   margin-bottom: 12px;
   position: relative;
-  box-shadow: var(--shadow-md);
   overflow: hidden;
+  box-shadow: var(--shadow-md);
+  background: var(--surface-2);
 }
 .song-card .art .art-img {
   position: absolute;
@@ -193,6 +199,42 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: filter 0.25s ease, transform 0.25s ease;
+}
+.song-card:hover .art-img,
+.song-card:focus-visible .art-img {
+  filter: brightness(1.12);
+  transform: scale(1.04);
+}
+/* 预览片段：淡入盖过封面静帧（muted 自动播放策略已满足） */
+.song-card .art .art-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: preview-in 0.3s ease both;
+}
+@keyframes preview-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* 悬停暗角：为迷你播放按钮与视频预览提供对比度 */
+.song-card .art .art-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 62%, rgba(8, 8, 8, 0.55));
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.song-card:hover .art-veil,
+.song-card:focus-visible .art-veil {
+  opacity: 1;
 }
 .song-card .art .mini-play {
   position: absolute;
@@ -213,9 +255,13 @@
   transition: all 0.2s ease;
   box-shadow: var(--shadow-lg);
 }
-.song-card:hover .mini-play {
+.song-card:hover .mini-play,
+.song-card:focus-visible .mini-play {
   opacity: 1;
   transform: translateY(0);
+}
+.song-card .card-info {
+  padding: 0 2px;
 }
 .song-card .t {
   font-size: 15px;
@@ -230,6 +276,9 @@
   margin-top: 3px;
 }
 .song-card .diff {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 11px;
   color: var(--ink-faint);
   margin-top: 6px;
