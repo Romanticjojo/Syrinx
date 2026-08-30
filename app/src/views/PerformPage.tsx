@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
 import { openMic, type MicSession } from '../audio/recorder'
 import { synthAccompaniment } from '../audio/synth'
@@ -297,13 +297,15 @@ export default function PerformPage() {
         playingRef.current = true
         setPlaying(true)
         setPhase('performing')
-        // 默认开录（录音开着才封存 Take）；麦克风没就绪时等它就绪后补开
+        // 默认开录（录音开着才封存 Take）；麦克风没就绪时等它就绪后补开。
+        // 一次性提示采集确实开起来了（t_b22f5467 项 2）
+        const REC_ON_TOAST = '🎙️ 录音已开启，结束后可在回放页查看'
         recOnRef.current = true
         setRecOn(true)
-        if (micRef.current) startCapture(0, false)
+        if (micRef.current && startCapture(0, false)) showToast(REC_ON_TOAST)
         else void ensureMic().then((mic) => {
           if (playingRef.current && recOnRef.current && micRef.current === mic && !recStartedRef.current)
-            startCapture(0, false)
+            if (startCapture(0, false)) showToast(REC_ON_TOAST)
         }).catch(() => {})
         return
       }
@@ -391,7 +393,7 @@ export default function PerformPage() {
     if (!next) {
       micRef.current?.discardCapture()
       recStartedRef.current = null
-      showToast('已关闭录音，重新开启即重录本段')
+      showToast('录音已关闭')
     } else if (!startCapture(audioEngine.time, !audioEngine.playing)) {
       showToast('麦克风不可用，无法录音')
       recOnRef.current = false
