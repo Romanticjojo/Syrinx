@@ -352,3 +352,25 @@
     padding: 30px 26px;
   }
 }
+
+
+/* ---------- 返回曲库按钮（与 PreviewPage back-pill 同语言） ---------- */
+.back-pill {
+  background: var(--surface-2);
+  border: none;
+  color: var(--ink);
+  height: 38px;
+  padding: 0 18px 0 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--pill);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.back-pill:hover {
+  background: var(--surface);
+  transform: scale(1.05);
+}

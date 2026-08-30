@@ -472,7 +472,7 @@ export default function PerformPage() {
     }
   }, [startCapture, showToast])
 
-  const exit = useCallback(() => go('preview'), [go])
+  const exit = useCallback(() => go('home'), [go])
 
   // 键盘：空格 播放/暂停，Esc 退出
   useEffect(() => {
@@ -514,6 +514,9 @@ export default function PerformPage() {
           <span>{song.composer}</span>
         </div>
         <div className="hud-stats">
+          <button className="back-pill" onClick={exit} aria-label="返回曲库">
+            ‹ 曲库
+          </button>
           <div className="hud-stat">
             <span>小节</span>
             <span className="num" ref={measureEl}>

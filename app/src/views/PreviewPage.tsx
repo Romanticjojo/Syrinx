@@ -90,7 +90,17 @@ export default function PreviewPage() {
               linear-gradient(160deg, #10201c, #0a0d0c 70%)`,
           }}
         />
-        {song.backgroundVideoUrl ? (
+        {song.previewVideoUrl ? (
+          <video
+            className="preview-bg-media"
+            ref={bgVideoRef}
+            src={song.previewVideoUrl}
+            muted
+            loop
+            playsInline
+            autoPlay
+          />
+        ) : song.backgroundVideoUrl ? (
           <video
             className="preview-bg-media"
             ref={bgVideoRef}
