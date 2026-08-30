@@ -48,15 +48,36 @@ video.perform-bg {
 }
 
 .hud-top {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 18px 28px 10px;
 }
+/* 可读性底座（t_bf0d76ec）：顶缘向下渐变 scrim，压住背景视频/canvas 亮部。
+   挂在 .hud-top::before（z-index:-1）——父级是 z-index:3 的 flex item，自带
+   stacking context，scrim 落在视频层(z0)之上、HUD 内容之下，且随 idle 一起淡出；
+   纯渐变不用 backdrop-filter：背景视频在动，blur 每帧重采样太贵 */
+.hud-top::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 112px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(11, 12, 12, 0.72) 0%,
+    rgba(11, 12, 12, 0.42) 55%,
+    rgba(11, 12, 12, 0) 100%
+  );
+}
 /* 左组：幽灵返回钮 + 歌名/作者纵向组（t_4a4c84a0 顶栏重设计）
    返回是导航动作不放大按钮——细线小圆钮融入顶栏；歌名层级提升（衬线加大），
-   作者弱化为 --ink-dim 小字跟随其下 */
+   作者弱化为 --ink-dim 小字跟随其下。
+   可读性（t_bf0d76ec）：scrim 之上再加细 text-shadow 兜底，最亮画面下仍达 AA */
 .hud-song {
   display: flex;
   align-items: center;
@@ -78,6 +99,8 @@ video.perform-bg {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--ink);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 .hud-song-text span {
   font-size: 11px;
@@ -86,6 +109,7 @@ video.perform-bg {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 .back-ghost {
   flex: none;
@@ -94,17 +118,17 @@ video.perform-bg {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--pill);
-  background: transparent;
-  color: var(--ink-dim);
+  background: rgba(11, 12, 12, 0.32);
+  color: var(--ink);
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 .back-ghost:hover {
-  border-color: var(--line-strong);
+  border-color: var(--ink-dim);
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(11, 12, 12, 0.5);
 }
 .hud-stats {
   display: flex;
@@ -115,13 +139,15 @@ video.perform-bg {
   align-items: baseline;
   gap: 8px;
   font-size: 11px;
-  color: var(--ink-faint);
+  color: var(--ink-dim);
   letter-spacing: 0.08em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 .hud-stat .num {
   font-size: 15px;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
 .hud-bottom {
