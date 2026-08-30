@@ -77,6 +77,8 @@ export interface SongManifest {
   /** 每曲动态背景视频（可选；缺省用 three.js 主题背景） */
   backgroundVideoUrl?: string
   previewVideoUrl?: string
+  /** 曲库卡片 hover 预览专用：与封面同构图的方形原版视频（镜头不动，人物原地动起来） */
+  hoverVideoUrl?: string
   /** 每曲封面图（可选；缺省用 accent 渐变） */
   coverUrl?: string
   /** 伴奏锚点文件（可选；离线分析伴奏生成，供伴奏驱动光标，见 score/anchors.ts） */

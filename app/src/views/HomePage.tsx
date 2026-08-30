@@ -36,7 +36,7 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
     videoRef.current?.pause()
   }
   const startPreview = () => {
-    if (!song.backgroundVideoUrl) return
+    if (!song.hoverVideoUrl && !song.backgroundVideoUrl) return
     clearTimeout(timer.current)
     timer.current = window.setTimeout(
       () => {
@@ -65,7 +65,13 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
       onBlur={stopPreview}
       title={`${song.title} · ${song.composer}`}
     >
-      <div className="art" style={song.coverUrl ? undefined : coverStyle(song.accent)}>
+      <div
+        className="art"
+        style={{
+          ...(song.coverUrl ? undefined : coverStyle(song.accent)),
+          ...(song.coverPosition ? { ['--cover-pos' as string]: song.coverPosition } : {}),
+        }}
+      >
         {song.coverUrl && (
           <img
             className="art-img"
@@ -76,12 +82,12 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
           />
         )}
         {/* 预览片段：静音自动播放（muted 满足 WebView 自动播放策略）；预热后隐藏保活 */}
-        {warmed && song.backgroundVideoUrl && (
+        {warmed && (song.hoverVideoUrl ?? song.backgroundVideoUrl) && (
           <video
             ref={videoRef}
             className="art-preview"
             style={{ visibility: previewing ? 'visible' : 'hidden' }}
-            src={song.backgroundVideoUrl}
+            src={song.hoverVideoUrl ?? song.backgroundVideoUrl}
             muted
             loop
             playsInline

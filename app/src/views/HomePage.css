@@ -214,7 +214,6 @@
 .song-card:hover .art-img,
 .song-card:focus-visible .art-img {
   filter: brightness(1.12);
-  transform: scale(1.04);
 }
 /* 预览片段：淡入盖过封面静帧（muted 自动播放策略已满足） */
 .song-card .art .art-preview {
@@ -223,7 +222,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  animation: preview-in 0.3s ease both;
+  object-position: var(--cover-pos, 26% 40%);
+  animation: preview-in 0.25s ease both;
 }
 @keyframes preview-in {
   from {
