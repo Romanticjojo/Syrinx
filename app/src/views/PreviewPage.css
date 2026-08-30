@@ -50,37 +50,69 @@
 }
 
 .preview-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 32px;
-  background: linear-gradient(var(--scrim-top), var(--scrim-mid) 70%, transparent);
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 28px 10px;
 }
-.back-pill {
-  background: var(--surface-2);
-  border: none;
-  color: var(--ink);
-  height: 38px;
-  padding: 0 18px 0 13px;
+/* 可读性 scrim：同演奏页顶栏（t_bf0d76ec 语言） */
+.preview-topbar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 112px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(11, 12, 12, 0.72) 0%,
+    rgba(11, 12, 12, 0.42) 55%,
+    rgba(11, 12, 12, 0) 100%
+  );
+}
+.topbar-left {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  border-radius: var(--pill);
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s ease;
+  gap: 14px;
 }
-.back-pill:hover {
-  background: var(--surface);
-  transform: scale(1.05);
+.back-ghost {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  background: rgba(11, 12, 12, 0.32);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.back-ghost:hover {
+  border-color: var(--ink-dim);
+  background: rgba(11, 12, 12, 0.5);
 }
 .preview-topbar .logo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--serif);
+  font-size: 19px;
   font-weight: 700;
-  font-size: 17px;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.preview-topbar .logo img {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--circ, 50%);
+  border: 1px solid var(--line-strong);
 }
 
 .album-hero {

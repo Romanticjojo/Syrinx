@@ -106,11 +106,16 @@ export default function PreviewPage() {
       </div>
 
       <header className="preview-topbar">
-        <button className="back-pill" onClick={() => go('home')} aria-label="返回曲库">
-          ‹ 曲库
-        </button>
-        <div className="logo">
-          Syrinx<i style={{ fontStyle: 'normal', color: song.accent }}>·</i>长笛流光
+        <div className="topbar-left">
+          <button className="back-ghost" onClick={() => go('home')} aria-label="返回曲库">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <div className="logo">
+            <img src="/brand/syrinx-logo-white.jpg" alt="" aria-hidden="true" />
+            Syrinx
+          </div>
         </div>
       </header>
 
