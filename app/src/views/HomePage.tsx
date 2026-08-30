@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import About from '../components/About'
 import { DIFFICULTY_LABEL, SONGS } from '../songs'
 import type { SongManifest } from '../types'
 import { useAppStore } from '../store'
@@ -132,7 +131,6 @@ export default function HomePage() {
   const go = useAppStore((s) => s.go)
   const featured = SONGS[0]
   const [theme, setThemeState] = useState(() => getTheme())
-  const [aboutOpen, setAboutOpen] = useState(false)
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -144,7 +142,8 @@ export default function HomePage() {
     <div className="home">
       <header className="home-topbar">
         <div className="home-logo">
-          Syrinx<i>·</i>长笛流光
+          <img src="/brand/syrinx-logo-white.jpg" alt="" aria-hidden="true" />
+          Syrinx
         </div>
         <nav className="home-nav">
           <button className="nav-pill on">曲库</button>
@@ -152,9 +151,6 @@ export default function HomePage() {
           <button className="nav-pill">我的录音</button>
           <button className="nav-pill ghost" onClick={toggleTheme} aria-label="切换深浅主题" title="切换深浅主题">
             {theme === 'dark' ? '☀' : '☾'}
-          </button>
-          <button className="nav-pill ghost" onClick={() => setAboutOpen(true)}>
-            关于
           </button>
         </nav>
       </header>
@@ -203,20 +199,6 @@ export default function HomePage() {
           ))}
         </div>
       </section>
-
-      <footer className="home-footer">
-        <div className="footer-brand">
-          <span>Syrinx · 长笛演奏辅助 —— 曲谱跟随 · 伴奏同步 · 录音回放 · 音高反馈</span>
-        </div>
-        <div className="footer-meta">
-          曲谱与伴奏素材由用户自备自用，应用不分发。
-          <button className="footer-about" onClick={() => setAboutOpen(true)}>
-            关于 Syrinx
-          </button>
-        </div>
-      </footer>
-
-      {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
     </div>
   )
 }

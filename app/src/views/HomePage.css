@@ -16,13 +16,20 @@
 }
 
 .home-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-weight: 700;
   font-size: 19px;
   letter-spacing: 0.02em;
 }
-.home-logo i {
-  font-style: normal;
-  color: var(--brand-gold);
+.home-logo img {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--circ);
+  border: 1px solid var(--line-strong);
+  object-fit: cover;
+  display: block;
 }
 
 .home-nav {
@@ -292,39 +299,6 @@
   color: var(--ink-faint);
   margin-top: 6px;
   letter-spacing: 0.04em;
-}
-.home-footer {
-  padding: 22px 32px 60px;
-  color: var(--ink-faint);
-  font-size: 12px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.footer-brand {
-  display: inline-flex;
-  align-items: center;
-}
-.footer-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
-}
-.footer-about {
-  background: transparent;
-  border: none;
-  color: var(--ink-dim);
-  font-size: 12px;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-color: var(--line-strong);
-}
-.footer-about:hover {
-  color: var(--ink);
 }
 
 @media (max-width: 720px) {

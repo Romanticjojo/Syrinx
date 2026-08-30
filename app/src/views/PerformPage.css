@@ -30,6 +30,11 @@
   display: block;
   z-index: 0;
 }
+/* 背景视频：contain 不裁人物；留边由视频主背景色（青绿）垫底，与画面融合无接缝 */
+video.perform-bg {
+  object-fit: contain;
+  background: rgb(40, 186, 207);
+}
 
 /* ---------- HUD（顶栏 + 底部控制区，idle 时淡出） ---------- */
 .perform-hud {
@@ -383,5 +388,12 @@
   }
   .ov-card {
     padding: 30px 26px;
+  }
+}
+
+/* 窄屏（手机竖屏等）：视频保持 contain 不裁人物，同色底自然延展补满留边 */
+@media (max-width: 768px) {
+  video.perform-bg {
+    object-fit: contain;
   }
 }

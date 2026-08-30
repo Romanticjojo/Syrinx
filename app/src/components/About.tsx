@@ -18,7 +18,7 @@ export default function About({ onClose }: Props) {
   return (
     <div className="about" role="dialog" aria-label="关于 Syrinx" onClick={onClose}>
       <div className="about-card" onClick={(e) => e.stopPropagation()}>
-        <img className="about-emblem" src="/brand/syrinx-logo-dark.jpg" alt="" aria-hidden="true" />
+        <img className="about-emblem" src="/brand/syrinx-logo-white.jpg" alt="" aria-hidden="true" />
         <h2 className="about-brand">
           Syrinx<span>·</span>长笛流光
         </h2>
