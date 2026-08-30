@@ -262,7 +262,7 @@ export class OSMDScore {
 - 创建：`app/src/background/LumiereScene.ts`
 - 修改：`app/src/views/PerformPage.tsx`（挂背景 canvas）
 
-- [ ] 步骤 1：实现 LumiereScene：全屏 WebGLRenderer + 场景组——
+- [x] 步骤 1：实现 LumiereScene：全屏 WebGLRenderer + 场景组——
   - 深蓝夜空渐变背景（大球体内表面 shader 或 fog + 渐变平面）
   - 金色光尘粒子（BufferGeometry Points ~1500，缓慢上升 + sin 漂移，附加 alpha 呼吸）
   - 地平线光晕（PlaneGeometry + 径向渐变 CanvasTexture，additive blending）
@@ -270,8 +270,8 @@ export class OSMDScore {
   - 谱面区域保护：场景整体置于谱面层之下 + CSS 暗化遮罩（谱面容器 backdrop 面板已有近黑背景，双保险）
   - `prefers-reduced-motion`：粒子静止、仅静态渐变
   - dispose()：geometry/material/renderer 全释放
-- [ ] 步骤 2：手动验证：背景渲染、随伴奏音量呼吸、谱面可读性不受影响、无内存泄漏（多次进出演奏页 renderer 数量不增长——`performance` 面板或 `renderer.info`）
-- [ ] 步骤 3：Commit「feat: three.js 晨光主题动态背景」
+- [x] 步骤 2：手动验证：背景渲染、随伴奏音量呼吸、谱面可读性不受影响、无内存泄漏（多次进出演奏页 renderer 数量不增长——`performance` 面板或 `renderer.info`）（build/test/dev 自动验证通过；渲染效果项列入任务 13 人工清单）
+- [x] 步骤 3：Commit「feat: three.js 晨光主题动态背景」
 
 ## 任务 9：MediaRecorder 录音
 

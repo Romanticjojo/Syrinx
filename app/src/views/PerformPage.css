@@ -8,6 +8,16 @@
   background: radial-gradient(120% 90% at 50% -10%, #141a17 0%, var(--bg) 55%);
 }
 
+/* three.js 主题背景：置于谱面层之下 */
+.perform-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+}
+
 /* ---------- HUD（顶栏 + 底部控制区，idle 时淡出） ---------- */
 .perform-hud {
   transition: opacity 0.5s ease;

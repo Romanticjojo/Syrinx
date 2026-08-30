@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
 import { synthAccompaniment } from '../audio/synth'
+import { LumiereScene } from '../background/LumiereScene'
 import ControlBar from '../components/ControlBar'
 import ScoreSheet from '../components/ScoreSheet'
 import type { OSMDScore } from '../score/OSMDScore'
@@ -45,6 +46,7 @@ export default function PerformPage() {
 
   const scoreRef = useRef<OSMDScore | null>(null)
   const shellRef = useRef<HTMLDivElement>(null)
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null)
   const measureEl = useRef<HTMLSpanElement>(null)
   const timeEl = useRef<HTMLSpanElement>(null)
   const playedEl = useRef<HTMLSpanElement>(null)
@@ -107,6 +109,26 @@ export default function PerformPage() {
     // song 由 currentSongId 派生，进入本页才加载一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // three.js 主题背景：挂载即渲染，伴奏 analyser 驱动呼吸，卸载全量释放
+  useEffect(() => {
+    const canvas = bgCanvasRef.current
+    if (!canvas) return
+    const scene = new LumiereScene(canvas, song.accent)
+    scene.setAnalyser(audioEngine.analyser)
+    const fit = () => {
+      const r = canvas.getBoundingClientRect()
+      scene.resize(r.width, r.height)
+    }
+    fit()
+    window.addEventListener('resize', fit)
+    return () => {
+      window.removeEventListener('resize', fit)
+      scene.dispose()
+    }
+    // accent 随曲目变化时重建场景
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song.accent])
 
   // 光标小节回调 → 直写 HUD（ScoreSheet 挂载先于本 effect，scoreRef 已就绪）
   useEffect(() => {
@@ -251,6 +273,7 @@ export default function PerformPage() {
       ref={shellRef}
       style={{ '--song-accent': song.accent } as React.CSSProperties}
     >
+      <canvas className="perform-bg" ref={bgCanvasRef} aria-hidden="true" />
       <header className="perform-hud hud-top">
         <div className="hud-song">
           <b>{song.title}</b>
