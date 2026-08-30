@@ -1,0 +1,82 @@
+/* 演奏页控制条：悬浮胶囊，idle 时随整层淡出 */
+.control-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(16, 16, 18, 0.72);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+}
+.ctl {
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.ctl:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+}
+.ctl:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ctl.main {
+  background: var(--song-accent, var(--accent));
+  color: #06130d;
+  font-size: 16px;
+}
+.ctl.main:hover {
+  background: var(--song-accent, var(--accent));
+  filter: brightness(1.12);
+}
+.ctl.exit:hover {
+  color: var(--rec);
+}
+.ctl-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+.zoom-read {
+  font-size: 11px;
+  color: var(--ink-faint);
+  min-width: 36px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.ctl-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+.vol-icon {
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+.ctl-volume input[type='range'] {
+  width: 90px;
+  accent-color: var(--song-accent, var(--accent));
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .ctl-volume input[type='range'] {
+    width: 56px;
+  }
+  .zoom-read {
+    display: none;
+  }
+}

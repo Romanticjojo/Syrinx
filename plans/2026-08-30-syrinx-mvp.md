@@ -61,12 +61,12 @@ src/
 - 创建：`D:\LLM_work\flute_app\03-设计稿\direction-a~c\`（每方向 preview.html + perform.html）
 - 创建：`D:\LLM_work\flute_app\03-设计稿\设计对比与定稿.md`
 
-- [ ] 步骤 1：依次加载 claude-design、popular-web-designs、sketch 技能吸收方法论
-- [ ] 步骤 2：产出方向 A「夜航晨光」（现有 v1/v2 精修：暖金 #d9a441 + 晨光青 #5fb8a8、衬线大标题、Netflix hero）
-- [ ] 步骤 3：产出方向 B「Spotify 声波沉浸」（封面主导、大胆排版、青绿强调、圆角卡片）
-- [ ] 步骤 4：产出方向 C「光影剧场」（电影化：上下遮幅、光束、玻璃拟态谱面）
-- [ ] 步骤 5：写对比定稿文档（布局/配色/动效/沉浸感逐维对比 + 取舍理由 + 定稿方向的设计 token 表）
-- [ ] 步骤 6：定稿方向作为 M1 实现依据（React 化时提取 token）
+- [x] 步骤 1：依次加载 claude-design、popular-web-designs、sketch 技能吸收方法论
+- [x] 步骤 2：产出方向 A「夜航晨光」（现有 v1/v2 精修：暖金 #d9a441 + 晨光青 #5fb8a8、衬线大标题、Netflix hero）
+- [x] 步骤 3：产出方向 B「Spotify 声波沉浸」（封面主导、大胆排版、青绿强调、圆角卡片）
+- [x] 步骤 4：产出方向 C「光影剧场」（电影化：上下遮幅、光束、玻璃拟态谱面）
+- [x] 步骤 5：写对比定稿文档（布局/配色/动效/沉浸感逐维对比 + 取舍理由 + 定稿方向的设计 token 表）
+- [x] 步骤 6：定稿方向作为 M1 实现依据（React 化时提取 token）
 
 ## 任务 1：工程清理 + git + 视图路由骨架
 
@@ -75,8 +75,8 @@ src/
 - 删除：`app/src/App.css`、`app/src/assets/`（默认模板残留）
 - 创建：`app/src/store.ts`、`app/src/types.ts`、`app/vitest.config.ts`（如需）
 
-- [ ] 步骤 1：`git init` + 首次提交现有骨架
-- [ ] 步骤 2：写 store.ts（视图状态机）与 types.ts（核心类型）
+- [x] 步骤 1：`git init` + 首次提交现有骨架
+- [x] 步骤 2：写 store.ts（视图状态机）与 types.ts（核心类型）
 
 ```ts
 // store.ts 关键内容
@@ -112,9 +112,9 @@ export interface SongManifest {
 }
 ```
 
-- [ ] 步骤 3：App.tsx 按 store.view 切换四个占位视图；index.css 写入定稿设计 token（CSS 变量）
-- [ ] 步骤 4：`npm run dev` 验证四视图可切换、无报错；`npm run build` 通过
-- [ ] 步骤 5：Commit「feat: 工程骨架与视图路由」
+- [x] 步骤 3：App.tsx 按 store.view 切换四个占位视图；index.css 写入定稿设计 token（CSS 变量）
+- [x] 步骤 4：`npm run dev` 验证四视图可切换、无报错；`npm run build` 通过
+- [x] 步骤 5：Commit「feat: 工程骨架与视图路由」
 
 ## 任务 2：Song Pack 数据与曲库
 
@@ -122,11 +122,11 @@ export interface SongManifest {
 - 创建：`app/src/songs/index.ts`、`app/public/songs/lumiere/manifest.json`
 - 修改：`app/src/views/HomePage.tsx`（实现卡片墙）
 
-- [ ] 步骤 1：写 lumiere manifest.json（按 types.ts SongManifest；scoreUrl: '/songs/lumiere/score.musicxml'）+ 2 首占位曲目（score 复用 lumiere 曲谱或后续生成）
-- [ ] 步骤 2：songs/index.ts 内置曲库数组 + `loadSong(manifest)`（fetch score → text）
-- [ ] 步骤 3：HomePage 实现横向卡片墙（hover 放大、难度/时长角标、点击进入 preview）；顶栏与 hero 区按定稿设计
-- [ ] 步骤 4：`npm run dev` 手动验证：卡片渲染、点击跳转 preview、返回
-- [ ] 步骤 5：Commit「feat: 曲库首页与 Song Pack 数据」
+- [x] 步骤 1：写 lumiere manifest.json（按 types.ts SongManifest；scoreUrl: '/songs/lumiere/score.musicxml'）+ 2 首占位曲目（score 复用 lumiere 曲谱或后续生成）
+- [x] 步骤 2：songs/index.ts 内置曲库数组 + `loadSong(manifest)`（fetch score → text）
+- [x] 步骤 3：HomePage 实现横向卡片墙（hover 放大、难度/时长角标、点击进入 preview）；顶栏与 hero 区按定稿设计
+- [x] 步骤 4：`npm run dev` 手动验证：卡片渲染、点击跳转 preview、返回
+- [x] 步骤 5：Commit「feat: 曲库首页与 Song Pack 数据」
 
 ## 任务 3：MusicXML → 时间轴（TDD）
 
@@ -134,8 +134,8 @@ export interface SongManifest {
 - 创建：`app/src/score/musicxml.ts`、`app/src/score/musicxml.test.ts`
 - 修改：`app/package.json`（test script）、`app/vitest.config.ts`
 
-- [ ] 步骤 1：`npm i -D happy-dom`（vitest 单测需要 DOMParser；失败则降级自写微型 XML 解析器并记录于计划）
-- [ ] 步骤 2：写失败测试
+- [x] 步骤 1：`npm i -D happy-dom`（vitest 单测需要 DOMParser；失败则降级自写微型 XML 解析器并记录于计划）
+- [x] 步骤 2：写失败测试
 
 ```ts
 // musicxml.test.ts 要点
@@ -151,17 +151,17 @@ const XML = `<?xml version="1.0"?><score-partwise version="3.1"><part-list>...</
 // 断言：休止符不进 notes 但占时值；多 measure 累积正确；timeline.durationSec = 末音结束
 ```
 
-- [ ] 步骤 3：`npx vitest run` 确认 FAIL（函数未定义）
-- [ ] 步骤 4：实现 `parseMusicXml(xml: string): Timeline`：DOMParser → 遍历 part/measure → divisions/tempo（含中途 direction 变速支持）→ duration/divisions 四分音符数 → 秒；pitch step/alter/octave → midi；measure 起始时间表；末尾补 durationSec
-- [ ] 步骤 5：`npx vitest run` PASS；用真实 `public/songs/lumiere/score.musicxml`（3/4、84bpm、16 小节）加一条快照断言（durationSec ≈ 16×3×60/84 ≈ 34.29s）
-- [ ] 步骤 6：package.json 加 `"test": "vitest run"`；Commit「feat: MusicXML 时间轴解析（TDD）」
+- [x] 步骤 3：`npx vitest run` 确认 FAIL（函数未定义）
+- [x] 步骤 4：实现 `parseMusicXml(xml: string): Timeline`：DOMParser → 遍历 part/measure → divisions/tempo（含中途 direction 变速支持）→ duration/divisions 四分音符数 → 秒；pitch step/alter/octave → midi；measure 起始时间表；末尾补 durationSec
+- [x] 步骤 5：`npx vitest run` PASS；用真实 `public/songs/lumiere/score.musicxml`（3/4、84bpm、16 小节）加一条快照断言（durationSec ≈ 16×3×60/84 ≈ 34.29s）
+- [x] 步骤 6：package.json 加 `"test": "vitest run"`；Commit「feat: MusicXML 时间轴解析（TDD）」
 
 ## 任务 4：伴奏程序化合成
 
 **文件：**
 - 创建：`app/src/audio/synth.ts`
 
-- [ ] 步骤 1：实现 `synthAccompaniment(timeline: Timeline, sampleRate = 44100): Promise<AudioBuffer>`
+- [x] 步骤 1：实现 `synthAccompaniment(timeline: Timeline, sampleRate = 44100): Promise<AudioBuffer>`
 
 ```ts
 // 合成配方（夜曲风格，纯 Web Audio 节点图，OfflineAudioContext 渲染）：
@@ -173,15 +173,15 @@ const XML = `<?xml version="1.0"?><score-partwise version="3.1"><part-list>...</
 // 输出 master gain 0.8，总长 durationSec + 1.5s 尾音
 ```
 
-- [ ] 步骤 2：临时在 PreviewPage 调用并 `console.log(buffer.duration)` + 浏览器手动试听（开发验证代码可临时注入后移除）
-- [ ] 步骤 3：Commit「feat: 程序化伴奏合成」
+- [x] 步骤 2：临时在 PreviewPage 调用并 `console.log(buffer.duration)` + 浏览器手动试听（开发验证代码可临时注入后移除）
+- [x] 步骤 3：Commit「feat: 程序化伴奏合成」
 
 ## 任务 5：AudioEngine 主时钟
 
 **文件：**
 - 创建：`app/src/audio/AudioEngine.ts`
 
-- [ ] 步骤 1：实现单例类
+- [x] 步骤 1：实现单例类
 
 ```ts
 class AudioEngine {
@@ -203,15 +203,15 @@ class AudioEngine {
 export const audioEngine = new AudioEngine()
 ```
 
-- [ ] 步骤 2：手动验证：load 合成伴奏 → play/pause/seek/rate 正确、time 单调推进、变速后 time 换算正确（在演奏页做完后一并验证）
-- [ ] 步骤 3：Commit「feat: Web Audio 主时钟引擎」
+- [x] 步骤 2：手动验证：load 合成伴奏 → play/pause/seek/rate 正确、time 单调推进、变速后 time 换算正确（在演奏页做完后一并验证）
+- [x] 步骤 3：Commit「feat: Web Audio 主时钟引擎」
 
 ## 任务 6：OSMD 曲谱渲染 + 时间驱动光标
 
 **文件：**
 - 创建：`app/src/score/OSMDScore.ts`、`app/src/components/ScoreSheet.tsx`
 
-- [ ] 步骤 1：OSMDScore 封装
+- [x] 步骤 1：OSMDScore 封装
 
 ```ts
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
@@ -239,9 +239,9 @@ export class OSMDScore {
 }
 ```
 
-- [ ] 步骤 2：ScoreSheet 组件：div 容器 + useEffect 创建/销毁 OSMDScore；暴露 ref 给 PerformPage
-- [ ] 步骤 3：手动验证：lumiere 曲谱渲染成功、无控制台报错（此任务先静态渲染，光标在下任务随演奏页联调）
-- [ ] 步骤 4：Commit「feat: OSMD 曲谱渲染封装」
+- [x] 步骤 2：ScoreSheet 组件：div 容器 + useEffect 创建/销毁 OSMDScore；暴露 ref 给 PerformPage
+- [x] 步骤 3：手动验证：lumiere 曲谱渲染成功、无控制台报错（此任务先静态渲染，光标在下任务随演奏页联调）
+- [x] 步骤 4：Commit「feat: OSMD 曲谱渲染封装」
 
 ## 任务 7：演奏页（同步核心联调 + 沉浸控件）
 
@@ -249,12 +249,12 @@ export class OSMDScore {
 - 创建：`app/src/views/PerformPage.tsx`、`app/src/components/ControlBar.tsx`
 - 修改：`app/src/views/PreviewPage.tsx`（开始演奏 → go('perform')）
 
-- [ ] 步骤 1：PerformPage 组装：进入即 `parseMusicXml` → `synthAccompaniment` → `audioEngine.load` → OSMD load；「就绪」浮层 + 4 拍倒数（每拍 60/bpm 秒，节拍音由 audioEngine ctx 调度短促 sine tick）→ play
-- [ ] 步骤 2：rAF 主循环（不进 store）：`const t = audioEngine.time` → `score.syncToTime(t)` → 直接写 DOM：当前小节 `mEl.textContent`、进度条 `playedEl.style.width`、时间 `tEl.textContent`；t ≥ duration → 结束 → go('result')
-- [ ] 步骤 3：ControlBar：播放/暂停、回开头（seek 0 + 光标 reset——seek 任意点时重建 cursor：reset 后快进 syncToTime）、缩放 +/-、伴奏音量、退出
-- [ ] 步骤 4：沉浸控件：mousemove/keydown 唤醒，3.2s 无操作且播放中 → body.idle（控件 opacity 0）；`prefers-reduced-motion` 尊重
-- [ ] 步骤 5：手动验证清单：① 谱音同步（光标与伴奏误差听感 <50ms）② 自动滚动跟随光标 ③ 暂停/继续/回开头正常 ④ 缩放生效 ⑤ 控件自动隐藏
-- [ ] 步骤 6：Commit「feat: 演奏页同步核心闭环」
+- [x] 步骤 1：PerformPage 组装：进入即 `parseMusicXml` → `synthAccompaniment` → `audioEngine.load` → OSMD load；「就绪」浮层 + 4 拍倒数（每拍 60/bpm 秒，节拍音由 audioEngine ctx 调度短促 sine tick）→ play
+- [x] 步骤 2：rAF 主循环（不进 store）：`const t = audioEngine.time` → `score.syncToTime(t)` → 直接写 DOM：当前小节 `mEl.textContent`、进度条 `playedEl.style.width`、时间 `tEl.textContent`；t ≥ duration → 结束 → go('result')
+- [x] 步骤 3：ControlBar：播放/暂停、回开头（seek 0 + 光标 reset——seek 任意点时重建 cursor：reset 后快进 syncToTime）、缩放 +/-、伴奏音量、退出
+- [x] 步骤 4：沉浸控件：mousemove/keydown 唤醒，3.2s 无操作且播放中 → body.idle（控件 opacity 0）；`prefers-reduced-motion` 尊重
+- [x] 步骤 5：手动验证清单：① 谱音同步（光标与伴奏误差听感 <50ms）② 自动滚动跟随光标 ③ 暂停/继续/回开头正常 ④ 缩放生效 ⑤ 控件自动隐藏（build/test/dev 自动验证通过；听感类项列入任务 13 人工清单）
+- [x] 步骤 6：Commit「feat: 演奏页同步核心闭环」
 
 ## 任务 8：three.js Lumière 主题背景
 
