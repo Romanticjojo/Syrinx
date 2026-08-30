@@ -5,9 +5,7 @@
   z-index: 60;
   display: grid;
   place-items: center;
-  background: rgba(8, 9, 9, 0.6);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.86);
   animation: about-in 0.2s ease;
 }
 @keyframes about-in {
