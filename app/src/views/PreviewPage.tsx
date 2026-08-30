@@ -16,13 +16,18 @@ export default function PreviewPage() {
   const [xml, setXml] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // 切曲时重置加载状态（渲染期间调整状态，避免 effect 内 setState 级联渲染）
+  const [lastSongId, setLastSongId] = useState(song.id)
+  if (lastSongId !== song.id) {
+    setLastSongId(song.id)
+    setXml(null)
+    setTimeline(null)
+    setLoadError(null)
+  }
 
   // 加载曲谱与时间轴（预览用静态渲染）
   useEffect(() => {
     let alive = true
-    setXml(null)
-    setTimeline(null)
-    setLoadError(null)
     loadSong(song)
       .then(({ xml: x, timeline: t }) => {
         if (!alive) return
