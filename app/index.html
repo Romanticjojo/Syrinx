@@ -5,10 +5,38 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Syrinx · 长笛演奏辅助——曲谱跟随、伴奏同步、动态背景、录音回放" />
+    <meta name="theme-color" content="#0e0f0f" />
     <title>Syrinx · 长笛流光</title>
+    <style>
+      /* 启动画面：JS 就绪前由品牌位占位（React 挂载后整体替换） */
+      .boot {
+        height: 100%;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 18px;
+        background: #0e0f0f;
+      }
+      .boot img {
+        width: min(300px, 56vw);
+        aspect-ratio: 1;
+        border-radius: 50%;
+      }
+      .boot span {
+        font-family: Georgia, 'Songti SC', serif;
+        font-size: 22px;
+        letter-spacing: 0.04em;
+        color: #f5f4f0;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot">
+        <img src="/brand/syrinx-logo-dark.jpg" alt="" aria-hidden="true" />
+        <span>Syrinx · 长笛流光</span>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

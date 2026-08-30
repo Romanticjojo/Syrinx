@@ -25,16 +25,16 @@
   height: 100%;
   object-fit: cover;
 }
-/* 暗部纱罩：保证前景文字对比度，同时保留动画氛围 */
+/* 纱罩：随主题翻转（暗色深纱 / 浅色亮纱），保证前景文字对比度 */
 .preview-bg-scrim {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     180deg,
-    rgba(9, 12, 11, 0.66) 0%,
-    rgba(9, 12, 11, 0.42) 38%,
-    rgba(9, 12, 11, 0.58) 68%,
-    rgba(9, 12, 11, 0.88) 100%
+    color-mix(in srgb, var(--page-scrim) 66%, transparent) 0%,
+    color-mix(in srgb, var(--page-scrim) 42%, transparent) 38%,
+    color-mix(in srgb, var(--page-scrim) 58%, transparent) 68%,
+    color-mix(in srgb, var(--page-scrim) 88%, transparent) 100%
   );
 }
 
@@ -57,7 +57,7 @@
   align-items: center;
   gap: 14px;
   padding: 14px 32px;
-  background: linear-gradient(rgba(14, 14, 14, 0.92), rgba(14, 14, 14, 0.4) 70%, transparent);
+  background: linear-gradient(var(--scrim-top), var(--scrim-mid) 70%, transparent);
 }
 .back-pill {
   background: var(--surface-2);
@@ -75,7 +75,7 @@
   transition: all 0.15s ease;
 }
 .back-pill:hover {
-  background: #2a2a2a;
+  background: var(--surface);
   transform: scale(1.05);
 }
 .preview-topbar .logo {
@@ -95,7 +95,7 @@
   pointer-events: none;
   filter: blur(10px);
 }
-/* hero 右侧 3D 长笛：随主题色打光；窄屏隐藏避免与文字重叠 */
+/* hero 右侧乐器位：真实长笛实拍图面板；窄屏隐藏避免与文字重叠 */
 .hero-flute {
   position: absolute;
   right: 24px;
@@ -125,7 +125,7 @@
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--line);
 }
 /* 正式封面图（Song Pack cover 字段）：铺满封面区，黑胶标记与角注浮于其上 */
 .cover .cover-img {
@@ -162,7 +162,7 @@
   right: 10px;
   bottom: 8px;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--on-media-dim);
   letter-spacing: 0.04em;
 }
 .album-info {
@@ -217,12 +217,13 @@
   border-radius: var(--circ);
   border: none;
   cursor: pointer;
-  color: #04150e;
+  color: var(--accent-ink);
+  background: var(--song-accent, var(--accent));
   font-size: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   transition: all 0.15s ease;
 }
 .btn-play-big:hover {
@@ -237,7 +238,7 @@
 /* 元数据行（Spotify 曲目列表式） */
 .info-list {
   margin: 26px 32px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--line);
 }
 .info-row {
   display: grid;
@@ -245,7 +246,7 @@
   gap: 14px;
   align-items: center;
   padding: 13px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--line);
   font-size: 14px;
 }
 .info-row:hover {
@@ -276,17 +277,17 @@
   color: var(--ink-faint);
   font-size: 12px;
   margin-top: 28px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid var(--line);
 }
 
 /* 曲谱预览区：玻璃谱面板（方案 A），悬浮于曲意背景之上 */
 .score-section {
   margin: 34px 32px 0;
   padding: 22px 26px;
-  background: rgba(14, 18, 17, 0.55);
+  background: color-mix(in srgb, var(--page-scrim) 55%, transparent);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
   border-radius: 10px;
 }
 .score-section-title {
@@ -325,14 +326,14 @@
   aspect-ratio: 16 / 9;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
   margin-bottom: 8px;
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 .more-card:hover .more-art,
 .more-card:focus-visible .more-art {
   transform: translateY(-3px);
-  border-color: rgba(255, 255, 255, 0.24);
+  border-color: var(--line-strong);
 }
 .more-art img {
   position: absolute;

@@ -1,10 +1,19 @@
-/* 入场动画覆盖层：深色舞台 + 光束 + 3D 长笛 + 品牌字 */
+/* 入场动画覆盖层：深色舞台 + 女神吹笛图形 + 品牌字 */
 .intro {
   position: fixed;
   inset: 0;
   z-index: 50;
   display: flex;
   flex-direction: column;
+  /* 品牌舞台锁定暗色 token：不随浅色主题翻转 */
+  --bg: #0e0f0f;
+  --surface: #161818;
+  --surface-2: #1e2020;
+  --ink: #f5f4f0;
+  --ink-dim: #a9aba8;
+  --ink-faint: #70736f;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.2);
   background:
     radial-gradient(90% 70% at 50% 110%, rgba(61, 223, 174, 0.14), transparent 60%),
     linear-gradient(180deg, #0a0c0b 0%, #0e0e0e 60%, #101312 100%);

@@ -1,0 +1,84 @@
+/* 关于页：极简品牌位 —— 灰阶 + 细线 + 大留白，暖金仅点缀字标分隔点 */
+.about {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 9, 9, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: about-in 0.2s ease;
+}
+@keyframes about-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.about-card {
+  width: min(400px, calc(100vw - 48px));
+  padding: 40px 36px 28px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 10px);
+  box-shadow: var(--shadow-md);
+}
+.about-emblem {
+  width: 168px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  margin-bottom: 20px;
+}
+.about-brand {
+  font-family: var(--serif);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.about-brand span {
+  color: var(--brand-gold);
+  font-style: normal;
+}
+.about-line {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+}
+.about-sub {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--ink-faint);
+}
+.about-foot {
+  margin-top: 26px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.about-ver {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+}
+.about-close {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  color: var(--ink);
+  padding: 7px 20px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.about-close:hover {
+  border-color: var(--ink);
+}

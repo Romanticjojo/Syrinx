@@ -5,6 +5,17 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* 沉浸页锁定暗色 token：背景为视频/canvas 媒体层，不随浅色主题翻转 */
+  --bg: #0e0f0f;
+  --surface: #161818;
+  --surface-2: #1e2020;
+  --ink: #f5f4f0;
+  --ink-dim: #a9aba8;
+  --ink-faint: #70736f;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.2);
+  --scrim-top: rgba(11, 12, 12, 0.94);
+  --scrim-mid: rgba(11, 12, 12, 0.4);
   background: radial-gradient(120% 90% at 50% -10%, #141a17 0%, var(--bg) 55%);
 }
 
