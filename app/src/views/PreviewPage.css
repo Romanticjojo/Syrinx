@@ -135,23 +135,6 @@
   height: 100%;
   object-fit: cover;
 }
-.cover .vinyl-mark {
-  position: absolute;
-  left: 18px;
-  top: 18px;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--circ);
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.75);
-}
-.cover.playing .vinyl-mark {
-  animation: spin 6s linear infinite;
-}
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -375,7 +358,4 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cover.playing .vinyl-mark {
-    animation: none;
-  }
 }

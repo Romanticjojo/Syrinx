@@ -120,7 +120,6 @@ export default function PreviewPage() {
         <div className="album-row">
           <div className="cover playing" style={cover}>
             {song.coverUrl && <img className="cover-img" src={song.coverUrl} alt={`${song.title} 封面`} />}
-            <div className="vinyl-mark">♪</div>
           </div>
           <div className="album-info">
             <div className="kicker">{song.tags.join(' · ')}</div>
