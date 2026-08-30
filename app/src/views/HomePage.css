@@ -1,0 +1,249 @@
+/* 曲库首页：Explore 面 —— 顶栏 + 首发英雄位 + 卡片网格 */
+.home {
+  min-height: 100%;
+  overflow-y: auto;
+}
+
+.home-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 16px 32px;
+  background: linear-gradient(rgba(14, 14, 14, 0.94), rgba(14, 14, 14, 0.55) 70%, transparent);
+}
+
+.home-logo {
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: 0.02em;
+}
+.home-logo i {
+  font-style: normal;
+  color: var(--accent);
+}
+
+.home-nav {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.nav-pill {
+  background: var(--surface-2);
+  color: var(--ink-dim);
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--pill);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.nav-pill.on,
+.nav-pill:hover {
+  color: var(--ink);
+  background: #2a2a2a;
+}
+
+/* 首发英雄位：横幅式推荐（Netflix 首屏精选） */
+.home-hero {
+  position: relative;
+  margin: 8px 32px 40px;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 340px;
+  display: flex;
+  align-items: flex-end;
+  cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.2s ease;
+}
+.home-hero:hover {
+  transform: scale(1.006);
+}
+.home-hero .hero-bg {
+  position: absolute;
+  inset: 0;
+  transition: transform 8s ease;
+}
+.home-hero:hover .hero-bg {
+  transform: scale(1.04);
+}
+.home-hero .hero-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(10, 10, 10, 0.86) 0%, rgba(10, 10, 10, 0.25) 55%, transparent),
+    linear-gradient(transparent 55%, rgba(10, 10, 10, 0.9));
+}
+.home-hero .hero-body {
+  position: relative;
+  z-index: 2;
+  padding: 40px;
+  max-width: 620px;
+}
+.home-hero .kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.home-hero h1 {
+  font-family: var(--serif);
+  font-size: clamp(34px, 4.6vw, 58px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  margin: 10px 0 8px;
+}
+.home-hero .meta {
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+.home-hero .meta b {
+  color: var(--ink);
+}
+.home-hero .desc {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--ink-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.home-hero .hero-play {
+  margin-top: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.home-hero .btn-play-big {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--circ);
+  border: none;
+  cursor: pointer;
+  background: var(--accent);
+  color: #04150e;
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  transition: all 0.15s ease;
+}
+.home-hero .btn-play-big:hover {
+  transform: scale(1.06);
+}
+
+/* 卡片网格 */
+.home-section {
+  padding: 0 32px 44px;
+}
+.home-section h3 {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+.song-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 18px;
+}
+.song-card {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 14px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  text-align: left;
+  border: none;
+  color: inherit;
+}
+.song-card:hover {
+  background: #202020;
+}
+.song-card .art {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  position: relative;
+  box-shadow: var(--shadow-md);
+}
+.song-card .art .mini-play {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--circ);
+  border: none;
+  cursor: pointer;
+  color: #06130d;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-lg);
+}
+.song-card:hover .mini-play {
+  opacity: 1;
+  transform: translateY(0);
+}
+.song-card .t {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.song-card .a {
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin-top: 3px;
+}
+.song-card .diff {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-top: 6px;
+  letter-spacing: 0.04em;
+}
+.home-footer {
+  padding: 20px 32px 60px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+@media (max-width: 720px) {
+  .home-topbar,
+  .home-hero,
+  .home-section {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .home-topbar {
+    padding: 14px 16px;
+  }
+  .home-hero {
+    margin: 8px 16px 32px;
+  }
+  .home-section {
+    padding: 0 16px 36px;
+  }
+  .home-nav {
+    display: none;
+  }
+  .home-hero .hero-body {
+    padding: 24px;
+  }
+}
