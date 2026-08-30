@@ -1,19 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
 import { parseMusicXml } from './musicxml'
 
 /**
- * OMR 产物验证：真实 OSMD 加载渲染 + timeline 统计。
- * 仅本地验证用，验证通过后删除。
+ * Luv Letter OMR 产物（任务 t_54968084）回归测试：
+ * 图片谱 OMR → MusicXML 的 timeline 必须与 4:29（269.4s）伴奏对齐。
+ * 注：OSMD 真实渲染验证用浏览器 e2e（happy-dom 无 canvas，OSMD 文字测量会崩）。
  */
-const xml = readFileSync(
-  'D:/Syrinx/resources/luv-letter/score/omr-work/luv-letter-final.musicxml',
-  'utf-8',
-)
+const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8')
 
-describe('luv-letter OMR 产物', () => {
-  it('parseMusicXml 时间轴：62 小节、durationSec≈4:29', () => {
+describe('luv-letter OMR 谱 timeline', () => {
+  it('parseMusicXml：62 小节、durationSec≈4:29（269.4s）', () => {
     const tl = parseMusicXml(xml)
     expect(tl.tempo).toBe(50)
     expect(tl.measureTimes).toHaveLength(62)
@@ -22,17 +19,16 @@ describe('luv-letter OMR 产物', () => {
     expect(tl.measureTimes[1]).toMatchObject({ measure: 2, time: 4 * (60 / 50) })
     // m6 换速 56.5：m6 起 = 5*4*(60/50)=24s
     expect(Math.abs(tl.measureTimes[5].time - 24)).toBeLessThan(0.01)
+    // m57 恢复 50
+    expect(Math.abs(tl.measureTimes[56].time - (24 + 51 * 4 * (60 / 56.5)))).toBeLessThan(0.01)
     // 总时长与伴奏 269.4s 对齐（±1s）
     expect(tl.durationSec).toBeGreaterThan(268)
     expect(tl.durationSec).toBeLessThan(271)
   })
 
-  it('OSMD 真实加载渲染无异常', async () => {
-    const div = document.createElement('div')
-    document.body.appendChild(div)
-    const osmd = new OpenSheetMusicDisplay(div, { autoResize: false })
-    await osmd.load(xml)
-    osmd.render()
-    expect(div.querySelectorAll('svg').length).toBeGreaterThan(0)
+  it('多声部 backup/forward 已正确处理（不产生游标溢出）', () => {
+    const tl = parseMusicXml(xml)
+    // 每小节 4/4：若 backup 被误当前进，62 小节会溢出到 >290s
+    expect(tl.durationSec / tl.measureTimes.length).toBeLessThan(4.8)
   })
 })

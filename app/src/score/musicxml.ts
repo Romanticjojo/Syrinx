@@ -40,7 +40,7 @@ export function parseMusicXml(xml: string): Timeline {
     let measureStartQuarters = cursorQuarters
 
     // 小节内备份/恢复：秒游标按当前 tempo 换算
-    measure.querySelectorAll('note, direction, attributes').forEach((el) => {
+    measure.querySelectorAll('note, direction, attributes, backup, forward').forEach((el) => {
       if (el.tagName === 'attributes') {
         const d = el.querySelector('divisions')
         if (d) divisions = Number(d.textContent) || divisions
