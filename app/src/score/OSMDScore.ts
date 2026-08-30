@@ -151,10 +151,10 @@ export class OSMDScore {
     const svgRect = svg.getBoundingClientRect()
     const x = clientX - svgRect.left
     const y = clientY - svgRect.top
-    const ml = (this.osmd.GraphicSheet ?? this.osmd.graphic)?.MeasureList
+    const ml = this.osmd.GraphicSheet?.MeasureList
     if (!ml) return null
     // y 最近的小节行
-    let bestSystem: { m: (typeof ml)[number][number]; d: number } | null = null
+    let bestSystem: { num: number; d: number } | null = null
     for (const systemMeasures of ml) {
       if (!systemMeasures?.length) continue
       let top = Infinity
@@ -175,9 +175,9 @@ export class OSMDScore {
         const dx = x < left ? left - x : x > right ? x - right : 0
         if (!best || dx < best.d) best = { num: m.MeasureNumber, d: dx }
       }
-      if (best) bestSystem = { m: best, d: dy }
+      if (best) bestSystem = { num: best.num, d: dy }
     }
-    return bestSystem ? bestSystem.m.num : null
+    return bestSystem ? bestSystem.num : null
   }
 
   dispose(): void {
