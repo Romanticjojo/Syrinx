@@ -317,7 +317,7 @@ export async function startRecording(ctx: AudioContext): Promise<{stop: () => Pr
 **文件：**
 - 创建：`app/src/pitch/compare.ts`、`app/src/pitch/compare.test.ts`
 
-- [ ] 步骤 1：写失败测试
+- [x] 步骤 1：写失败测试
 
 ```ts
 // compare.test.ts 要点
@@ -328,8 +328,8 @@ export async function startRecording(ctx: AudioContext): Promise<{stop: () => Pr
 // scoreStats：返回 {inTuneRatio, avgAbsCents, noteCount}
 ```
 
-- [ ] 步骤 2：FAIL → 步骤 3：实现 `extractPitchTrack(buffer, {frameSec: .0464, hopSec: .0232})`（帧 2048 样本）与 `scoreAgainst(track, timeline)`（每音符窗口取实测中位频率 → cents = 1200*log2(f/fTarget)，±50 内计准；无实测样本的音符记 miss）
-- [ ] 步骤 4：PASS；Commit「feat: 音高对比与统计（TDD）」
+- [x] 步骤 2：FAIL → 步骤 3：实现 `extractPitchTrack(buffer, {frameSec: .0464, hopSec: .0232})`（帧 2048 样本）与 `scoreAgainst(track, timeline)`（每音符窗口取实测中位频率 → cents = 1200*log2(f/fTarget)，±50 内计准；无实测样本的音符记 miss）
+- [x] 步骤 4：PASS；Commit「feat: 音高对比与统计（TDD）」
 
 ## 任务 12：回放页 + 音高对比图 + 入场/预览 3D 长笛
 
