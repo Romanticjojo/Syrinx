@@ -3,3 +3,7 @@ dist
 *.zip
 resources/_cgi-bin*
 *.local
+
+# 安装的技能（非项目源码）
+.claude/
+.vitest-out.txt

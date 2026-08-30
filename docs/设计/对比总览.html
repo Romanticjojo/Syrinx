@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Syrinx 三方向设计对比</title>
+<style>
+  body{margin:0;background:#0b0b0f;color:#e6ebf4;font-family:"Segoe UI","Microsoft YaHei",sans-serif;}
+  header{padding:14px 20px;border-bottom:1px solid #232f45;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  header h1{font-size:16px;margin:0;}
+  header .tag{font-size:12px;color:#8b93a7;}
+  .badge{font-size:12px;border-radius:20px;padding:3px 12px;border:1px solid #232f45;background:#121826;}
+  .badge.win{border-color:#2dd4bf;color:#2dd4bf;}
+  main{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:14px;height:calc(100vh - 60px);box-sizing:border-box;}
+  .dir{display:flex;flex-direction:column;border:1px solid #232f45;border-radius:12px;overflow:hidden;background:#121826;}
+  .dir.win{border-color:#2dd4bf;box-shadow:0 0 18px rgba(45,212,191,.15);}
+  .dir .label{padding:9px 14px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #232f45;}
+  .dir .label .sub{font-size:11px;color:#8b93a7;font-weight:400;}
+  iframe{flex:1;border:0;width:100%;background:#000;}
+  .foot{padding:8px 14px;font-size:11px;color:#8b93a7;border-top:1px solid #232f45;line-height:1.6;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎨 Syrinx · 三方向设计对比</h1>
+  <span class="tag">Claude Code 设计阶段产出 · 每格为入场预览页（perform 演奏页在标签里可单独打开）</span>
+  <span class="badge win">★ 定稿：A 夜航晨光（用户 2026-08-30 决策，B 已否决）</span>
+</header>
+<main>
+  <div class="dir win">
+    <div class="label">A · 夜航晨光 ★ <span class="sub">Netflix 编辑感 · 玻璃谱面板</span></div>
+    <iframe src="方案对比/A-夜航晨光（定稿）/preview.html"></iframe>
+    <div class="foot">★ 用户定稿：双色克制（暖金+晨光青）· 谱面可读最稳 · 后续目录/详情打磨基于此</div>
+  </div>
+  <div class="dir">
+    <div class="label">B · 声波暗流 ✗ <span class="sub">Spotify 内容优先 · 已否决</span></div>
+    <iframe src="方案对比/B-声波暗流（已否决）/preview.html"></iframe>
+    <div class="foot">✗ 用户否决（播放器感）· 仅保留每曲主题色思路参考</div>
+  </div>
+  <div class="dir">
+    <div class="label">C · 光影剧场 <span class="sub">电影预告片 · 仪式感</span></div>
+    <iframe src="方案对比/C-光影剧场/preview.html"></iframe>
+    <div class="foot">开场字幕卡 · 遮幅吃 13% 垂直空间 · 建议仅用于入场动画</div>
+  </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向C · 光影剧场 · 演奏界面 — Syrinx</title>
+<style>
+  /* 立场：剧场舞台——上下遮幅定场，谱面是舞台中央被追光照亮的幕布卡片，
+     两侧大片暗场，小节号以"场次"呈现，控制件退到遮幅边缘。 */
+  :root{
+    --black:#050507; --ink:#efe9dc; --ink-dim:#a89f8d; --ink-faint:#6b6558;
+    --gold:#e8c07a; --gold-dim:rgba(232,192,122,.14); --rec:#d96a5c;
+    --serif:Georgia,"Songti SC","Noto Serif SC",serif;
+    --sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --rail:6.5vh; --bar-h:64px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--black);color:var(--ink);font-family:var(--sans);overflow:hidden;user-select:none}
+
+  .rail{position:fixed;left:0;right:0;height:var(--rail);background:var(--black);z-index:40;
+    display:flex;align-items:center;justify-content:space-between;padding:0 3vw;
+    transition:opacity .5s ease}
+  .rail.top{top:0}.rail.bottom{bottom:0}
+  body.idle .rail{opacity:0;pointer-events:none}
+  .rail .txt{font-size:10px;letter-spacing:.34em;color:var(--ink-faint);text-transform:uppercase}
+  .rail button{background:none;border:none;color:var(--ink-dim);font-size:11px;letter-spacing:.24em;
+    cursor:pointer;text-transform:uppercase;font-family:var(--sans);padding:8px 4px;transition:.2s}
+  .rail button:hover{color:var(--gold)}
+
+  /* 追光光锥 */
+  .spot{position:fixed;top:calc(var(--rail) - 6vh);left:50%;width:92vw;height:88vh;z-index:1;
+    transform:translateX(-50%);pointer-events:none;
+    background:radial-gradient(46% 62% at 50% 26%,rgba(232,192,122,.17),transparent 68%);
+    filter:blur(4px);animation:breath 9s ease-in-out infinite}
+  @keyframes breath{0%,100%{opacity:.85}50%{opacity:1}}
+  .grain{position:fixed;inset:0;z-index:2;pointer-events:none;opacity:.45;
+    background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0 1px,transparent 1px 3px)}
+  #bg{position:fixed;inset:0;z-index:0;opacity:.55}
+  .bg-note{position:fixed;right:16px;bottom:calc(var(--rail) + 10px);z-index:3;
+    font-size:10px;color:var(--ink-faint);letter-spacing:.14em}
+  @media (prefers-reduced-motion:reduce){.spot{animation:none}}
+
+  /* 舞台 */
+  .stage{position:relative;z-index:10;height:100%;display:flex;align-items:center;justify-content:center;
+    padding:calc(var(--rail) + 34px) 7vw calc(var(--rail) + 44px)}
+  .score-curtain{position:relative;width:min(1080px,100%);max-height:100%;
+    background:linear-gradient(180deg,rgba(16,14,20,.92),rgba(10,9,14,.96));
+    border:1px solid rgba(232,192,122,.16);border-radius:4px;
+    box-shadow:0 44px 110px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,240,210,.06);
+    padding:30px 46px 24px}
+  .score-curtain::before,.score-curtain::after{content:"";position:absolute;top:-1px;bottom:-1px;
+    width:3px;background:linear-gradient(180deg,transparent,var(--gold),transparent);opacity:.5}
+  .score-curtain::before{left:-1px}.score-curtain::after{right:-1px}
+  .scene-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px}
+  .scene-head h2{font-family:var(--serif);font-size:20px;font-weight:400;letter-spacing:.06em}
+  .scene-ind{font-size:11px;letter-spacing:.3em;color:var(--ink-faint);text-transform:uppercase}
+  .scene-ind b{color:var(--gold);font-weight:600;font-size:14px;letter-spacing:.1em}
+  svg#score{display:block;width:100%;height:auto}
+  .staff-line{stroke:#e9e2d2;stroke-width:1;opacity:.9}
+  .clef{fill:#efe9dc;font-size:58px}
+  .timesig{fill:#efe9dc;font:400 30px var(--serif)}
+  .notehead{fill:#f7f2e6}
+  .stem{stroke:#f7f2e6;stroke-width:1.6}
+  .measure-rect{fill:transparent}
+  .measure-rect.active{fill:rgba(232,192,122,.13);stroke:rgba(232,192,122,.66);stroke-width:1.2;rx:3px}
+  .measure-rect.played{fill:rgba(232,192,122,.04)}
+  #cursor{stroke:var(--gold);stroke-width:2;stroke-linecap:round;
+    filter:drop-shadow(0 0 9px rgba(232,192,122,.85))}
+  .lyric{fill:#a89f8d;font:italic 13px var(--serif)}
+
+  /* 底部遮幅内的极简控制（细线进度 + 小按钮） */
+  .controls{position:fixed;left:3vw;right:3vw;bottom:calc(var(--rail) + 12px);z-index:41;
+    display:flex;flex-direction:column;gap:9px;transition:opacity .5s ease}
+  body.idle .controls{opacity:0;pointer-events:none}
+  .progress{height:2px;background:rgba(239,233,220,.16);position:relative;cursor:pointer}
+  .progress .played{position:absolute;left:0;top:0;bottom:0;background:var(--gold);width:0%}
+  .progress .tick{position:absolute;top:-2.5px;width:1px;height:7px;background:rgba(239,233,220,.3)}
+  .ctl-row{display:flex;align-items:center;gap:20px}
+  .ctl-row .time{font-size:10px;letter-spacing:.2em;color:var(--ink-faint);font-variant-numeric:tabular-nums}
+  .ctl-btn{background:none;border:none;color:var(--ink-dim);font-size:11px;letter-spacing:.22em;
+    cursor:pointer;text-transform:uppercase;font-family:var(--sans);padding:4px 2px;transition:.2s}
+  .ctl-btn:hover,.ctl-btn.toggled{color:var(--gold)}
+  .ctl-spacer{flex:1}
+  .rec-btn{display:flex;align-items:center;gap:8px;color:var(--rec)}
+  .rec-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--rec);animation:blink 1.2s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+  @media (prefers-reduced-motion:reduce){.rec-btn .dot{animation:none}}
+
+  /* 开幕倒数：场次卡 */
+  #countdown{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:18px;background:rgba(4,4,6,.86);transition:opacity .6s ease}
+  #countdown.hide{opacity:0;pointer-events:none}
+  #countdown .k{font-size:11px;letter-spacing:.5em;text-indent:.5em;color:var(--ink-faint);text-transform:uppercase}
+  #countdown .num{font-family:var(--serif);font-size:130px;color:var(--gold);line-height:1;
+    text-shadow:0 0 80px rgba(232,192,122,.4)}
+  #countdown .num.pulse{animation:pulse 1s ease-out}
+  @keyframes pulse{0%{transform:scale(1.3);opacity:.3}100%{transform:scale(1);opacity:1}}
+  #countdown .hint{font-size:11px;letter-spacing:.34em;color:var(--ink-dim);text-transform:uppercase}
+  @media (max-width:760px){
+    .stage{padding:calc(var(--rail) + 18px) 4vw calc(var(--rail) + 40px)}
+    .score-curtain{padding:18px 18px 14px}}
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+<div class="spot"></div>
+<div class="grain"></div>
+<div class="bg-note">动态背景占位 · 正式素材为每曲外部视频 / three.js 场景</div>
+
+<div class="rail top">
+  <button onclick="location.href='preview.html'">‹ 退出</button>
+  <span class="txt">Nocturne pour Lumière · Lorien Testard · 84 BPM</span>
+  <span class="txt">Syrinx</span>
+</div>
+
+<main class="stage">
+  <section class="score-curtain" aria-label="曲谱区域">
+    <div class="scene-head">
+      <h2>Nocturne pour Lumière</h2>
+      <div class="scene-ind">Scene <b id="mNow">01</b> ∕ <span id="mTotal">08</span></div>
+    </div>
+    <svg id="score" viewBox="0 0 1200 210" role="img" aria-label="五线谱"></svg>
+  </section>
+</main>
+
+<div class="rail bottom">
+  <span class="txt">Un récital de flûte</span>
+  <span class="txt" id="railRight">速度 1.0x · bB 大调</span>
+</div>
+
+<div class="controls">
+  <div class="progress" id="prog"><div class="played" id="played"></div></div>
+  <div class="ctl-row">
+    <button class="ctl-btn" id="btnPlay">Pause</button>
+    <button class="ctl-btn" id="btnBack">重来</button>
+    <button class="ctl-btn toggled" id="btnMetro">节拍</button>
+    <span class="time" id="tCur">00:00</span>
+    <span class="ctl-spacer"></span>
+    <button class="ctl-btn">缩放</button>
+    <button class="ctl-btn rec-btn"><span class="dot"></span>REC</button>
+    <span class="time">00:42</span>
+  </div>
+</div>
+
+<div id="countdown">
+  <div class="k">Acte Ⅰ · La Nuit</div>
+  <div class="num" id="cdNum">4</div>
+  <div class="hint">Lights · 跟随节拍入拍</div>
+</div>
+
+<script>
+const NS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('score');
+const PITCHES=[[4,5,6,5],[4,3,2,3],[4,5,7,6],[5,-1,4,-1],[6,7,8,7],[6,5,4,3],[2,3,4,5],[4,-1,2,-1]];
+const TOTAL_M=PITCHES.length,BEATS=4,TOP=70,GAP=13;
+document.getElementById('mTotal').textContent=String(TOTAL_M).padStart(2,'0');
+const L=(x1,y1,x2,y2,cls)=>{const e=document.createElementNS(NS,'line');
+  e.setAttribute('x1',x1);e.setAttribute('y1',y1);e.setAttribute('x2',x2);e.setAttribute('y2',y2);
+  if(cls)e.setAttribute('class',cls);svg.appendChild(e);return e;};
+const T=(x,y,txt,cls)=>{const e=document.createElementNS(NS,'text');
+  e.setAttribute('x',x);e.setAttribute('y',y);if(cls)e.setAttribute('class',cls);
+  e.textContent=txt;svg.appendChild(e);return e;};
+for(let i=0;i<5;i++)L(40,TOP+i*GAP,1160,TOP+i*GAP,'staff-line');
+T(52,TOP+GAP*3.4,'𝄞','clef');
+T(108,TOP+GAP,'3','timesig');T(108,TOP+GAP*3,'4','timesig');
+const measW=(1160-140)/TOTAL_M,x0=140;
+const noteX=(m,b)=>x0+m*measW+16+b*((measW-32)/BEATS);
+const noteY=p=>TOP+GAP*3-p*(GAP/2);
+const rects=[];
+PITCHES.forEach((ms,m)=>{
+  const mx=x0+m*measW;
+  const r=document.createElementNS(NS,'rect');
+  r.setAttribute('x',mx+2);r.setAttribute('y',TOP-24);r.setAttribute('width',measW-4);
+  r.setAttribute('height',GAP*4+48);r.setAttribute('class','measure-rect');svg.appendChild(r);rects.push(r);
+  if(m>0)L(mx,TOP-24,mx,TOP+GAP*4+24,'staff-line');
+  ms.forEach((p,b)=>{
+    const x=noteX(m,b),y=noteY(p);
+    if(p<0){T(x-4,TOP+GAP*2,'𝄽','lyric');return;}
+    const h=document.createElementNS(NS,'ellipse');
+    h.setAttribute('cx',x);h.setAttribute('cy',y);h.setAttribute('rx',7.2);h.setAttribute('ry',5.2);
+    h.setAttribute('transform',`rotate(-18 ${x} ${y})`);h.setAttribute('class','notehead');svg.appendChild(h);
+    const up=y>TOP+GAP*2;
+    L(x+(up?6.6:-6.6),y,x+(up?6.6:-6.6),y+(up?-44:44),'stem');
+  });
+  T(mx+measW/2,TOP+GAP*4+46,['夜色落下','晨光初现','微风吹过','长笛独鸣','星光渐亮','云影游移','黎明将至','光之终章'][m],'lyric');
+});
+const cursor=L(0,TOP-24,0,TOP+GAP*4+24,'');cursor.id='cursor';
+
+const SEC_PER_BEAT=60/84,TOTAL_S=TOTAL_M*BEATS*SEC_PER_BEAT;
+let playing=false,t=0,last=performance.now();
+const $=id=>document.getElementById(id);
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  if(playing){t+=dt;if(t>=TOTAL_S){t=TOTAL_S;playing=false;$('btnPlay').textContent='Play';}}
+  const beatF=t/SEC_PER_BEAT,m=Math.min(TOTAL_M-1,Math.floor(beatF/BEATS)),bIn=beatF-m*BEATS;
+  const x=noteX(m,Math.min(BEATS-1,bIn))+((measW-32)/BEATS)*(bIn/BEATS);
+  cursor.setAttribute('x1',x);cursor.setAttribute('x2',x);
+  rects.forEach((r,i)=>r.setAttribute('class','measure-rect'+(i===m?' active':i<m?' played':'')));
+  $('mNow').textContent=String(m+1).padStart(2,'0');
+  $('played').style.width=(t/TOTAL_S*100)+'%';
+  $('tCur').textContent=`${String(Math.floor(t/60)).padStart(2,'0')}:${String(Math.floor(t%60)).padStart(2,'0')}`;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+$('btnPlay').onclick=()=>{playing=!playing;$('btnPlay').textContent=playing?'Pause':'Play';};
+$('btnBack').onclick=()=>{t=0;};
+$('btnMetro').onclick=()=>$('btnMetro').classList.toggle('toggled');
+
+const cd=$('countdown'),cdNum=$('cdNum');let cdN=4;
+(function tick(){if(cdN===0){cd.classList.add('hide');playing=true;$('btnPlay').textContent='Pause';return;}
+  cdNum.textContent=cdN;cdNum.classList.remove('pulse');void cdNum.offsetWidth;
+  cdNum.classList.add('pulse');cdN--;setTimeout(tick,960);})();
+
+let idleTimer;
+const wake=()=>{document.body.classList.remove('idle');clearTimeout(idleTimer);
+  idleTimer=setTimeout(()=>{if(playing)document.body.classList.add('idle');},3400);};
+['mousemove','mousedown','keydown','touchstart'].forEach(e=>addEventListener(e,wake));wake();
+
+/* 背景微光粒子（占位） */
+const bgc=$('bg'),bx=bgc.getContext('2d');let W,H,ps=[];
+function resize(){W=bgc.width=innerWidth;H=bgc.height=innerHeight;
+  ps=Array.from({length:36},()=>({x:Math.random()*W,y:Math.random()*H,
+    r:Math.random()*1.8+.5,s:Math.random()*.24+.05,o:Math.random()*.28+.08}));}
+resize();addEventListener('resize',resize);
+(function loop(ts){bx.clearRect(0,0,W,H);
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    bx.fillStyle='#f4dca8';
+    ps.forEach(p=>{p.y-=p.s;if(p.y<-4)p.y=H+4;
+      bx.globalAlpha=p.o*(.5+.5*Math.sin(ts/1200+p.x));
+      bx.beginPath();bx.arc(p.x+Math.sin(ts/3000+p.y/50)*7,p.y,p.r,0,7);bx.fill();});
+    bx.globalAlpha=1;}
+  requestAnimationFrame(loop);})(0);
+</script>
+</body>
+</html>

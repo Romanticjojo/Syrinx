@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向C · 光影剧场 · 入场预览页 — Syrinx</title>
+<style>
+  /* 立场：电影预告片式——全屏影像 + 片名字幕卡。上下遮幅、单色暖金、
+     极细字距小字与衬线巨字的对撞，光束缓慢摆动如放映机。 */
+  :root{
+    --black:#050507; --curtain:#0b0a10;
+    --ink:#efe9dc; --ink-dim:#a89f8d; --ink-faint:#6b6558;
+    --gold:#e8c07a; --gold-dim:rgba(232,192,122,.14);
+    --serif:Georgia,"Songti SC","Noto Serif SC",serif;
+    --sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --rail:7vh;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--black);color:var(--ink);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+
+  /* ===== 遮幅条（电影黑边） ===== */
+  .rail{position:fixed;left:0;right:0;height:var(--rail);background:var(--black);z-index:40}
+  .rail.top{top:0;box-shadow:0 1px 0 rgba(232,192,122,.08)}
+  .rail.bottom{bottom:0}
+  .rail .rail-txt{position:absolute;line-height:var(--rail);font-size:10px;letter-spacing:.34em;
+    color:var(--ink-faint);text-transform:uppercase}
+  .rail.top .rail-txt{left:3vw}
+  .rail.bottom .rail-txt{right:3vw}
+
+  /* ===== 放映机光束 + 浮尘 ===== */
+  .screen{position:relative;height:100vh;min-height:640px;overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 50% -20%,#191524 0%,var(--black) 55%)}
+  .beam{position:absolute;top:calc(var(--rail) - 12vh);left:50%;width:130vw;height:130vh;
+    transform-origin:top center;pointer-events:none;
+    background:conic-gradient(from 200deg at 50% 0%,
+      transparent 38%, rgba(232,192,122,.13) 46%, rgba(255,236,200,.20) 50%,
+      rgba(232,192,122,.13) 54%, transparent 62%);
+    filter:blur(6px);animation:sway 16s ease-in-out infinite alternate}
+  @keyframes sway{from{transform:translateX(-50%) rotate(-4.5deg)}to{transform:translateX(-50%) rotate(4.5deg)}}
+  .screen canvas{position:absolute;inset:0}
+  .grain{position:absolute;inset:0;opacity:.5;pointer-events:none;
+    background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0 1px,transparent 1px 3px)}
+  @media (prefers-reduced-motion:reduce){.beam{animation:none}}
+
+  /* ===== 片名字幕卡 ===== */
+  .title-card{position:relative;z-index:10;height:100%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;padding:0 6vw;gap:0}
+  .kicker{font-size:11px;letter-spacing:.5em;text-indent:.5em;color:var(--ink-faint);
+    text-transform:uppercase}
+  .title-card h1{font-family:var(--serif);font-weight:400;font-size:clamp(44px,8vw,110px);
+    line-height:1.04;letter-spacing:.045em;margin:26px 0 14px;text-wrap:balance;
+    text-shadow:0 2px 60px rgba(0,0,0,.8)}
+  .sub-rule{display:flex;align-items:center;gap:18px;margin:8px 0 22px}
+  .sub-rule .line{width:72px;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}
+  .sub-rule .line.r{background:linear-gradient(90deg,var(--gold),transparent)}
+  .sub-rule span{font-family:var(--serif);font-size:15px;letter-spacing:.3em;color:var(--ink-dim)}
+  .title-card .desc{max-width:560px;font-size:14.5px;line-height:2;color:var(--ink-dim);text-wrap:pretty}
+  .facts-strip{display:flex;gap:34px;margin-top:34px;font-size:11px;letter-spacing:.22em;
+    color:var(--ink-faint);text-transform:uppercase}
+  .facts-strip b{color:var(--gold);font-weight:600}
+  .cta-row{display:flex;gap:18px;margin-top:44px}
+  .btn{cursor:pointer;font-family:var(--sans);transition:.22s;letter-spacing:.3em;text-indent:.3em}
+  .btn-primary{background:var(--gold);color:#191204;border:none;font-size:14px;
+    padding:17px 44px;font-weight:600}
+  .btn-primary:hover{background:#f4d494;box-shadow:0 8px 40px rgba(232,192,122,.28)}
+  .btn-ghost{background:transparent;color:var(--ink-dim);border:1px solid rgba(239,233,220,.24);
+    font-size:12px;padding:16px 34px}
+  .btn-ghost:hover{color:var(--ink);border-color:var(--ink)}
+  .preview-status{position:absolute;bottom:calc(var(--rail) + 18px);left:0;right:0;text-align:center;
+    font-size:10px;letter-spacing:.3em;color:var(--ink-faint);text-transform:uppercase}
+  .preview-status i{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold);
+    margin:0 8px 1px;animation:blink 2.4s infinite;font-style:normal}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+  @media (prefers-reduced-motion:reduce){.preview-status i{animation:none}}
+
+  /* ===== 下一幕：曲库（放映表格式） ===== */
+  .rePERTOIRE{padding:70px 6vw 90px;max-width:1160px;margin:0 auto}
+  .rePERTOIRE h3{font-size:11px;letter-spacing:.4em;color:var(--ink-faint);text-transform:uppercase;
+    text-align:center;margin-bottom:38px}
+  .bill{display:flex;flex-direction:column}
+  .bill-row{display:grid;grid-template-columns:52px 96px 1fr auto auto;gap:22px;align-items:center;
+    padding:19px 12px;border-bottom:1px solid rgba(239,233,220,.09);cursor:pointer;transition:.2s}
+  .bill-row:hover{background:var(--gold-dim);padding-left:22px}
+  .bill-row .no{font-family:var(--serif);font-size:15px;color:var(--ink-faint)}
+  .bill-row .thumb{width:96px;height:54px;border-radius:3px;
+    box-shadow:0 8px 26px rgba(0,0,0,.5)}
+  .bill-row .t{font-family:var(--serif);font-size:19px;letter-spacing:.03em}
+  .bill-row .a{display:block;font-family:var(--sans);font-size:12px;color:var(--ink-faint);
+    letter-spacing:.06em;margin-top:4px}
+  .bill-row .diff{font-size:11px;letter-spacing:.18em;color:var(--gold)}
+  .bill-row .dur{font-size:12px;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+  .b1{background:radial-gradient(90% 130% at 30% 20%,#2a2138,#0d0a14)}
+  .b2{background:radial-gradient(90% 130% at 70% 30%,#1e3a34,#0a1310)}
+  .b3{background:radial-gradient(90% 130% at 50% 80%,#45301a,#160f08)}
+  .b4{background:radial-gradient(90% 130% at 20% 60%,#243449,#0b1119)}
+  .b5{background:radial-gradient(90% 130% at 60% 20%,#3d2531,#140a10)}
+  footer{padding:34px 6vw calc(var(--rail) + 30px);color:var(--ink-faint);font-size:11px;
+    letter-spacing:.1em;text-align:center}
+  @media (max-width:760px){
+    .bill-row{grid-template-columns:40px 1fr auto}.bill-row .thumb,.bill-row .diff{display:none}}
+</style>
+</head>
+<body>
+
+<div class="rail top"><span class="rail-txt">Syrinx Présente</span></div>
+<div class="rail bottom"><span class="rail-txt">Un récital de flûte</span></div>
+
+<section class="screen">
+  <div class="beam"></div>
+  <canvas id="dust"></canvas>
+  <div class="grain"></div>
+
+  <div class="title-card">
+    <div class="kicker">Clair Obscur · Expedition 33</div>
+    <h1>Nocturne<br>pour Lumière</h1>
+    <div class="sub-rule"><span class="line"></span><span>Lorien Testard</span><span class="line r"></span></div>
+    <p class="desc">夜色未尽，晨光将临。一支长笛，一段夜曲——在光与暗的边界，奏响属于 Lumière 的温柔。</p>
+    <div class="facts-strip">
+      <span>难度 <b>●●○</b></span><span>bB 大调</span><span>3/4 · 84 BPM</span><span>时长 <b>2:24</b></span>
+    </div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="location.href='perform.html'">开始演奏</button>
+      <button class="btn btn-ghost" id="favBtn">加入保留曲目</button>
+    </div>
+  </div>
+  <div class="preview-status"><i></i>正在放映 · 预览占位（正式素材为每曲外部视频 + 伴奏）</div>
+</section>
+
+<section class="rePERTOIRE">
+  <h3>Repertoire · 演奏曲目表</h3>
+  <div class="bill">
+    <div class="bill-row" onclick="location.reload()">
+      <span class="no">Ⅰ</span><div class="thumb b1"></div>
+      <div><span class="t">Nocturne pour Lumière</span><span class="a">Lorien Testard</span></div>
+      <span class="diff">●●○ 进阶</span><span class="dur">2:24</span>
+    </div>
+    <div class="bill-row">
+      <span class="no">Ⅱ</span><div class="thumb b2"></div>
+      <div><span class="t">晨间音阶练习</span><span class="a">传统练习曲</span></div>
+      <span class="diff">●○○ 入门</span><span class="dur">1:38</span>
+    </div>
+    <div class="bill-row">
+      <span class="no">Ⅲ</span><div class="thumb b3"></div>
+      <div><span class="t">Sicilienne</span><span class="a">Gabriel Fauré</span></div>
+      <span class="diff">●●● 演奏级</span><span class="dur">4:12</span>
+    </div>
+    <div class="bill-row">
+      <span class="no">Ⅳ</span><div class="thumb b4"></div>
+      <div><span class="t">Gymnopédie No.1</span><span class="a">Erik Satie</span></div>
+      <span class="diff">●●○ 进阶</span><span class="dur">3:05</span>
+    </div>
+    <div class="bill-row">
+      <span class="no">Ⅴ</span><div class="thumb b5"></div>
+      <div><span class="t">Au Clair de la Lune</span><span class="a">法国民谣</span></div>
+      <span class="diff">●○○ 入门</span><span class="dur">1:52</span>
+    </div>
+  </div>
+</section>
+
+<footer>Syrinx UI 设计方向 C「光影剧场」· 入场预览页 · 预告片式字幕卡 · 素材为占位，曲谱与伴奏用户自备自用</footer>
+
+<script>
+  const fav=document.getElementById('favBtn');
+  fav.onclick=()=>{fav.textContent='✓ 已在保留曲目';fav.style.color='var(--gold)';fav.style.borderColor='var(--gold)';};
+  /* 放映浮尘（光束中的微粒，正式实现为视频/three.js） */
+  const cv=document.getElementById('dust'),cx=cv.getContext('2d');
+  let W,H,ps=[];
+  function rs(){W=cv.width=cv.offsetWidth;H=cv.height=cv.offsetHeight;
+    ps=Array.from({length:46},()=>({x:Math.random()*W,y:Math.random()*H,
+      r:Math.random()*1.6+.4,s:Math.random()*.22+.04,o:Math.random()*.3+.06}));}
+  rs();addEventListener('resize',rs);
+  (function loop(ts){cx.clearRect(0,0,W,H);
+    if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+      cx.fillStyle='#ffe9c4';
+      ps.forEach(p=>{p.y-=p.s;if(p.y<-4)p.y=H+4;
+        cx.globalAlpha=p.o*(.5+.5*Math.sin(ts/1100+p.x*.7));
+        cx.beginPath();cx.arc(p.x+Math.sin(ts/3400+p.y/60)*9,p.y,p.r,0,7);cx.fill();});
+      cx.globalAlpha=1;}
+    requestAnimationFrame(loop);})(0);
+</script>
+</body>
+</html>

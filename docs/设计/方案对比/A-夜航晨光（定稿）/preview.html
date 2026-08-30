@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向A · 夜航晨光 · 入场预览页 — Syrinx</title>
+<style>
+  :root{
+    --bg:#0b0b0f; --surface:#16161c; --ink:#f2efe9; --ink-dim:#b9b4a9; --ink-faint:#7d786e;
+    --gold:#d9a441; --gold-soft:rgba(217,164,65,.16); --teal:#5fb8a8;
+    --serif:Georgia,"Songti SC","Noto Serif SC",serif;
+    --sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);min-height:100vh}
+
+  /* ===== 入场动画层（占位：正式素材为外部拼装视频/3D） ===== */
+  #intro{position:fixed;inset:0;z-index:100;background:#08080b;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:28px;transition:opacity .8s ease}
+  #intro.hide{opacity:0;pointer-events:none}
+  .intro-sub{color:var(--ink-dim);font-size:14px;letter-spacing:.34em;text-transform:uppercase}
+  .intro-title{font-family:var(--serif);font-size:clamp(30px,5vw,52px);letter-spacing:.12em}
+  .flute-assembly{position:relative;width:min(640px,84vw);height:90px}
+  .flute-part{position:absolute;top:34px;height:22px;border-radius:11px;
+    background:linear-gradient(180deg,#e9e6df,#a9a49a);box-shadow:0 6px 18px rgba(0,0,0,.5);
+    transition:transform 1s cubic-bezier(.2,.8,.2,1),opacity .9s;opacity:0}
+  .loaded .flute-part{opacity:1;transform:translateX(0)!important}
+  .skip-row{display:flex;align-items:center;gap:16px}
+  .skip-btn{background:none;border:1px solid rgba(255,255,255,.3);color:var(--ink-dim);
+    padding:10px 26px;border-radius:999px;font-size:14px;cursor:pointer;transition:.2s}
+  .skip-btn:hover{color:var(--ink);border-color:var(--ink)}
+  .skip-label{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-faint);cursor:pointer}
+  .skip-label input{accent-color:var(--gold);width:15px;height:15px}
+  .intro-note{font-size:11px;color:#55525d;letter-spacing:.08em}
+
+  /* ===== 顶栏 ===== */
+  .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:26px;padding:18px 5vw;
+    background:linear-gradient(rgba(11,11,15,.92),rgba(11,11,15,0))}
+  .logo{font-family:var(--serif);font-size:24px;letter-spacing:.06em;color:var(--gold)}
+  .logo small{color:var(--ink-dim);font-family:var(--sans);font-size:12px;letter-spacing:.3em;margin-left:10px;text-transform:uppercase}
+  .topbar nav{margin-left:auto;display:flex;gap:22px;font-size:14px;color:var(--ink-dim)}
+  .topbar nav a{color:inherit;text-decoration:none;padding:6px 2px;border-bottom:2px solid transparent}
+  .topbar nav a.on,.topbar nav a:hover{color:var(--ink);border-color:var(--gold)}
+
+  /* ===== Netflix 式 hero：左侧信息，右侧光景 ===== */
+  .hero{position:relative;height:74vh;min-height:500px;overflow:hidden}
+  .hero-media{position:absolute;inset:0;
+    background:
+      radial-gradient(58% 85% at 74% 32%, rgba(217,164,65,.32), transparent 64%),
+      radial-gradient(48% 70% at 18% 82%, rgba(95,184,168,.20), transparent 60%),
+      linear-gradient(160deg,#1a1424 0%,#0b0b0f 55%);
+    transform:scale(1.04);animation:drift 22s ease-in-out infinite alternate}
+  @keyframes drift{from{transform:scale(1.04) translate(0,0)}to{transform:scale(1.1) translate(-2%,-1.5%)}}
+  @media (prefers-reduced-motion:reduce){.hero-media{animation:none}}
+  .hero-media::after{content:"";position:absolute;inset:auto 0 0 0;height:45%;
+    background:linear-gradient(transparent,var(--bg))}
+  .hero-media canvas{position:absolute;inset:0}
+  .preview-line{position:absolute;left:0;bottom:0;height:3px;width:38%;z-index:2;
+    background:linear-gradient(90deg,var(--gold),#e8b95c);animation:pvline 24s linear infinite}
+  @keyframes pvline{from{width:4%}to{width:100%}}
+  .hero-content{position:relative;z-index:3;height:100%;display:flex;flex-direction:column;
+    justify-content:center;padding:0 5vw;max-width:860px}
+  .badge-row{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+  .badge{font-size:12px;letter-spacing:.1em;color:var(--gold);border:1px solid rgba(217,164,65,.5);
+    padding:4px 12px;border-radius:999px}
+  .badge.dim{color:var(--ink-dim);border-color:rgba(255,255,255,.18)}
+  .hero h1{font-family:var(--serif);font-weight:500;font-size:clamp(38px,6vw,72px);
+    line-height:1.08;letter-spacing:.02em;text-wrap:balance}
+  .hero .by{margin-top:10px;font-size:16px;color:var(--ink-dim)}
+  .hero .by b{color:var(--ink);font-weight:500}
+  .hero .desc{margin-top:20px;max-width:520px;font-size:15px;line-height:1.8;color:var(--ink-dim);text-wrap:pretty}
+  .facts{display:flex;gap:22px;margin-top:22px;font-size:13px;color:var(--ink-faint)}
+  .facts b{color:var(--teal);font-weight:600}
+  .cta-row{display:flex;gap:14px;margin-top:34px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:10px;font-size:16px;padding:14px 34px;
+    border-radius:10px;cursor:pointer;border:none;transition:.18s;font-family:var(--sans)}
+  .btn-primary{background:var(--ink);color:#141419;font-weight:600}
+  .btn-primary:hover{background:#fff;transform:translateY(-1px)}
+  .btn-ghost{background:rgba(255,255,255,.1);color:var(--ink);border:1px solid rgba(255,255,255,.16)}
+  .btn-ghost:hover{background:rgba(255,255,255,.18)}
+  .btn-ghost.added{color:var(--teal);border-color:var(--teal);background:rgba(95,184,168,.12)}
+
+  /* ===== 卡片行 ===== */
+  .section{padding:44px 5vw 70px}
+  .section h3{font-size:18px;font-weight:600;letter-spacing:.04em;margin-bottom:20px}
+  .section h3 span{color:var(--ink-faint);font-size:13px;font-weight:400;margin-left:12px}
+  .card-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(200px,240px);gap:18px;
+    overflow-x:auto;padding-bottom:14px;scroll-snap-type:x proximity}
+  .card-row::-webkit-scrollbar{height:8px}
+  .card-row::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:4px}
+  .card{scroll-snap-align:start;cursor:pointer;transition:transform .25s}
+  .card:hover{transform:scale(1.045)}
+  .cover{aspect-ratio:16/9;border-radius:10px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:12px}
+  .cover .play-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:34px;color:rgba(255,255,255,0);transition:.2s;text-shadow:0 4px 18px rgba(0,0,0,.6)}
+  .card:hover .play-hint{color:rgba(255,255,255,.95)}
+  .cover .difficulty{position:absolute;top:10px;left:10px;font-size:11px;letter-spacing:.08em;
+    padding:3px 9px;border-radius:999px;background:rgba(8,8,12,.6);color:var(--gold)}
+  .cover .dur{position:absolute;top:10px;right:10px;font-size:11px;color:rgba(255,255,255,.75);
+    background:rgba(8,8,12,.6);padding:3px 8px;border-radius:6px}
+  .card .t{margin-top:10px;font-size:14px;font-weight:500}
+  .card .a{margin-top:3px;font-size:12px;color:var(--ink-faint)}
+  .c1{background:radial-gradient(80% 120% at 30% 20%,#3d2f52,#151220)}
+  .c2{background:radial-gradient(80% 120% at 70% 30%,#274a46,#0f1a19)}
+  .c3{background:radial-gradient(80% 120% at 50% 80%,#54351f,#1a120d)}
+  .c4{background:radial-gradient(80% 120% at 20% 60%,#2c3a5c,#10131f)}
+  .c5{background:radial-gradient(80% 120% at 60% 20%,#4a2c3f,#180f16)}
+  footer{padding:30px 5vw 50px;color:var(--ink-faint);font-size:12px;border-top:1px solid rgba(255,255,255,.06)}
+  @media (max-width:720px){
+    .hero{height:auto;min-height:0}.hero-media{position:relative;height:38vh}
+    .hero-content{padding:26px 5vw 10px;height:auto}.topbar nav{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="intro">
+  <div class="intro-sub">Syrinx</div>
+  <div class="intro-title">听见晨光</div>
+  <div class="flute-assembly" id="assembly">
+    <div class="flute-part" style="left:6%;width:16%;transform:translateX(-70px)"></div>
+    <div class="flute-part" style="left:24%;width:12%;transform:translateY(-60px)"></div>
+    <div class="flute-part" style="left:38%;width:14%;transform:translateX(80px)"></div>
+    <div class="flute-part" style="left:54%;width:12%;transform:translateY(60px)"></div>
+    <div class="flute-part" style="left:68%;width:26%;transform:translateX(120px)"></div>
+  </div>
+  <div class="skip-row">
+    <button class="skip-btn" id="skipBtn">跳过 ›</button>
+    <label class="skip-label"><input type="checkbox" id="skipMemo">下次不再播放</label>
+  </div>
+  <div class="intro-note">拼装动画占位 · 正式素材为外部视频 / 3D 模型</div>
+</div>
+
+<header class="topbar">
+  <div class="logo">Syrinx<small>长笛 · 流光</small></div>
+  <nav><a class="on" href="#">曲库</a><a href="#">收藏</a><a href="#">我的录音</a></nav>
+</header>
+
+<section class="hero">
+  <div class="hero-media">
+    <canvas id="dust"></canvas>
+    <div class="preview-line"></div>
+  </div>
+  <div class="hero-content">
+    <div class="badge-row">
+      <span class="badge">首发曲</span><span class="badge dim">夜曲 · 治愈</span><span class="badge dim">入门 → 进阶</span>
+    </div>
+    <h1>Nocturne pour<br>Lumière</h1>
+    <div class="by">作曲 <b>Lorien Testard</b> · 选自《Clair Obscur: Expedition 33》</div>
+    <p class="desc">一首写给晨光的夜曲。旋律线平缓悠长，长笛在中音区低语，随伴奏渐亮——适合作为长笛学习旅程的第一首完整曲目。预览片段正在播放：占位视觉 + 程序化伴奏。</p>
+    <div class="facts">
+      <span>难度 <b>●●○</b></span><span>时长 <b>2:24</b></span>
+      <span>调性 <b>bB 大调</b></span><span>拍号 <b>3/4 · 84 BPM</b></span>
+    </div>
+    <div class="cta-row">
+      <button class="btn btn-primary" onclick="location.href='perform.html'">▶ 开始演奏</button>
+      <button class="btn btn-ghost" id="favBtn">＋ 加入收藏</button>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h3>继续演奏 <span>最近练习的曲目</span></h3>
+  <div class="card-row">
+    <div class="card" onclick="location.reload()"><div class="cover c1"><span class="difficulty">●●○ 进阶</span><span class="dur">2:24</span><span class="play-hint">▶</span></div><div class="t">Nocturne pour Lumière</div><div class="a">Lorien Testard</div></div>
+    <div class="card"><div class="cover c2"><span class="difficulty">●○○ 入门</span><span class="dur">1:38</span><span class="play-hint">▶</span></div><div class="t">晨间音阶练习</div><div class="a">传统练习曲</div></div>
+    <div class="card"><div class="cover c3"><span class="difficulty">●●● 演奏级</span><span class="dur">4:12</span><span class="play-hint">▶</span></div><div class="t">Sicilienne</div><div class="a">Gabriel Fauré</div></div>
+  </div>
+</section>
+
+<section class="section">
+  <h3>为你推荐 <span>按难度与风格挑选</span></h3>
+  <div class="card-row">
+    <div class="card"><div class="cover c4"><span class="difficulty">●●○ 进阶</span><span class="dur">3:05</span><span class="play-hint">▶</span></div><div class="t">Gymnopédie No.1</div><div class="a">Erik Satie</div></div>
+    <div class="card"><div class="cover c5"><span class="difficulty">●○○ 入门</span><span class="dur">1:52</span><span class="play-hint">▶</span></div><div class="t">Au Clair de la Lune</div><div class="a">法国民谣</div></div>
+    <div class="card"><div class="cover c1"><span class="difficulty">●●● 演奏级</span><span class="dur">5:20</span><span class="play-hint">▶</span></div><div class="t">Meditation from Thaïs</div><div class="a">Jules Massenet</div></div>
+  </div>
+</section>
+
+<footer>Syrinx UI 设计方向 A「夜航晨光」· 入场预览页 · 封面与预览素材为占位，正式素材由用户外部生成 · 曲谱与伴奏用户自备自用，应用不分发</footer>
+
+<script>
+  const intro=document.getElementById('intro');
+  const skip=()=>intro.classList.add('hide');
+  document.getElementById('skipBtn').onclick=skip;
+  if(localStorage.getItem('syrinx_skip_intro')==='1'){setTimeout(skip,600);}
+  else{setTimeout(()=>document.getElementById('assembly').classList.add('loaded'),300);setTimeout(skip,5200);}
+  document.getElementById('skipMemo').onchange=e=>localStorage.setItem('syrinx_skip_intro',e.target.checked?'1':'0');
+  const fav=document.getElementById('favBtn');
+  fav.onclick=()=>{fav.classList.add('added');fav.textContent='✓ 已收藏';};
+  /* hero 光尘微粒（占位动态背景，正式实现为 three.js / 视频） */
+  const cv=document.getElementById('dust'),cx=cv.getContext('2d');
+  let W,H,ps=[];
+  function rs(){W=cv.width=cv.offsetWidth;H=cv.height=cv.offsetHeight;
+    ps=Array.from({length:36},()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.8+.5,s:Math.random()*.3+.06,o:Math.random()*.35+.1}));}
+  rs();addEventListener('resize',rs);
+  (function loop(ts){cx.clearRect(0,0,W,H);
+    if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+      cx.fillStyle='#e8d9b0';
+      ps.forEach(p=>{p.y-=p.s;if(p.y<-4)p.y=H+4;
+        cx.globalAlpha=p.o*(.6+.4*Math.sin(ts/900+p.x));
+        cx.beginPath();cx.arc(p.x+Math.sin(ts/2400+p.y/40)*6,p.y,p.r,0,7);cx.fill();});
+      cx.globalAlpha=1;}
+    requestAnimationFrame(loop);})(0);
+</script>
+</body>
+</html>

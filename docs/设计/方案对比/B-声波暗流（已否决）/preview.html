@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向B · 声波暗流 · 入场预览页 — Syrinx</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+<style>
+  /* 立场：Spotify 式"内容优先黑暗"——UI 隐入暗处，封面（曲目主题色）是唯一色彩来源。
+     药丸/圆形几何 + 重阴影 + 紧凑排版 + 粗细二元字重。每曲一个主题色驱动全部强调元素。 */
+  :root{
+    --base:#0e0e0e;          /* 最深层 */
+    --surface:#181818;       /* 卡面 */
+    --surface-2:#1f1f1f;     /* 交互面 */
+    --text:#ffffff; --text-dim:#b3b3b3; --text-faint:#7a7a7a;
+    --accent:#3ddfae;        /* Lumière 主题色（每曲不同）：功能专用，不做装饰 */
+    --accent-deep:#0f5c46;
+    --border:#4d4d4d;
+    --shadow-md:rgba(0,0,0,.3) 0 8px 8px;
+    --shadow-lg:rgba(0,0,0,.5) 0 8px 24px;
+    --sans:'DM Sans',system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--base);color:var(--text);font-family:var(--sans);min-height:100vh;
+    -webkit-font-smoothing:antialiased}
+
+  /* ===== 顶栏 ===== */
+  .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:28px;
+    padding:16px 32px;background:linear-gradient(rgba(14,14,14,.94),rgba(14,14,14,.55) 70%,transparent)}
+  .logo{font-weight:700;font-size:19px;letter-spacing:.02em}
+  .logo i{font-style:normal;color:var(--accent)}
+  .topbar nav{margin-left:auto;display:flex;gap:8px}
+  .nav-pill{background:var(--surface-2);color:var(--text-dim);border:none;padding:8px 16px;
+    border-radius:9999px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:.15s}
+  .nav-pill.on,.nav-pill:hover{color:var(--text);background:#2a2a2a}
+
+  /* ===== 专辑式 hero：封面主导，主题色渗出 ===== */
+  .album-hero{position:relative;padding:8px 32px 30px;overflow:hidden}
+  .album-hero::before{content:"";position:absolute;inset:-40% -20% auto -20%;height:120%;
+    background:radial-gradient(60% 90% at 28% 40%,rgba(61,223,174,.30),transparent 70%);
+    filter:blur(10px);pointer-events:none}
+  .album-row{position:relative;display:flex;gap:34px;align-items:flex-end;padding-top:44px;flex-wrap:wrap}
+  .cover{width:min(300px,60vw);aspect-ratio:1;border-radius:10px;flex-shrink:0;
+    background:
+      radial-gradient(70% 55% at 30% 28%,rgba(255,255,255,.13),transparent 60%),
+      radial-gradient(90% 80% at 75% 85%,rgba(61,223,174,.45),transparent 65%),
+      linear-gradient(150deg,#123a30,#0c1512 70%);
+    box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+  .cover::after{content:"预览片段占位 · 每曲 preview.mp4";position:absolute;right:10px;bottom:8px;
+    font-size:10px;color:rgba(255,255,255,.35);letter-spacing:.04em}
+  .cover .vinyl-mark{position:absolute;left:18px;top:18px;width:34px;height:34px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;
+    font-size:15px;color:rgba(255,255,255,.75)}
+  .cover.playing .vinyl-mark{animation:spin 6s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .album-info{flex:1;min-width:280px;padding-bottom:6px}
+  .kicker{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim)}
+  .album-info h1{font-size:clamp(38px,6vw,76px);font-weight:700;letter-spacing:-.02em;
+    line-height:1.02;margin:8px 0 10px;text-wrap:balance}
+  .album-meta{font-size:14px;color:var(--text-dim);font-weight:400}
+  .album-meta b{color:var(--text);font-weight:700}
+  .album-meta .dot-sep{margin:0 8px;color:var(--text-faint)}
+  .action-row{display:flex;align-items:center;gap:20px;margin-top:26px}
+  .btn-play-big{width:74px;height:74px;border-radius:50%;border:none;cursor:pointer;
+    background:var(--accent);color:#04150e;font-size:28px;display:flex;align-items:center;justify-content:center;
+    box-shadow:var(--shadow-md);transition:.15s}
+  .btn-play-big:hover{transform:scale(1.05);background:#54ebbd}
+  .btn-pill{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:9999px;
+    padding:11px 22px;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--sans);transition:.15s}
+  .btn-pill:hover{border-color:var(--text);transform:scale(1.03)}
+  .btn-pill.added{color:var(--accent);border-color:var(--accent)}
+  .listen-state{font-size:12px;color:var(--text-faint);letter-spacing:.06em}
+
+  /* ===== 曲目信息（Spotify 曲目列表式元数据行） ===== */
+  .info-list{margin:26px 32px 0;border-top:1px solid rgba(255,255,255,.07)}
+  .info-row{display:grid;grid-template-columns:36px 1fr auto;gap:14px;align-items:center;
+    padding:13px 10px;border-bottom:1px solid rgba(255,255,255,.07);font-size:14px}
+  .info-row:hover{background:var(--surface)}
+  .info-row .idx{color:var(--text-faint);font-variant-numeric:tabular-nums;font-size:13px}
+  .info-row .k{font-weight:700}
+  .info-row .v{color:var(--text-dim)}
+  .info-row .tag{font-size:11px;color:var(--accent);border:1px solid rgba(61,223,174,.4);
+    padding:2px 10px;border-radius:2px;text-transform:capitalize}
+
+  /* ===== 更多曲目网格 ===== */
+  .grid-section{padding:40px 32px 60px}
+  .grid-section h3{font-size:22px;font-weight:700;margin-bottom:18px}
+  .song-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:18px}
+  .song-card{background:var(--surface);border-radius:8px;padding:14px;cursor:pointer;transition:.2s;position:relative}
+  .song-card:hover{background:#202020}
+  .song-card .art{aspect-ratio:1;border-radius:6px;margin-bottom:12px;position:relative;
+    box-shadow:var(--shadow-md)}
+  .song-card .art .mini-play{position:absolute;right:10px;bottom:10px;width:42px;height:42px;border-radius:50%;
+    background:var(--accent);color:#04150e;border:none;font-size:15px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;opacity:0;transform:translateY(6px);
+    transition:.2s;box-shadow:var(--shadow-lg)}
+  .song-card:hover .mini-play{opacity:1;transform:translateY(0)}
+  .song-card .t{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .song-card .a{font-size:13px;color:var(--text-dim);margin-top:3px}
+  .song-card .diff{font-size:11px;color:var(--text-faint);margin-top:6px;letter-spacing:.04em}
+  .g1{background:radial-gradient(80% 70% at 30% 25%,rgba(61,223,174,.4),transparent 65%),linear-gradient(150deg,#123a30,#0c1512)}
+  .g2{background:radial-gradient(80% 70% at 65% 30%,rgba(120,140,255,.35),transparent 65%),linear-gradient(150deg,#1d2340,#0f1220)}
+  .g3{background:radial-gradient(80% 70% at 50% 75%,rgba(230,160,80,.4),transparent 65%),linear-gradient(150deg,#3a2a15,#191108)}
+  .g4{background:radial-gradient(80% 70% at 25% 70%,rgba(235,110,130,.35),transparent 65%),linear-gradient(150deg,#3a1520,#1a0b10)}
+  .g5{background:radial-gradient(80% 70% at 70% 70%,rgba(110,220,235,.35),transparent 65%),linear-gradient(150deg,#12323a,#0b1719)}
+  footer{padding:26px 32px 50px;color:var(--text-faint);font-size:12px;border-top:1px solid rgba(255,255,255,.07)}
+  @media (max-width:720px){
+    .album-row{flex-direction:column;align-items:flex-start}
+    .cover{width:min(220px,70vw)}
+    .topbar nav{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){.cover.playing .vinyl-mark{animation:none}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="logo">Syrinx<i>·</i>长笛流光</div>
+  <nav>
+    <button class="nav-pill on">曲库</button>
+    <button class="nav-pill">收藏</button>
+    <button class="nav-pill">我的录音</button>
+  </nav>
+</header>
+
+<section class="album-hero">
+  <div class="album-row">
+    <div class="cover playing" id="cover">
+      <div class="vinyl-mark">♪</div>
+    </div>
+    <div class="album-info">
+      <div class="kicker">夜曲 · 治愈 · 首发曲</div>
+      <h1>Nocturne pour Lumière</h1>
+      <div class="album-meta">
+        <b>Lorien Testard</b><span class="dot-sep">•</span>《Clair Obscur: Expedition 33》
+        <span class="dot-sep">•</span>入门 → 进阶<span class="dot-sep">•</span>2:24
+      </div>
+      <p class="album-meta" style="margin-top:10px;max-width:560px;line-height:1.7">
+        一首写给晨光的夜曲。旋律平缓悠长，长笛在中音区低语，随伴奏渐亮。当前正在播放程序化伴奏预览——点击右下角开始完整演奏。
+      </p>
+      <div class="action-row">
+        <button class="btn-play-big" title="开始演奏" onclick="location.href='perform.html'">▶</button>
+        <button class="btn-pill" id="favBtn">＋ 收藏</button>
+        <span class="listen-state" id="listenState">正在预览 · 0:38 / 2:24</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="info-list" aria-label="曲目信息">
+  <div class="info-row"><span class="idx">1</span><span class="k">调性 <span class="v">bB 大调</span></span><span class="tag">Key</span></div>
+  <div class="info-row"><span class="idx">2</span><span class="k">拍号 <span class="v">3/4 · 84 BPM</span></span><span class="tag">Tempo</span></div>
+  <div class="info-row"><span class="idx">3</span><span class="k">小节数 <span class="v">48 小节 · 约 2 分 24 秒</span></span><span class="tag">Length</span></div>
+  <div class="info-row"><span class="idx">4</span><span class="k">伴奏 <span class="v">钢琴 + 弦乐 pad（程序化占位）</span></span><span class="tag">Audio</span></div>
+  <div class="info-row"><span class="idx">5</span><span class="k">技巧要求 <span class="v">连奏气息 · 中音区 · 弱起处理</span></span><span class="tag">Level 2</span></div>
+</section>
+
+<section class="grid-section">
+  <h3>更多曲目</h3>
+  <div class="song-grid">
+    <div class="song-card"><div class="art g1"><button class="mini-play">▶</button></div><div class="t">Nocturne pour Lumière</div><div class="a">Lorien Testard</div><div class="diff">●●○ 进阶 · 2:24</div></div>
+    <div class="song-card"><div class="art g2"><button class="mini-play">▶</button></div><div class="t">Gymnopédie No.1</div><div class="a">Erik Satie</div><div class="diff">●●○ 进阶 · 3:05</div></div>
+    <div class="song-card"><div class="art g3"><button class="mini-play">▶</button></div><div class="t">Au Clair de la Lune</div><div class="a">法国民谣</div><div class="diff">●○○ 入门 · 1:52</div></div>
+    <div class="song-card"><div class="art g4"><button class="mini-play">▶</button></div><div class="t">Sicilienne</div><div class="a">Gabriel Fauré</div><div class="diff">●●● 演奏级 · 4:12</div></div>
+    <div class="song-card"><div class="art g5"><button class="mini-play">▶</button></div><div class="t">晨间音阶练习</div><div class="a">传统练习曲</div><div class="diff">●○○ 入门 · 1:38</div></div>
+  </div>
+</section>
+
+<footer>Syrinx UI 设计方向 B「声波暗流」· 入场预览页 · Spotify 式内容优先黑暗 + 每曲主题色驱动 · 素材为占位，曲谱与伴奏用户自备自用</footer>
+
+<script>
+  const fav=document.getElementById('favBtn');
+  fav.onclick=()=>{fav.classList.add('added');fav.textContent='✓ 已收藏';};
+  /* 预览时间推进示意（正式实现为伴奏音频时钟） */
+  let s=38;const st=document.getElementById('listenState');
+  setInterval(()=>{s=(s+1)%145;
+    const f=x=>`${Math.floor(x/60)}:${String(Math.floor(x%60)).padStart(2,'0')}`;
+    st.textContent=`正在预览 · ${f(s)} / 2:24`;},1000);
+</script>
+</body>
+</html>
