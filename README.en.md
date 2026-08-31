@@ -8,7 +8,7 @@
 
 **Play a real flute, and let the score flow with you.**
 
-[Quick Start](#-quick-start) · [Features](#-features) · [Roadmap](#-roadmap) · [FAQ](#-faq--known-issues)
+[中文](README.md) · [Quick Start](#-quick-start) · [Features](#-features) · [Roadmap](#-roadmap) · [FAQ](#-faq--known-issues)
 
 ![Electron](https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
