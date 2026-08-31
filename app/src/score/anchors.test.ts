@@ -186,36 +186,33 @@ describe('applyBeats 伴奏锚点重写', () => {
     expect(early.measureTimes[3].time).toBeCloseTo(anchored.measureTimes[3].time - 0.05, 5)
   })
 
-  it('luv-letter 真实数据：v4 拍级锚点落地——抽样 10 音对照离线拍级网格（t_76c0cbff / beat_refine）', () => {
+  it('luv-letter 真实数据：v5b 音符级锚点落地——抽样 10 音对照离线音符级网格（t_76c0cbff / beat_refine）', () => {
     // 新谱带反复记号：与应用 loadSong 一致，先 expandRepeats 再 parse → applyBeats
     const raw = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8').replace(
-      /^<\?xml[^>]*\?>/,
-      (m) => m.replace(/'/g, '"'),
+      /^<\?xml[^>]*\?>/,(m) => m.replace(/'/g, '"'),
     )
     const beats = JSON.parse(
       readFileSync('public/songs/luv-letter/beats.json', 'utf-8'),
     ) as BeatsFile
-    // v4：97 小节锚点不变 + 388 拍级控制点
-    expect(beats.version).toBe(4)
+    // v5b：97 小节锚点不变 + 音符级控制点（442：beat0 偶发 + 吸附成功的音符 onset + 段落边界）
+    expect(beats.version).toBe(5)
     expect(beats.anchors).toHaveLength(97)
-    expect(beats.beatAnchors).toHaveLength(388)
+    expect(beats.beatAnchors!.length).toBeGreaterThan(400)
     const ts = beats.anchors.map((a) => a.t)
     expect(ts[0]).toBeGreaterThanOrEqual(0)
     for (const [i, t] of ts.entries()) {
       if (i === 0) continue
       expect(t, `anchor#${i + 1}`).toBeGreaterThan(ts[i - 1])
     }
-    // 拍级 q 严格递增（0..387）；beat0 与小节锚点同源一致（数据合法性）
+    // 控制点 q 严格递增、t 非降（数据合法性）
     const ba = beats.beatAnchors!
     for (const [i, p] of ba.entries()) {
       if (i === 0) continue
-      expect(p.q, `beatQ#${i}`).toBeGreaterThan(ba[i - 1].q)
+      expect(p.q, `ctrlQ#${i}`).toBeGreaterThan(ba[i - 1].q)
+      expect(p.t, `ctrlT#${i}`).toBeGreaterThanOrEqual(ba[i - 1].t)
     }
     expect(ba[0].q).toBe(0)
-    expect(ba[387].q).toBe(387)
-    for (let k = 0; k < 97; k++) {
-      expect(ba[4 * k].t, `beat0@m${k + 1}`).toBe(beats.anchors[k].t)
-    }
+    expect(ba[0].t).toBe(beats.anchors[0].t)
 
     const pre = parseMusicXml(expandRepeats(raw))
     const out = applyBeats(pre, beats)
