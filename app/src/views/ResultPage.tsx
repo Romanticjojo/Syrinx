@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
+import { encodeWav } from '../audio/wav'
 import PitchChart from '../components/PitchChart'
+import { loadFeedback, submitFeedback } from '../lib/feedback'
 import { extractPitchTrack, scoreAgainst, type ScoreResult } from '../pitch/compare'
 import { getSong, loadSong, SONGS } from '../songs'
 import { useAppStore } from '../store'
@@ -25,6 +27,44 @@ export default function ResultPage() {
   const [analysis, setAnalysis] = useState<Analysis>({ status: 'analyzing' })
   const [syncPlaying, setSyncPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
+
+  // 试奏反馈（t_b3080db9）：星级 + 文字，dev 端点落盘 public/feedback/<songId>.json
+  const [fbRating, setFbRating] = useState(0)
+  const [fbComment, setFbComment] = useState('')
+  const [fbState, setFbState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [fbError, setFbError] = useState('')
+  const [fbExisting, setFbExisting] = useState(0)
+
+  useEffect(() => {
+    let alive = true
+    void loadFeedback(song.id).then((n) => {
+      if (alive) setFbExisting(n.length)
+    })
+    return () => {
+      alive = false
+    }
+  }, [song.id])
+
+  const submitFb = useCallback(async () => {
+    if (!fbRating || fbState === 'sending') return
+    setFbState('sending')
+    try {
+      await submitFeedback({
+        songId: song.id,
+        rating: fbRating,
+        comment: fbComment.trim(),
+        submittedAt: new Date().toISOString(),
+        durationSec: take?.durationSec,
+      })
+      setFbState('sent')
+      setFbRating(0)
+      setFbComment('')
+      setFbExisting((n) => n + 1)
+    } catch (e) {
+      setFbState('error')
+      setFbError(e instanceof Error ? e.message : String(e))
+    }
+  }, [fbComment, fbRating, fbState, song.id, take])
 
   // 音高分析：解码录音 → 逐帧 YIN → 与目标时间轴对比（不支持解码的浏览器保留纯回放）
   useEffect(() => {
@@ -104,14 +144,31 @@ export default function ResultPage() {
     }
   }, [syncPlaying, take])
 
-  /** 双击图表下载录音（webm/mp4 由 mime 决定扩展名） */
-  const downloadTake = () => {
+  /** 双击图表下载录音：解码重编码为 WAV（MediaRecorder webm 缺 duration 元数据，
+   *  直接下载在部分播放器无声）；解码失败回退原样 webm/mp4 */
+  const downloadTake = async () => {
     if (!take) return
-    const ext = take.mimeType.includes('mp4') ? 'mp4' : 'webm'
-    const a = document.createElement('a')
-    a.href = take.audioUrl
-    a.download = `syrinx-${song.id}-${new Date(take.startedAt).toISOString().slice(0, 19).replace(/[:T]/g, '')}.${ext}`
-    a.click()
+    const stamp = new Date(take.startedAt).toISOString().slice(0, 19).replace(/[:T]/g, '')
+    const fallback = () => {
+      const ext = take.mimeType.includes('mp4') ? 'mp4' : 'webm'
+      const a = document.createElement('a')
+      a.href = take.audioUrl
+      a.download = `syrinx-${song.id}-${stamp}.${ext}`
+      a.click()
+    }
+    try {
+      const res = await fetch(take.audioUrl)
+      const buffer = await audioEngine.decode(await res.arrayBuffer())
+      const url = URL.createObjectURL(encodeWav(buffer))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `syrinx-${song.id}-${stamp}.wav`
+      a.click()
+      // 留出浏览器取走 blob 的时间再释放
+      setTimeout(() => URL.revokeObjectURL(url), 30_000)
+    } catch {
+      fallback()
+    }
   }
 
   if (!take) {
@@ -252,6 +309,46 @@ export default function ResultPage() {
           <div className="chart-placeholder">
             {analysis.status === 'analyzing' ? '正在绘制音高轨迹…' : '音高对比图不可用'}
           </div>
+        )}
+      </section>
+
+      <section className="feedback-card" aria-label="试奏反馈">
+        <h3>试奏反馈</h3>
+        {fbState === 'sent' ? (
+          <div className="feedback-done">已收到，感谢你的反馈 ♪</div>
+        ) : (
+          <>
+            <div className="feedback-stars" role="radiogroup" aria-label="评分">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  className={`star${n <= fbRating ? ' on' : ''}`}
+                  onClick={() => setFbRating(n)}
+                  role="radio"
+                  aria-checked={n === fbRating}
+                  aria-label={`${n} 星`}
+                >
+                  ★
+                </button>
+              ))}
+              <span className="feedback-count">
+                {fbExisting > 0 ? `已有 ${fbExisting} 条反馈` : '还没有反馈，来当第一个'}
+              </span>
+            </div>
+            <textarea
+              className="feedback-text"
+              placeholder="这次试奏的感受（选填）…"
+              rows={3}
+              value={fbComment}
+              onChange={(e) => setFbComment(e.target.value)}
+            />
+            <div className="feedback-actions">
+              <button className="btn-pill" disabled={!fbRating || fbState === 'sending'} onClick={() => void submitFb()}>
+                {fbState === 'sending' ? '提交中…' : '提交反馈'}
+              </button>
+              {fbState === 'error' && <span className="feedback-err">{fbError}</span>}
+            </div>
+          </>
         )}
       </section>
 
