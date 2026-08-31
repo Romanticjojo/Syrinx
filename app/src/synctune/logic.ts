@@ -72,33 +72,49 @@ export function buildSyncNotes(timeline: Timeline): SyncNote[] {
   }))
 }
 
-/** 拍级网格 q→t：相邻控制点线性插值，首/末段斜率外推（q 不必整数，不必递增输入） */
+/** 拍级网格 q→t：相邻控制点线性插值，首/末段斜率外推（q 不必整数，不必递增输入）
+ *  性能（t_perf_sync_tune）：控制点按 q 排序的结果缓存；连续命中同 q（同一音符
+ *  在一次渲染里被 tunedCount/属性面板/列表反复查询）直接返回缓存，段下标也缓存
+ *  供递增 q 的顺序扫描复用。601 控制点下每次调用从「重排序 O(N log N)」降为 O(1)。 */
 export function makeQ2T(points: CtrlPoint[]): (q: number) => { t: number; rate: number } {
   const pts = [...points].sort((a, b) => a.q - b.q)
   if (pts.length < 2) {
     // 单点/空网格：退化为恒速（斜率 0.5s/拍兜底），仅供防御，正常数据 ≥2 项
     const t0 = pts[0]?.t ?? 0
-    return (q) => ({ t: t0 + Math.max(0, q - (pts[0]?.q ?? 0)) * 0.5, rate: 0.5 })
+    const q0 = pts[0]?.q ?? 0
+    return (q) => ({ t: t0 + Math.max(0, q - q0) * 0.5, rate: 0.5 })
   }
+  let lastQ = NaN
+  let lastResult: { t: number; rate: number } | null = null
+  let lastI = 0
   return (q) => {
+    if (q === lastQ && lastResult) return lastResult
     const n = pts.length
     let i: number
     if (q <= pts[0].q) i = 0
     else if (q >= pts[n - 1].q) i = n - 2
     else {
-      let lo = 0
-      let hi = n - 1
-      while (hi - lo > 1) {
-        const mid = (lo + hi) >> 1
-        if (pts[mid].q <= q) lo = mid
-        else hi = mid
+      // 顺序扫描 fast path：q 相对上次命中前进且仍在界内（播放序遍历音符表即此形态）
+      if (lastI < n - 2 && q >= pts[lastI].q && q < pts[lastI + 1].q) {
+        i = lastI
+      } else {
+        let lo = 0
+        let hi = n - 1
+        while (hi - lo > 1) {
+          const mid = (lo + hi) >> 1
+          if (pts[mid].q <= q) lo = mid
+          else hi = mid
+        }
+        i = lo
       }
-      i = lo
     }
+    lastI = i
     const a = pts[i]
     const b = pts[i + 1]
     const rate = (b.t - a.t) / Math.max(b.q - a.q, 1e-9)
-    return { t: a.t + (q - a.q) * rate, rate }
+    lastQ = q
+    lastResult = { t: a.t + (q - a.q) * rate, rate }
+    return lastResult
   }
 }
 
@@ -115,11 +131,32 @@ export function cpIndexAt(points: CtrlPoint[], q: number): number {
   return points.findIndex((p) => p.q === q)
 }
 
-/** 音符是否已人工微调：q 处控制点存在且 t 偏离基线插值 > 1µs */
+/** 音符是否已人工微调：q 处控制点存在且 t 偏离基线插值 > 1µs
+ *  （批量场景请用 tunedFlags，单音符路径保留兼容） */
 export function isTuned(note: SyncNote, working: CtrlPoint[], baseline: CtrlPoint[]): boolean {
   const i = cpIndexAt(working, note.q)
   if (i < 0) return false
   return Math.abs(working[i].t - baselineTAt(baseline, note.q)) > 1e-6
+}
+
+/**
+ * 批量判定音符已调状态（t_perf_sync_tune）：working 控制点建 q→t 查找表 O(N)，
+ * 基线插值用单个记忆化 q2t 闭包，整体 O(N log N)——替代逐音符 isTuned 的
+ * O(N²)（601 音符 × 601 findIndex，每次渲染 ~36 万次比较）。
+ * 返回与 notes 下标对齐的 boolean[]。
+ */
+export function tunedFlags(
+  notes: SyncNote[],
+  working: CtrlPoint[],
+  baseline: CtrlPoint[],
+): boolean[] {
+  const cpT = new Map<number, number>()
+  for (const p of working) if (!cpT.has(p.q)) cpT.set(p.q, p.t)
+  const baseQ2T = makeQ2T(baseline)
+  return notes.map((n) => {
+    const t = cpT.get(n.q)
+    return t !== undefined && Math.abs(t - baseQ2T(n.q).t) > 1e-6
+  })
 }
 
 /**

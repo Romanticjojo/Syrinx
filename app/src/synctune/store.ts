@@ -8,6 +8,7 @@ import {
   isTuned,
   makeQ2T,
   resetPoint,
+  tunedFlags,
   type CtrlPoint,
   type ManualOffset,
   type SyncNote,
@@ -141,18 +142,44 @@ export function selectedNoteView(state: SyncTuneState): {
   }
 }
 
-/** 已微调音符数（顶栏统计 + 导出记录） */
+/** 已微调音符数（顶栏统计 + 导出记录）
+ *  性能（t_perf_sync_tune）：走 tunedFlags 批量 Map 判定 O(N log N)，
+ *  禁止逐音符 isTuned（O(N²)，601 控制点下每次渲染 ~36 万次比较，卡顿主因） */
 export function tunedCount(state: SyncTuneState): number {
-  return state.notes.filter((n) => isTuned(n, state.working, state.baseline)).length
+  return tunedFlags(state.notes, state.working, state.baseline).reduce(
+    (acc, f) => acc + (f ? 1 : 0),
+    0,
+  )
 }
 
-/** 过滤后的音符列表（当前小节 ±2 窗口由调用方的小节游标再裁一次） */
+/** 音符 → 已调状态查找表（visibleNotes 内部共用，一次构建 O(N log N)） */
+function tunedSetOf(state: SyncTuneState): Set<number> {
+  const flags = tunedFlags(state.notes, state.working, state.baseline)
+  const set = new Set<number>()
+  for (let i = 0; i < state.notes.length; i++) if (flags[i]) set.add(state.notes[i].idx)
+  return set
+}
+
+/** 过滤后的音符列表（当前小节 ±2 窗口由调用方的小节游标再裁一次）
+ *  性能（t_perf_sync_tune）：小节窗口用二分裁剪 + 窗口线性收集，不再全表 filter；
+ *  filter 模式的已调判定走 tunedSetOf 单次构建。 */
 export function visibleNotes(state: SyncTuneState, curMeasure: number, window = 2): SyncNote[] {
-  const inWindow = state.notes.filter(
-    (n) => n.measure >= curMeasure - window && n.measure <= curMeasure + window,
-  )
+  const notes = state.notes
+  // 音符按播放序 ≈ 小节序排列：二分找窗口起点，向右收集到出窗为止
+  let lo = 0
+  let hi = notes.length
+  const minM = curMeasure - window
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (notes[mid].measure < minM) lo = mid + 1
+    else hi = mid
+  }
+  const maxM = curMeasure + window
+  const inWindow: SyncNote[] = []
+  for (let i = lo; i < notes.length && notes[i].measure <= maxM; i++) inWindow.push(notes[i])
   if (state.filter === 'all') return inWindow
-  return inWindow.filter((n) => isTuned(n, state.working, state.baseline) === (state.filter === 'tuned'))
+  const tunedSet = tunedSetOf(state)
+  return inWindow.filter((n) => tunedSet.has(n.idx) === (state.filter === 'tuned'))
 }
 
 /** 工作网格 q→t（波形期望线/试听 B 窗共用） */

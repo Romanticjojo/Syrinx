@@ -1,5 +1,6 @@
 import type { SongManifest, Timeline } from '../types'
-import { applyBeats, type BeatsFile } from '../score/anchors'
+import { applyAnchorOffset, applyBeats, type BeatsFile } from '../score/anchors'
+import { assetUrl } from '../lib/assetUrl'
 import { expandRepeats, parseMusicXml } from '../score/musicxml'
 import luvLetterManifest from '../../public/songs/luv-letter/manifest.json'
 
@@ -43,34 +44,6 @@ export const SONGS: SongManifest[] = [
     backgroundTheme: 'aurora',
     bpm: 84,
   },
-  {
-    id: 'ember-nocturne',
-    title: '炉火夜曲',
-    composer: '传统（占位）',
-    difficulty: 3,
-    durationLabel: '0:42',
-    keyLabel: 'C 大调',
-    description: '情绪更浓的夜曲式占位曲目，用于展示每曲主题色与动态背景的换肤能力。',
-    tags: ['夜曲', '演奏级'],
-    scoreUrl: '/songs/lumiere/score.musicxml',
-    accent: '#e6a050',
-    backgroundTheme: 'ember',
-    bpm: 84,
-  },
-  {
-    id: 'zephyr-etude',
-    title: '微风练习曲',
-    composer: '传统（占位）',
-    difficulty: 1,
-    durationLabel: '0:42',
-    keyLabel: 'C 大调',
-    description: '轻快明朗的连音热身曲占位，暖金主题色呼应「夜航晨光」设计基调。',
-    tags: ['练习曲', '入门'],
-    scoreUrl: '/songs/lumiere/score.musicxml',
-    accent: '#d9a441',
-    backgroundTheme: 'aurora',
-    bpm: 84,
-  },
 ]
 
 export function getSong(id: string | null): SongManifest | undefined {
@@ -80,7 +53,7 @@ export function getSong(id: string | null): SongManifest | undefined {
 /** 加载曲目：拉取 MusicXML → 反复段展开为实体小节 → 解析时间轴 → 应用伴奏锚点。
  * 展开后的 xml 同时喂给 OSMD 与 timeline，光标/变色顺序与播放序严格一致 */
 export async function loadSong(manifest: SongManifest): Promise<{ xml: string; timeline: Timeline }> {
-  const res = await fetch(manifest.scoreUrl)
+  const res = await fetch(assetUrl(manifest.scoreUrl))
   if (!res.ok) throw new Error(`曲谱加载失败：${manifest.scoreUrl}（HTTP ${res.status}）`)
   const raw = await res.text()
   const xml = expandRepeats(raw)
@@ -88,12 +61,14 @@ export async function loadSong(manifest: SongManifest): Promise<{ xml: string; t
   // 伴奏锚点（可选）：谱面缺段/假 tempo 时把逐拍时间对齐到伴奏（t_3b9cfc25）
   if (manifest.beatsUrl) {
     try {
-      const beats = await fetch(manifest.beatsUrl)
+      const beats = await fetch(assetUrl(manifest.beatsUrl))
       if (beats.ok) timeline = applyBeats(timeline, (await beats.json()) as BeatsFile)
     } catch (e: unknown) {
       console.warn(`[syrinx] 伴奏锚点加载失败，回退恒速时间轴：${e instanceof Error ? e.message : e}`)
     }
   }
+  // 全局微调（可选，默认 0）：锚点残差手工校准，正 = 谱面整体延后（t_b3080db9）
+  if (manifest.anchorOffsetMs) timeline = applyAnchorOffset(timeline, manifest.anchorOffsetMs / 1000)
   return { xml, timeline }
 }
 

@@ -83,6 +83,11 @@ export interface SongManifest {
   coverUrl?: string
   /** 伴奏锚点文件（可选；离线分析伴奏生成，供伴奏驱动光标，见 score/anchors.ts） */
   beatsUrl?: string
+  /**
+   * 谱面-伴奏整体对齐微调（毫秒，可选，默认 0）：正 = 谱面整体延后。
+   * 锚点标定后的残差按此字段手工校准，替代改动 beats.json（t_b3080db9）。
+   */
+  anchorOffsetMs?: number
   /** 封面构图锚点（object-position，宽幅裁切时保持人物/主体可见；缺省居中） */
   coverPosition?: string
   /** 每曲主题色：驱动背景/光标/高亮/强调元素 */

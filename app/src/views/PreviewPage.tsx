@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ScoreSheet from '../components/ScoreSheet'
 import { DIFFICULTY_LABEL, getSong, loadSong, SONGS } from '../songs'
+import { assetUrl } from '../lib/assetUrl'
 import { useAppStore } from '../store'
 import type { SongManifest, Timeline } from '../types'
 import './PreviewPage.css'
@@ -93,14 +94,14 @@ export default function PreviewPage() {
           <video
             className="preview-bg-media"
             ref={bgVideoRef}
-            src={song.backgroundVideoUrl}
+            src={assetUrl(song.backgroundVideoUrl)}
             muted
             loop
             playsInline
             autoPlay
           />
         ) : song.coverUrl ? (
-          <img className="preview-bg-media" src={song.coverUrl} alt="" style={positionOf(song)} />
+          <img className="preview-bg-media" src={assetUrl(song.coverUrl ?? '')} alt="" style={positionOf(song)} />
         ) : null}
         <div className="preview-bg-scrim" />
       </div>
@@ -113,7 +114,7 @@ export default function PreviewPage() {
             </svg>
           </button>
           <div className="logo">
-            <img src="/brand/syrinx-logo-white.jpg" alt="" aria-hidden="true" />
+            <img src={assetUrl("/brand/syrinx-logo-white.jpg")} alt="" aria-hidden="true" />
             Syrinx
           </div>
         </div>
@@ -124,7 +125,7 @@ export default function PreviewPage() {
         {/* hero 右侧：3D 长笛展示（加载失败自动回退 CSS 长笛条） */}
         <div className="album-row">
           <div className="cover playing" style={cover}>
-            {song.coverUrl && <img className="cover-img" src={song.coverUrl} alt={`${song.title} 封面`} />}
+            {song.coverUrl && <img className="cover-img" src={assetUrl(song.coverUrl)} alt={`${song.title} 封面`} />}
           </div>
           <div className="album-info">
             <div className="kicker">{song.tags.join(' · ')}</div>
@@ -193,7 +194,7 @@ export default function PreviewPage() {
           {SONGS.filter((x) => x.id !== song.id).map((x) => (
             <button key={x.id} className="more-card" onClick={() => go('preview', x.id)} title={x.title}>
               <div className="more-art" style={x.coverUrl ? undefined : placeholderStyle(x.accent)}>
-                {x.coverUrl && <img src={x.coverUrl} alt="" loading="lazy" style={positionOf(x)} />}
+                {x.coverUrl && <img src={assetUrl(x.coverUrl)} alt="" loading="lazy" style={positionOf(x)} />}
                 <span className="more-veil" aria-hidden="true" />
               </div>
               <div className="more-name">{x.title}</div>

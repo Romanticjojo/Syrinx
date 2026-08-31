@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import './Intro.css'
+import { assetUrl } from '../lib/assetUrl'
 
 interface Props {
   onDone: () => void
@@ -35,7 +36,7 @@ export default function Intro({ onDone }: Props) {
     <div className={`intro${leaving ? ' leaving' : ''}`} role="dialog" aria-label="Syrinx 入场">
       <div className="intro-beam" aria-hidden="true" />
       <div className="intro-center">
-        <img className="intro-emblem" src="/brand/syrinx-logo-dark.jpg" alt="" aria-hidden="true" />
+        <img className="intro-emblem" src={assetUrl("/brand/syrinx-logo-dark.jpg")} alt="" aria-hidden="true" />
         <h1 className="intro-brand">Syrinx</h1>
       </div>
       <div className="intro-actions">

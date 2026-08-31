@@ -407,6 +407,44 @@ video.perform-bg {
   }
 }
 
+/* 超窄屏（<400px）：顶栏收纳不换行不溢出——统计标签收起只留数字、
+   歌名让位给 ellipsis、间距收紧（t_b3080db9） */
+@media (max-width: 399.98px) {
+  .hud-top {
+    gap: 10px;
+    padding: 10px 12px 8px;
+  }
+  .hud-song {
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .hud-song-text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .hud-song-text b {
+    font-size: 16px;
+  }
+  .hud-stats {
+    flex: none;
+    gap: 10px;
+  }
+  /* 标签「小节/时间」竖排堆叠在数字左侧，数字保持横向可读 */
+  .hud-stat {
+    gap: 4px;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+  .hud-stat > span:first-child {
+    writing-mode: vertical-rl;
+    line-height: 1;
+  }
+  .hud-stat .num {
+    font-size: 12px;
+  }
+}
+
 /* 窄屏（手机竖屏等）：视频保持 contain 不裁人物，同色底自然延展补满留边 */
 @media (max-width: 768px) {
   video.perform-bg {

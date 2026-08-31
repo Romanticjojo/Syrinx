@@ -38,6 +38,18 @@ export class OSMDScore {
   /** 小节变化回调（rAF 中触发，直接操作 DOM，勿 setState） */
   onMeasureChange?: (measure: number, total: number) => void
 
+  // —— 标记层性能缓存（t_perf_sync_tune）——
+  /** 小节几何缓存：load 渲染后首算，谱面不变则复用（601 标记共享一份） */
+  private markerGeom: {
+    map: Map<number, { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }>
+    offX: number
+    offY: number
+    unitPx: number
+  } | null = null
+  /** 标记 DOM 元素池：key → 已定位元素，setMarkers 复用不再重建 */
+  private markerEls = new Map<string, HTMLDivElement>()
+  private markerLayer: HTMLElement | null = null
+
   constructor(container: HTMLElement, accent = '#3ddfae', osmdInstance?: OpenSheetMusicDisplay) {
     this.containerEl = container
     this.accent = accent
@@ -70,6 +82,10 @@ export class OSMDScore {
     await this.osmd.load(xml)
     if (this.disposed) return
     this.osmd.render()
+    // 新谱面几何：标记层缓存全部作废（t_perf_sync_tune）
+    this.markerGeom = null
+    this.markerEls.clear()
+    this.markerLayer = null
     this.secPerQuarter = timeline.secPerQuarter
     this.measureTimes = timeline.measureTimes
     // 终点标记不是真实小节
@@ -285,79 +301,108 @@ export class OSMDScore {
    * [sync-tune 调试页扩展] 控制点标记层：谱面上叠加定位刻度（如 beats 微调页的
    * 控制点/选中音标记）。空数组清除整层；OSMD 未渲染时忽略。纯 overlay，
    * 不触碰谱面图形树，缺省（不调用）行为不变。
+   * 性能（t_perf_sync_tune）：小节几何渲染后缓存一次；标记 DOM 走元素池
+   * （q→元素复用，仅更新 style/title），601 标记从「全删全建」降为「差异更新」。
    */
   setMarkers(markers: { measure: number; rvInMeasure: number; color: string; title?: string }[]): void {
-    const layer =
-      this.containerEl.querySelector<HTMLElement>('.sync-marker-layer') ??
-      document.createElement('div')
-    layer.className = 'sync-marker-layer'
     if (!markers.length) {
-      layer.remove()
+      this.markerLayer?.remove()
+      this.markerEls.clear()
       return
     }
     const svg = this.containerEl.querySelector('svg')
     const ml = this.osmd.GraphicSheet?.MeasureList
     if (!svg || !ml) return
-    layer.innerHTML = ''
-    // 容器可能带内边距：svg 相对容器的偏移叠进标记坐标
-    const cRect = this.containerEl.getBoundingClientRect()
-    const svgRect = svg.getBoundingClientRect()
-    const offX = svgRect.left - cRect.left
-    const offY = svgRect.top - cRect.top
-    const unitPx = 10 * (this.osmd.Zoom || 1)
-    // 小节号 → 几何（首个同名项）+ 小节内 rv→x 映射（staffEntry 线性插值，缺数据回退比例）
-    const geom = new Map<number, { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }>()
-    for (const systemMeasures of ml) {
-      if (!systemMeasures?.length) continue
-      for (const m of systemMeasures) {
-        if (geom.has(m.MeasureNumber)) continue
-        const ps = m.PositionAndShape
-        geom.set(m.MeasureNumber, {
-          x: ps.AbsolutePosition.x * unitPx,
-          y: ps.AbsolutePosition.y * unitPx,
-          w: ps.Size.width * unitPx,
-          h: ps.Size.height * unitPx,
-          se: m.staffEntries.map((se) => ({
-            rv: se.sourceStaffEntry?.Timestamp?.RealValue ?? 0,
-            x: se.PositionAndShape.AbsolutePosition.x,
-          })),
-        })
-      }
+    let layer = this.markerLayer
+    if (!layer || layer.parentElement !== this.containerEl) {
+      layer =
+        this.containerEl.querySelector<HTMLElement>('.sync-marker-layer') ??
+        document.createElement('div')
+      layer.className = 'sync-marker-layer'
+      if (layer.parentElement !== this.containerEl) this.containerEl.appendChild(layer)
+      this.markerLayer = layer
     }
-    for (const mk of markers) {
-      const g = geom.get(mk.measure)
-      if (!g) continue
-      // rv→x：夹取到 staffEntry 时间戳范围后按相邻项线性插值（符距与音值近似成正比）；
-      // 无 staffEntry 数据时回退小节宽度比例（fx 与 g.x 同为 OSMD 单位）
-      const last = g.se.at(-1)
-      const rel = Math.max(0, Math.min(last?.rv ?? 1, mk.rvInMeasure))
-      let fx: number
-      if (!last) fx = 0
-      else if (rel >= last.rv) fx = last.x
-      else {
-        const i = g.se.findIndex((p) => p.rv > rel)
-        if (i <= 0) fx = g.se[0].x
-        else {
-          const a = g.se[i - 1]
-          const b = g.se[i]
-          fx = a.x + ((b.x - a.x) * (rel - a.rv)) / Math.max(b.rv - a.rv, 1e-9)
+    // 容器可能带内边距：svg 相对容器的偏移叠进标记坐标（几何首次算好后缓存）
+    if (!this.markerGeom) {
+      const cRect = this.containerEl.getBoundingClientRect()
+      const svgRect = svg.getBoundingClientRect()
+      const unitPx = 10 * (this.osmd.Zoom || 1)
+      const map = new Map<number, { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }>()
+      for (const systemMeasures of ml) {
+        if (!systemMeasures?.length) continue
+        for (const m of systemMeasures) {
+          if (map.has(m.MeasureNumber)) continue
+          const ps = m.PositionAndShape
+          map.set(m.MeasureNumber, {
+            x: ps.AbsolutePosition.x * unitPx,
+            y: ps.AbsolutePosition.y * unitPx,
+            w: ps.Size.width * unitPx,
+            h: ps.Size.height * unitPx,
+            se: m.staffEntries.map((se) => ({
+              rv: se.sourceStaffEntry?.Timestamp?.RealValue ?? 0,
+              x: se.PositionAndShape.AbsolutePosition.x,
+            })),
+          })
         }
       }
-      const el = document.createElement('div')
-      el.className = 'sync-marker'
-      el.style.left = `${offX + g.x + fx * unitPx}px`
-      el.style.top = `${offY + g.y}px`
+      this.markerGeom = {
+        map,
+        offX: svgRect.left - cRect.left,
+        offY: svgRect.top - cRect.top,
+        unitPx,
+      }
+    }
+    const geom = this.markerGeom
+    // rv→x：夹取到 staffEntry 时间戳范围后按相邻项线性插值（符距与音值近似成正比）；
+    // 无 staffEntry 数据时回退小节宽度比例（fx 与 g.x 同为 OSMD 单位）
+    const rvToX = (g: { se: { rv: number; x: number }[] }, rvInMeasure: number): number => {
+      const last = g.se.at(-1)
+      const rel = Math.max(0, Math.min(last?.rv ?? 1, rvInMeasure))
+      if (!last) return 0
+      if (rel >= last.rv) return last.x
+      const i = g.se.findIndex((p) => p.rv > rel)
+      if (i <= 0) return g.se[0].x
+      const a = g.se[i - 1]
+      const b = g.se[i]
+      return a.x + ((b.x - a.x) * (rel - a.rv)) / Math.max(b.rv - a.rv, 1e-9)
+    }
+    // 元素池差异更新：key = `m<measure>@rv<rvInMeasure>`（微调不改标记位置，稳定）
+    const used = new Set<string>()
+    for (const mk of markers) {
+      const g = geom.map.get(mk.measure)
+      if (!g) continue
+      const key = `m${mk.measure}@rv${mk.rvInMeasure}`
+      used.add(key)
+      let el = this.markerEls.get(key)
+      if (!el) {
+        el = document.createElement('div')
+        el.className = 'sync-marker'
+        this.markerEls.set(key, el)
+        layer.appendChild(el)
+      }
+      const fx = rvToX(g, mk.rvInMeasure)
+      el.style.left = `${geom.offX + g.x + fx * geom.unitPx}px`
+      el.style.top = `${geom.offY + g.y}px`
       el.style.height = `${g.h}px`
       el.style.borderColor = mk.color
       if (mk.title) el.title = mk.title
-      layer.appendChild(el)
+      else el.removeAttribute('title')
     }
-    if (layer.parentElement !== this.containerEl) this.containerEl.appendChild(layer)
+    // 池中已不在本次集合的元素 → 摘除并回收
+    for (const [key, el] of this.markerEls) {
+      if (!used.has(key)) {
+        el.remove()
+        this.markerEls.delete(key)
+      }
+    }
   }
 
   dispose(): void {
     this.disposed = true
     // OSMD 无 dispose API；清空容器释放 DOM
+    this.markerGeom = null
+    this.markerEls.clear()
+    this.markerLayer = null
     this.containerEl.innerHTML = ''
   }
 }
