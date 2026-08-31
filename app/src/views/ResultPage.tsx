@@ -27,6 +27,7 @@ export default function ResultPage() {
 
   const [analysis, setAnalysis] = useState<Analysis>({ status: 'analyzing' })
   const [syncPlaying, setSyncPlaying] = useState(false)
+  const [downloading, setDownloading] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   // 音高分析：解码录音 → 逐帧 YIN → 与目标时间轴对比（不支持解码的浏览器保留纯回放）
@@ -107,30 +108,38 @@ export default function ResultPage() {
     }
   }, [syncPlaying, take])
 
-  /** 双击图表下载录音：解码重编码为 WAV（MediaRecorder webm 缺 duration 元数据，
-   *  直接下载在部分播放器无声）；解码失败回退原样 webm/mp4 */
+  /** 下载录音按钮：32kHz 单声道 WAV 直采录音直接下载；旧版 MediaRecorder
+   *  webm/mp4 take 解码重编码 WAV（webm 缺 duration 元数据，直接下载在部分
+   *  播放器无声），解码失败回退原样下载 */
   const downloadTake = async () => {
-    if (!take) return
+    if (!take || downloading) return
+    setDownloading(true)
     const stamp = new Date(take.startedAt).toISOString().slice(0, 19).replace(/[:T]/g, '')
-    const fallback = () => {
-      const ext = take.mimeType.includes('mp4') ? 'mp4' : 'webm'
+    const saveAs = (href: string, ext: string) => {
       const a = document.createElement('a')
-      a.href = take.audioUrl
+      a.href = href
       a.download = `syrinx-${song.id}-${stamp}.${ext}`
       a.click()
     }
     try {
-      const res = await fetch(take.audioUrl)
-      const buffer = await audioEngine.decode(await res.arrayBuffer())
-      const url = URL.createObjectURL(encodeWav(buffer))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `syrinx-${song.id}-${stamp}.wav`
-      a.click()
-      // 留出浏览器取走 blob 的时间再释放
-      setTimeout(() => URL.revokeObjectURL(url), 30_000)
-    } catch {
-      fallback()
+      if (take.mimeType === 'audio/wav') {
+        // 直采录音已是 32kHz 单声道 WAV：直接下载，解码重编码反而放大体积
+        saveAs(take.audioUrl, 'wav')
+        return
+      }
+      try {
+        const res = await fetch(take.audioUrl)
+        const buffer = await audioEngine.decode(await res.arrayBuffer())
+        const url = URL.createObjectURL(encodeWav(buffer))
+        saveAs(url, 'wav')
+        // 留出浏览器取走 blob 的时间再释放
+        setTimeout(() => URL.revokeObjectURL(url), 30_000)
+      } catch {
+        const ext = take.mimeType.includes('mp4') ? 'mp4' : 'webm'
+        saveAs(take.audioUrl, ext)
+      }
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -196,7 +205,9 @@ export default function ResultPage() {
       <section className="result-grid">
         <div className="playback-card">
           <h3>录音回放</h3>
-          <PlaybackDeck src={take.audioUrl} accent={song.accent} audioRef={audioRef} />
+          <div className="pdeck-area">
+            <PlaybackDeck src={take.audioUrl} accent={song.accent} audioRef={audioRef} />
+          </div>
           <div className="playback-actions">
             <button
               className="btn-pill sync"
@@ -206,7 +217,14 @@ export default function ResultPage() {
             >
               {syncPlaying ? '❚❚ 停止对照' : '♫ 对照伴奏播放'}
             </button>
-            <span className="hint">双击下方图表可下载录音文件</span>
+            <button
+              className="btn-pill"
+              onClick={() => void downloadTake()}
+              disabled={downloading}
+              title="下载本段录音（32kHz 单声道 WAV）"
+            >
+              {downloading ? '下载中…' : '⤓ 下载录音'}
+            </button>
           </div>
         </div>
 
@@ -254,12 +272,7 @@ export default function ResultPage() {
         </div>
       </section>
 
-      <section
-        className="chart-section"
-        onDoubleClick={downloadTake}
-        title="双击下载录音"
-        aria-label="音高对比图"
-      >
+      <section className="chart-section" aria-label="音高对比图">
         {analysis.status === 'done' ? (
           <>
             <PitchChart
