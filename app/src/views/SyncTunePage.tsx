@@ -14,6 +14,7 @@ import {
   fmtTime,
   makeQ2T,
   midiName,
+  type SyncNote,
 } from '../synctune/logic'
 import { selectedNoteView, tunedCount, useSyncTuneStore, visibleNotes } from '../synctune/store'
 import './SyncTunePage.css'
@@ -39,7 +40,22 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   const [markersReady, setMarkersReady] = useState(false)
   const [curMeasure, setCurMeasure] = useState(1)
   const [auditioning, setAuditioning] = useState(false)
-  const [, bumpView] = useState(0) // 视口变化触发页脚刻度文本刷新（波形由 rAF 直画）
+  // 音频状态徽标（T1）：仅事件驱动更新（启用/播放尝试后 set），不进 rAF 帧路径
+  const [audioState, setAudioState] = useState<AudioContextState>(() => audioEngine.state)
+  const audioBadgeRef = useRef<HTMLButtonElement>(null)
+  // 波形按需重绘（t_perf_sync_tune）：store 变化/视口变化置脏，rAF 循环只在
+  // 播放中或脏时重绘（旧实现无条件 60fps 全量重绘，空闲时也吃满一核）；
+  // q2t 闭包/刻度表/选中 q 由 store 订阅预构建缓存，绘制帧只读 refs；
+  // 页脚刻度文本由 drawWave 直写 DOM（拖拽/缩放不再触发 React 重渲染）
+  const waveDirtyRef = useRef(true)
+  const q2tWorkRef = useRef<((q: number) => { t: number }) | null>(null)
+  const q2tBaseRef = useRef<((q: number) => { t: number }) | null>(null)
+  const ticksRef = useRef<{ t: number; q: number; tuned: boolean }[]>([])
+  const notesRef = useRef<SyncNote[]>([])
+  const selQRef = useRef<number | null>(null)
+  const waveHintRef = useRef<HTMLSpanElement>(null)
+  /** rAF 唤醒器：主循环空闲（未播放）时置脏后必须 kick 一次才会重绘 */
+  const waveKickRef = useRef<() => void>(() => {})
 
   // store 快照（渲染用）；rAF/事件回调里一律 getState() 取最新
   const working = useSyncTuneStore((s) => s.working)
@@ -69,6 +85,26 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     auditionSeqRef.current++
     setAuditioning(false)
   }, [])
+
+  /** 徽标闪动（播放被自动播放策略挡下时）：直接操作 DOM 重启动画，避免定时 setState */
+  const flashAudioBadge = useCallback(() => {
+    const el = audioBadgeRef.current
+    if (!el) return
+    el.classList.remove('st-audio-flash')
+    void el.offsetWidth // 强制回流，重启动画
+    el.classList.add('st-audio-flash')
+  }, [])
+
+  /** 用户手势内解锁音频：resume 后刷新徽标（仍失败则闪动提示） */
+  const enableAudio = useCallback(async () => {
+    try {
+      await audioEngine.resume()
+    } catch {
+      // resume 抛错保持 suspended，徽标仍提示
+    }
+    setAudioState(audioEngine.state)
+    if (audioEngine.state !== 'running') flashAudioBadge()
+  }, [flashAudioBadge])
 
   /** q → 所在播放序小节（quarters ≤ q 的最后一个非终点小节） */
   const measureForQ = useCallback(
@@ -208,27 +244,71 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     score.setMarkers(markers)
   }, [working, baseline, selView.note, markersReady, measureForQ, song.accent])
 
-  // —— 主循环：唯一时钟 audioEngine.time → 光标推进 + 波形重画 ——
+  // —— 波形派生缓存：working/baseline/选中变化时重建（订阅级，渲染外） ——
+  useEffect(() => {
+    const unsub = useSyncTuneStore.subscribe((s0) => {
+      q2tWorkRef.current = makeQ2T(s0.working)
+      q2tBaseRef.current = makeQ2T(s0.baseline)
+      ticksRef.current = s0.working.map((p) => ({
+        t: p.t,
+        q: p.q,
+        tuned: s0.baseline.some((b) => b.q === p.q && Math.abs(b.t - p.t) > 1e-6),
+      }))
+      notesRef.current = s0.notes
+      selQRef.current =
+        s0.selectedIdx === null
+          ? null
+          : (s0.notes.find((n) => n.idx === s0.selectedIdx)?.q ?? null)
+      waveDirtyRef.current = true
+      waveKickRef.current()
+    })
+    return unsub
+  }, [])
+
+  // —— 主循环：唯一时钟 audioEngine.time → 光标推进 + 波形按需重绘。
+  //  空闲（未播放且不脏）时完全停掉 rAF 循环，零空转；置脏方负责 kick 唤醒 ——
   useEffect(() => {
     if (phase !== 'ready') return
     let raf = 0
+    let running = false
     const step = () => {
       const t = audioEngine.time
-      if (audioEngine.playing) scoreRef.current?.syncToTime(t)
-      drawWave(t)
-      raf = requestAnimationFrame(step)
+      const playing = audioEngine.playing
+      if (playing) scoreRef.current?.syncToTime(t)
+      if (waveDirtyRef.current) {
+        drawWave(t)
+        waveDirtyRef.current = false
+      }
+      if (playing) {
+        raf = requestAnimationFrame(step)
+      } else {
+        running = false // 空闲休眠：直到 kick/播放恢复
+      }
     }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
+    waveKickRef.current = () => {
+      if (!running) {
+        running = true
+        raf = requestAnimationFrame(step)
+      }
+    }
+    // 首绘一次后休眠
+    waveKickRef.current()
+    return () => {
+      cancelAnimationFrame(raf)
+      running = false
+      waveKickRef.current = () => {}
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
 
-  /** 波形绘制：包络 + 基线/工作期望线 + 控制点刻度 + 播放头 */
+  /** 波形绘制：包络 + 基线/工作期望线 + 控制点刻度 + 播放头
+   *  性能（t_perf_sync_tune）：q2t 闭包/刻度表/选中 q 全部来自缓存 refs
+   *  （store 订阅预构建，绘制帧零 getState/零 Map 构建），期望线两遍循环
+   *  各合并单 path；页脚刻度文本直写 DOM，拖拽/缩放不再触发 React 重渲染 */
   const drawWave = (playT: number) => {
     const canvas = canvasRef.current
     const peaks = peaksRef.current
     if (!canvas) return
-    const st0 = st.getState()
     const dpr = window.devicePixelRatio || 1
     const w = canvas.clientWidth
     const h = canvas.clientHeight
@@ -277,30 +357,35 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     }
     ctx.stroke()
     // 期望线：基线（暗）与工作网格（亮）——微调时亮线实时移动
-    const drawLines = (
-      q2t: (q: number) => { t: number },
-      color: string,
-      width: number,
-    ) => {
-      ctx.strokeStyle = color
-      ctx.lineWidth = width
+    const q2tW = q2tWorkRef.current
+    const q2tB = q2tBaseRef.current
+    if (q2tW && q2tB) {
+      ctx.lineWidth = 1
+      ctx.strokeStyle = 'rgba(255,255,255,0.13)'
       ctx.beginPath()
-      for (const n of st0.notes) {
-        const t = q2t(n.q).t
+      for (const n of notesRef.current) {
+        const t = q2tB(n.q).t
         if (t < t0 || t > t1) continue
         const x = xOf(t)
         ctx.moveTo(x + 0.5, 0)
         ctx.lineTo(x + 0.5, h)
       }
       ctx.stroke()
-      ctx.lineWidth = 1
+      ctx.strokeStyle = 'rgba(95,184,168,0.45)'
+      ctx.beginPath()
+      for (const n of notesRef.current) {
+        const t = q2tW(n.q).t
+        if (t < t0 || t > t1) continue
+        const x = xOf(t)
+        ctx.moveTo(x + 0.5, 0)
+        ctx.lineTo(x + 0.5, h)
+      }
+      ctx.stroke()
     }
-    drawLines(makeQ2T(st0.baseline), 'rgba(255,255,255,0.13)', 1)
-    drawLines(makeQ2T(st0.working), 'rgba(95,184,168,0.45)', 1)
     // 选中音期望线（工作网格，高亮）
-    const sel = st0.notes.find((n) => n.idx === st0.selectedIdx)
-    if (sel) {
-      const x = xOf(makeQ2T(st0.working)(sel.q).t)
+    const selQ = selQRef.current
+    if (selQ !== null && q2tW) {
+      const x = xOf(q2tW(selQ).t)
       if (x >= 0 && x <= w) {
         ctx.strokeStyle = song.accent
         ctx.lineWidth = 2
@@ -311,13 +396,12 @@ export default function SyncTunePage({ songId }: { songId: string }) {
         ctx.lineWidth = 1
       }
     }
-    // 控制点刻度（底部）：已调橙 / 未调灰 / 选中 accent
-    for (const p of st0.working) {
+    // 控制点刻度（底部）：已调橙 / 未调灰 / 选中 accent——缓存刻度表
+    for (const p of ticksRef.current) {
       if (p.t < t0 || p.t > t1) continue
       const x = xOf(p.t)
-      const isSel = sel?.q === p.q
-      const tunedHere = st0.baseline.some((b) => b.q === p.q && Math.abs(b.t - p.t) > 1e-6)
-      ctx.strokeStyle = isSel ? song.accent : tunedHere ? '#ff9f43' : 'rgba(255,255,255,0.35)'
+      const isSel = selQ === p.q
+      ctx.strokeStyle = isSel ? song.accent : p.tuned ? '#ff9f43' : 'rgba(255,255,255,0.35)'
       ctx.lineWidth = isSel ? 2 : 1
       ctx.beginPath()
       ctx.moveTo(x + 0.5, h - (isSel ? 14 : 8))
@@ -332,6 +416,11 @@ export default function SyncTunePage({ songId }: { songId: string }) {
       ctx.moveTo(xOf(playT) + 0.5, 0)
       ctx.lineTo(xOf(playT) + 0.5, h)
       ctx.stroke()
+    }
+    // 页脚刻度文本：直写 DOM
+    const hint = waveHintRef.current
+    if (hint) {
+      hint.textContent = `拖拽平移 · 滚轮缩放 · 点刻度选中 · 点空白 seek ｜ ${fmtTime(t0)} – ${fmtTime(t1)}`
     }
   }
 
@@ -353,7 +442,8 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     let t0 = d.t0 - (dx / w) * span
     t0 = Math.max(0, Math.min(t0, dur - span))
     viewRef.current = { t0, t1: t0 + span }
-    bumpView((v) => v + 1)
+    waveDirtyRef.current = true // 页脚文本由 drawWave 直写，rAF 帧内重绘
+    waveKickRef.current()
   }
   const onWavePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const d = dragRef.current
@@ -380,6 +470,8 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     cancelAudition()
     audioEngine.seek(t)
     scoreRef.current?.resetCursor()
+    waveDirtyRef.current = true
+    waveKickRef.current()
   }
   const onWaveWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault()
@@ -396,20 +488,33 @@ export default function SyncTunePage({ songId }: { songId: string }) {
       ns = Math.min(ns, dur)
     }
     viewRef.current = { t0: nt0, t1: nt0 + ns }
-    bumpView((v) => v + 1)
+    waveDirtyRef.current = true // 同拖拽：按需重绘
+    waveKickRef.current()
   }
 
   // —— 播放/暂停 与 试听 A/B ——
-  const togglePlay = useCallback(() => {
+  const togglePlay = useCallback(async () => {
     cancelAudition()
-    if (audioEngine.playing) audioEngine.pause()
-    else {
-      audioEngine.play()
-      scoreRef.current?.showCursor()
+    if (audioEngine.playing) {
+      audioEngine.pause()
+    } else {
+      // play 是 async：先解锁 AudioContext 再 start；await 后 playing 才为真，
+      // 需再 kick 一次唤醒 rAF 循环（同步 kick 已在未播放态休眠）
+      const ok = await audioEngine.play()
+      setAudioState(audioEngine.state)
+      if (!ok) {
+        flashAudioBadge()
+      } else {
+        scoreRef.current?.showCursor()
+        waveDirtyRef.current = true
+        waveKickRef.current()
+      }
     }
-  }, [cancelAudition])
+    waveDirtyRef.current = true
+    waveKickRef.current()
+  }, [cancelAudition, flashAudioBadge])
 
-  const runAudition = useCallback(() => {
+  const runAudition = useCallback(async () => {
     const st0 = st.getState()
     const view = selectedNoteView(st0)
     if (!view.note) return
@@ -420,8 +525,17 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     const seq = ++auditionSeqRef.current
     setAuditioning(true)
     audioEngine.pause()
-    audioEngine.play(A.start)
+    // A 窗播放：失败（仍 suspended）直接终止试听并闪动徽标
+    const okA = await audioEngine.play(A.start)
+    setAudioState(audioEngine.state)
+    if (!okA) {
+      flashAudioBadge()
+      setAuditioning(false)
+      return
+    }
     scoreRef.current?.resetCursor()
+    waveDirtyRef.current = true
+    waveKickRef.current()
     const watch = (endT: number, next: () => void) => {
       const step = () => {
         if (auditionSeqRef.current !== seq) return
@@ -444,14 +558,24 @@ export default function SyncTunePage({ songId }: { songId: string }) {
         setAuditioning(false)
         return
       }
-      audioEngine.play(B.start)
-      scoreRef.current?.resetCursor()
-      watch(B.end, () => {
-        audioEngine.pause()
-        setAuditioning(false)
+      // B 窗在 rAF 回调里启动：play 为 async，成功后再起 watch
+      void audioEngine.play(B.start).then((okB) => {
+        setAudioState(audioEngine.state)
+        if (!okB) {
+          flashAudioBadge()
+          setAuditioning(false)
+          return
+        }
+        scoreRef.current?.resetCursor()
+        waveDirtyRef.current = true
+        waveKickRef.current()
+        watch(B.end, () => {
+          audioEngine.pause()
+          setAuditioning(false)
+        })
       })
     })
-  }, [cancelAudition])
+  }, [cancelAudition, flashAudioBadge])
 
   // —— 快捷键：[/]=±50ms、{/}=±200ms、空格、Enter、Ctrl+Z ——
   useEffect(() => {
@@ -483,11 +607,11 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           break
         case ' ':
           e.preventDefault()
-          togglePlay()
+          void togglePlay()
           break
         case 'Enter':
           e.preventDefault()
-          runAudition()
+          void runAudition()
           break
       }
     }
@@ -537,6 +661,20 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           ← 返回
         </a>
         <b>{song.title}</b>
+        {audioState === 'running' ? (
+          <span className="st-audio ok" title="音频已启用">
+            ●
+          </span>
+        ) : (
+          <button
+            ref={audioBadgeRef}
+            className="st-audio"
+            onClick={() => void enableAudio()}
+            title="浏览器自动播放策略挂起了音频，点击解锁"
+          >
+            🔊 点击启用音频
+          </button>
+        )}
         <span className="st-meta">
           beats v{beatsRef.current?.version ?? '—'} · 控制点 {working.length} · 已调{' '}
           <em className={tuned ? 'on' : ''}>{tuned}</em>
@@ -670,7 +808,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           onPointerUp={onWavePointerUp}
           onWheel={onWaveWheel}
         />
-        <span className="st-wave-hint">
+        <span className="st-wave-hint" ref={waveHintRef}>
           拖拽平移 · 滚轮缩放 · 点刻度选中 · 点空白 seek ｜ {fmtTime(viewRef.current.t0)} –{' '}
           {fmtTime(viewRef.current.t1)}
         </span>

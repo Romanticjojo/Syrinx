@@ -36,9 +36,21 @@ class AudioEngine {
     this.playing = false
   }
 
-  play(offsetSec?: number): void {
-    if (!this.buffer) return
-    if (this.ctx.state === 'suspended') void this.ctx.resume()
+  /** 播放（可选起点秒）。
+   *  必须先 await resume 再 start：浏览器自动播放策略下 ctx suspended 时
+   *  fire-and-forget 的 resume 会让 src.start() 先于恢复执行 -> 静音。
+   *  resume 失败（仍 suspended）返回 false 且不置 playing，调用方据此提示。
+   *  兼容性：不 await 调用方（PerformPage 等）不受影响，忽略返回值即可。 */
+  async play(offsetSec?: number): Promise<boolean> {
+    if (!this.buffer) return false
+    if (this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume()
+      } catch (e: unknown) {
+        console.warn(`[audio] AudioContext resume 失败（保持 suspended）：${e instanceof Error ? e.message : e}`)
+        return false
+      }
+    }
     if (offsetSec !== undefined) this.startOffset = offsetSec
     if (this.startOffset >= this.buffer.duration) this.startOffset = 0
     this.stopSource()
@@ -52,6 +64,12 @@ class AudioEngine {
     this.startCtxTime = this.ctx.currentTime
     this.playing = true
     this.watchEnd()
+    return true
+  }
+
+  /** AudioContext 状态（running/suspended/closed），UI 音频徽标用 */
+  get state(): AudioContextState {
+    return this.ctx.state
   }
 
   pause(): void {
