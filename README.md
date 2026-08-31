@@ -6,7 +6,7 @@
 
 **吹响真实长笛，让曲谱跟随你流动。**
 
-[English](#english) · [快速开始](#-快速开始) · [功能](#-功能总览) · [路线图](#-路线图) · [FAQ](#-faq--已知问题)
+[快速开始](#-快速开始) · [功能](#-功能总览) · [路线图](#-路线图) · [FAQ](#-faq--已知问题)
 
 ![Electron](https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
@@ -16,42 +16,16 @@
 ![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-lightgrey?style=flat-square)
 
 *介于「智能乐谱播放器」与「音乐节奏游戏」之间的长笛演奏辅助应用。*
-*Syrinx（赛琳克斯）——希腊神话中化为排笛的仙女，也是德彪西的同名长笛独奏曲。*
 
 </div>
 
-<a id="english"></a>
-
-> **English** | Syrinx is a flute performance companion app: it renders sheet music, follows your playing with a moving cursor and auto page-turn, plays reactive backgrounds, records your take and scores your pitch. This README is mainly in Chinese — see Chinese for details.
-
----
-
-## 📖 目录
-
-- [截图](#-截图)
-- [功能总览](#-功能总览)
-- [亮点](#-亮点)
-- [技术栈](#-技术栈)
-- [快速开始](#-快速开始)
-- [项目结构](#-项目结构)
-- [曲目接入（Song Pack）](#-曲目接入song-pack)
-- [路线图](#-路线图)
-- [FAQ / 已知问题](#-faq--已知问题)
-- [License](#-license)
-
-## 📸 截图
-
-> 🖼 以下截图取自真实运行界面；结果页 / 回放页截图**占位——后期补**。
-
-| 曲库 · Netflix 式卡片流 | 曲目详情 · 预览 |
-|---|---|
-| ![曲库](docs/img/screenshot-1-library.png) | ![预览](docs/img/screenshot-2-preview.png) |
-
-| 演奏 · 就绪倒数 | 演奏中 · 光标走谱 + 动态背景 |
-|---|---|
-| ![演奏就绪](docs/img/screenshot-3-perform.png) | ![演奏中](docs/img/screenshot-4-perform-live.png) |
+<p align="center">
+  <img src="docs/img/overview.png" alt="Syrinx 演奏视图：光标走谱 + 动态背景" width="100%"/>
+</p>
 
 ## ✅ 功能总览
+
+上面这一屏就是 Syrinx 的核心体验：顶部 HUD 实时显示小节与时间，谱面上光标逐音符跟随伴奏前进，three.js 动态背景随音乐呼吸，底部控制条把暂停 / 录音 / 缩放 / 退出收在一处。围绕这条演奏主线，各子系统能力如下：
 
 | 状态 | 功能 |
 |:---:|---|
@@ -71,6 +45,8 @@
 
 ## ✨ 亮点
 
+功能表之下，是几个贯穿全项目的设计决策——它们决定了 Syrinx 在「实时演奏」这个场景下的工程性格：
+
 > 🎼 **时间即谱面**
 > `AudioContext.currentTime` 是唯一时间源 → rAF 每帧换算 → 直写 DOM 驱动光标，不进响应式 store，避免重渲染抖动。
 
@@ -82,19 +58,6 @@
 
 > 🌌 **演奏也要有氛围**
 > three.js 晨光主题场景随音乐呼吸，谱面区域受保护；3.2 秒无操作控件自动隐入，沉浸演奏。
-
-## 🛠 技术栈
-
-| 组件 | 选型 | 理由 |
-|---|---|---|
-| 工程 | Vite 8 + TypeScript 6 + React 19 | 秒级 HMR；类型安全贯穿曲谱解析与音频管线 |
-| 桌面 | Electron 44 + electron-builder | 麦克风低延迟访问 + Windows 安装包 / 便携版一条命令产出 |
-| 状态 | zustand 5 | 四视图状态机（`home / preview / perform / result`），轻量无样板 |
-| 曲谱 | OpenSheetMusicDisplay 2.1 | 浏览器端最成熟的 MusicXML → SVG 渲染引擎 |
-| 音频 | Web Audio API | `AudioContext.currentTime` 唯一主时钟；AnalyserNode 实时分析 |
-| 音高检测 | 自研 YIN（纯 TS） | 无依赖、可测试、可替换（接口化封装） |
-| 背景 | three.js 0.185 | audio-reactive 粒子场景 + GLTF 长笛模型 |
-| 测试 | Vitest 4 + happy-dom | 曲谱时间轴 / YIN / 音高对比统计单测，TDD 工作流 |
 
 ## 🚀 快速开始
 
@@ -177,6 +140,8 @@ app/public/songs/<song-id>/
 
 ## 🗺 路线图
 
+核心演奏闭环已经落地，接下来的重心是曲库生态与进阶练习功能：
+
 | 阶段 | 内容 | 状态 |
 |:---:|---|:---:|
 | M1 | 预览 + 渲染：曲库 → 预览 → OSMD 谱面渲染 | ✅ |
@@ -211,7 +176,6 @@ A：打包脚本目前仅配置 Windows（NSIS / portable）；应用本体是�
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) — 浏览器 MusicXML 曲谱引擎
 - [three.js](https://threejs.org/) — 3D 背景与长笛模型
 - [Electron](https://www.electronjs.org/) / [Vite](https://vitejs.dev/) / [React](https://react.dev/) — 工程基座
-- Lorien Testard & Alice Duport-Percier — 《Clair Obscur: Expedition 33》OST（内测曲目素材）
 
 ---
 
