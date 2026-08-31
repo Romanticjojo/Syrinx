@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
 import { encodeWav } from '../audio/wav'
+import PlaybackDeck from '../components/PlaybackDeck'
 import PitchChart from '../components/PitchChart'
 import { extractPitchTrack, scoreAgainst, type ScoreResult } from '../pitch/compare'
 import { getSong, loadSong, SONGS } from '../songs'
@@ -184,7 +185,7 @@ export default function ResultPage() {
       <section className="result-grid">
         <div className="playback-card">
           <h3>录音回放</h3>
-          <audio ref={audioRef} src={take.audioUrl} controls preload="metadata" />
+          <PlaybackDeck src={take.audioUrl} accent={song.accent} audioRef={audioRef} />
           <div className="playback-actions">
             <button
               className="btn-pill sync"
