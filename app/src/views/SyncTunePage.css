@@ -10,13 +10,16 @@
   overflow: hidden;
 }
 
+/* 顶栏容器（T2）：topbar + 播放控制条两行 */
+.st-topwrap {
+  background: #0e1317;
+  border-bottom: 1px solid #1d262c;
+}
 .st-topbar {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
-  border-bottom: 1px solid #1d262c;
-  background: #0e1317;
 }
 .st-back {
   color: #8fb8ae;
@@ -59,6 +62,62 @@
   75% {
     opacity: 0.2;
   }
+}
+
+/* 播放控制条（T2）：⏮ ⏯ ⏭ + 小节号 + 进度条 + m:ss.t 时间 */
+.st-transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 8px;
+}
+.st-tbtn {
+  background: #18222a;
+  color: #cfd8d4;
+  border: 1px solid #2a3942;
+  border-radius: 6px;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  font: 14px/1 'Segoe UI Symbol', 'Segoe UI', sans-serif;
+}
+.st-tbtn:hover {
+  border-color: var(--song-accent, #5fb8a8);
+}
+.st-pos {
+  color: #7a8a90;
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+}
+.st-time {
+  color: #9aa8ad;
+  font-variant-numeric: tabular-nums;
+  min-width: 56px;
+  text-align: right;
+}
+.st-progress {
+  flex: 1;
+  min-width: 120px;
+  height: 8px;
+  position: relative;
+  background: #18222a;
+  border: 1px solid #2a3942;
+  border-radius: 5px;
+  cursor: pointer;
+  touch-action: none;
+}
+.st-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: var(--song-accent, #5fb8a8);
+  border-radius: 4px;
+  opacity: 0.85;
+  pointer-events: none;
 }
 .st-meta em {
   font-style: normal;
@@ -232,8 +291,10 @@
   opacity: 0.9;
 }
 
-/* 右栏：属性面板 */
+/* 右栏：属性面板（flex 列使操作说明钉底） */
 .st-props {
+  display: flex;
+  flex-direction: column;
   border-left: 1px solid #1d262c;
   padding: 12px 14px;
   min-height: 0;
@@ -278,34 +339,144 @@
   gap: 6px;
   margin-bottom: 10px;
 }
-.st-hint {
-  color: #5c6c73;
-  font-size: 12px;
-  margin: 0;
-}
 .st-empty {
   color: #5c6c73;
   padding: 16px 4px;
 }
 
-/* 底部：伴奏波形总览 */
+/* 操作说明面板（T2）：默认收起、展开不持久化 */
+.st-help {
+  margin-top: auto; /* 内容不足时钉在右栏底部 */
+  border: 1px solid #2a3942;
+  border-radius: 6px;
+  background: #0e1317;
+  flex: none;
+}
+.st-help summary {
+  cursor: pointer;
+  padding: 6px 10px;
+  color: #9aa8ad;
+  list-style: none;
+  user-select: none;
+}
+.st-help summary::-webkit-details-marker {
+  display: none;
+}
+.st-help summary::before {
+  content: '? ';
+  color: var(--song-accent, #5fb8a8);
+  font-weight: 700;
+}
+.st-help[open] summary {
+  border-bottom: 1px solid #1d262c;
+}
+.st-help-body {
+  padding: 4px 10px 10px;
+  font-size: 12px;
+  color: #8a99a0;
+}
+.st-help-sec {
+  margin: 6px 0 2px;
+  color: #7a8a90;
+  font-weight: 600;
+}
+.st-help-body ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.st-help-body li {
+  margin: 2px 0;
+}
+.st-help kbd {
+  font-family: Consolas, monospace;
+  background: #18222a;
+  border: 1px solid #2a3942;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: #cfd8d4;
+}
+
+/* 底部：伴奏波形总览（T2：头行 = 折叠开关 + 图例 + 视口时间范围） */
 .st-wave {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   border-top: 1px solid #1d262c;
-  height: 130px;
+  height: 160px;
+}
+.st-wave.collapsed {
+  height: 32px;
+}
+.st-wave.collapsed canvas {
+  display: none;
+}
+.st-wave-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  cursor: pointer;
+  color: #7a8a90;
+  user-select: none;
+}
+.st-wave-head:hover {
+  color: #9aa8ad;
+}
+.st-wave-caret {
+  flex: none;
+  color: #5c6c73;
+  transition: transform 0.15s;
+}
+.st-wave-caret.closed {
+  transform: rotate(-90deg);
+}
+.st-wave-title {
+  flex: none;
+  color: #9aa8ad;
+  font-weight: 600;
+}
+.st-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+.st-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.st-legend .sw {
+  display: inline-block;
+  flex: none;
+  border-radius: 1px;
+}
+.st-legend .sw.h {
+  width: 12px;
+  height: 2px;
+}
+.st-legend .sw.v {
+  width: 3px;
+  height: 10px;
 }
 .st-wave canvas {
+  flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
   display: block;
   cursor: crosshair;
   touch-action: none;
 }
 .st-wave-hint {
-  position: absolute;
-  right: 10px;
-  bottom: 4px;
+  flex: none;
   font-size: 11px;
   color: #5c6c73;
+  font-variant-numeric: tabular-nums;
   pointer-events: none;
 }

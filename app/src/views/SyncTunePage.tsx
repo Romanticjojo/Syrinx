@@ -25,6 +25,8 @@ import './SyncTunePage.css'
  * 微调 beats.json 的 beatAnchors 控制点使光标节奏与伴奏逐音对齐；
  * diff 只在本页内存中，导出 JSON 由用户覆盖 beats.json 后才影响演奏页。
  * 时间唯一来源 audioEngine（不新起时钟）；q↔t 换算走局部段速率（logic.ts）。
+ * R2（T2）：顶栏播放控制条（⏮⏯⏭ + 进度条 + 时间/小节）、波形图例/可折叠、
+ * 右栏「? 操作说明」面板；进度/时间走 rAF 帧直写 DOM，不进每帧 React 渲染。
  */
 
 type Phase = 'loading' | 'ready' | 'error'
@@ -56,6 +58,24 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   const waveHintRef = useRef<HTMLSpanElement>(null)
   /** rAF 唤醒器：主循环空闲（未播放）时置脏后必须 kick 一次才会重绘 */
   const waveKickRef = useRef<() => void>(() => {})
+  // 播放控制条（T2）：进度/时间/小节号由 rAF 帧直写 DOM（ref），不进每帧 React 渲染；
+  // ⏯ 图标仅在播放态翻转时 setState；拖拽进度条期间暂停 rAF 直写，松手才 seek
+  const [playingUi, setPlayingUi] = useState(false)
+  const playingUiRef = useRef(false)
+  const fillRef = useRef<HTMLDivElement>(null)
+  const timeLabelRef = useRef<HTMLSpanElement>(null)
+  const measureLabelRef = useRef<HTMLSpanElement>(null)
+  const scrubbingRef = useRef(false)
+  /** 小节起始时间表（基线网格 t）：⏮/⏭ 换算与小节号显示共用，随 baseline 重建 */
+  const measureStartsRef = useRef<{ m: number; t: number }[]>([])
+  // 波形面板折叠（T2）：localStorage 记忆；图例常驻折叠条
+  const [waveCollapsed, setWaveCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('st-wave-collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
 
   // store 快照（渲染用）；rAF/事件回调里一律 getState() 取最新
   const working = useSyncTuneStore((s) => s.working)
@@ -142,6 +162,12 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           .map((e) => ({ m: e.measure, quarters: e.quarters }))
         beatsRef.current = beats
         st.getState().load(song.id, buildSyncNotes(pre), ba.map((p) => ({ ...p })))
+        // 小节起始时间表（订阅前兜底）：⏮/⏭ 与小节号显示用
+        const q2tB0 = makeQ2T(st.getState().baseline)
+        measureStartsRef.current = measureTableRef.current.map((e) => ({
+          m: e.m,
+          t: q2tB0(e.quarters).t,
+        }))
         setXml(xmlExp)
         // 演奏显示时间轴：基线锚点应用后的时间轴（光标语义同演奏页）
         displayTlRef.current = applyBeats(pre, beats)
@@ -151,6 +177,8 @@ export default function SyncTunePage({ songId }: { songId: string }) {
             const ab = await fetch(assetUrl(song.accompanimentUrl))
             if (!ab.ok) throw new Error(`HTTP ${ab.status}`)
             const buf = await audioEngine.decode(await ab.arrayBuffer())
+            // 装载为 play() 数据源：decode 只解码不装载，缺这行冷启动 play() 恒 false
+            await audioEngine.load(buf)
             const ch = buf.getChannelData(0)
             const n = Math.ceil(ch.length / PEAK_STEP)
             const peaks = new Float32Array(n * 2)
@@ -248,7 +276,12 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   useEffect(() => {
     const unsub = useSyncTuneStore.subscribe((s0) => {
       q2tWorkRef.current = makeQ2T(s0.working)
-      q2tBaseRef.current = makeQ2T(s0.baseline)
+      const q2tB = makeQ2T(s0.baseline)
+      q2tBaseRef.current = q2tB
+      measureStartsRef.current = measureTableRef.current.map((e) => ({
+        m: e.m,
+        t: q2tB(e.quarters).t,
+      }))
       ticksRef.current = s0.working.map((p) => ({
         t: p.t,
         q: p.q,
@@ -278,6 +311,13 @@ export default function SyncTunePage({ songId }: { songId: string }) {
       if (waveDirtyRef.current) {
         drawWave(t)
         waveDirtyRef.current = false
+      }
+      // 控制条（T2）：进度/时间/小节号直写 DOM；拖拽中让位给指针回调
+      if (!scrubbingRef.current) updateTransport(t)
+      // ⏯ 图标：仅播放态翻转时 setState（非每帧）
+      if (playingUiRef.current !== playing) {
+        playingUiRef.current = playing
+        setPlayingUi(playing)
       }
       if (playing) {
         raf = requestAnimationFrame(step)
@@ -417,10 +457,10 @@ export default function SyncTunePage({ songId }: { songId: string }) {
       ctx.lineTo(xOf(playT) + 0.5, h)
       ctx.stroke()
     }
-    // 页脚刻度文本：直写 DOM
+    // 页脚刻度文本：直写 DOM（T2 起仅显示视口时间范围，交互说明移入图例/帮助面板）
     const hint = waveHintRef.current
     if (hint) {
-      hint.textContent = `拖拽平移 · 滚轮缩放 · 点刻度选中 · 点空白 seek ｜ ${fmtTime(t0)} – ${fmtTime(t1)}`
+      hint.textContent = `${fmtTime(t0)} – ${fmtTime(t1)}`
     }
   }
 
@@ -491,6 +531,107 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     waveDirtyRef.current = true // 同拖拽：按需重绘
     waveKickRef.current()
   }
+
+  // —— 播放控制条（T2）：时间/小节号/进度填充直写 DOM（refs），供 rAF 帧与指针回调共用 ——
+  const updateTransport = useCallback((t: number) => {
+    const dur = durationRef.current
+    if (fillRef.current) {
+      const frac = dur > 0 ? Math.max(0, Math.min(1, t / dur)) : 0
+      fillRef.current.style.width = `${(frac * 100).toFixed(2)}%`
+    }
+    if (timeLabelRef.current) timeLabelRef.current.textContent = fmtTime(t)
+    if (measureLabelRef.current) {
+      const ms = measureStartsRef.current
+      let m = ms[0]?.m ?? 1
+      for (const e of ms) {
+        if (e.t <= t) m = e.m
+        else break
+      }
+      measureLabelRef.current.textContent = `m ${m} / ${ms.length ? ms[ms.length - 1].m : m}`
+    }
+  }, [])
+
+  /** seek 到 t（进度条/⏮/⏭ 共用）：暂停态同步推进光标；波形与控制条即刻刷新 */
+  const doSeek = useCallback(
+    (t: number) => {
+      cancelAudition()
+      audioEngine.seek(t)
+      scoreRef.current?.resetCursor()
+      if (!audioEngine.playing) scoreRef.current?.syncToTime(t)
+      updateTransport(audioEngine.time)
+      waveDirtyRef.current = true
+      waveKickRef.current()
+    },
+    [cancelAudition, updateTransport],
+  )
+
+  /** 当前 t 所在小节序（measureStarts 单调递增，线性足够） */
+  const measureIdxAt = (t: number): number => {
+    const ms = measureStartsRef.current
+    let i = 0
+    for (let k = 0; k < ms.length; k++) {
+      if (ms[k].t <= t) i = k
+      else break
+    }
+    return i
+  }
+
+  /** ⏮：距小节头 >1s 回本小节头，否则退上一小节；首小节回开头 */
+  const seekPrevMeasure = useCallback(() => {
+    const ms = measureStartsRef.current
+    if (!ms.length) return
+    const i = measureIdxAt(audioEngine.time)
+    const target = audioEngine.time - ms[i].t > 1 ? ms[i].t : i > 0 ? ms[i - 1].t : 0
+    doSeek(Math.max(0, target))
+  }, [doSeek])
+
+  /** ⏭：下一小节头；末小节到曲尾 */
+  const seekNextMeasure = useCallback(() => {
+    const ms = measureStartsRef.current
+    if (!ms.length) return
+    const i = measureIdxAt(audioEngine.time)
+    const target = i + 1 < ms.length ? ms[i + 1].t : durationRef.current
+    doSeek(Math.min(target, durationRef.current))
+  }, [doSeek])
+
+  // —— 进度条：拖拽中只直写视觉（updateTransport），松手才 audioEngine.seek（避免反复重启音频）——
+  const fracOfProgress = (e: React.PointerEvent<HTMLDivElement>): number => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(rect.width, 1)))
+  }
+  const onProgressPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (durationRef.current <= 0) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    scrubbingRef.current = true
+    updateTransport(fracOfProgress(e) * durationRef.current)
+  }
+  const onProgressPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubbingRef.current) return
+    updateTransport(fracOfProgress(e) * durationRef.current)
+  }
+  const onProgressPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubbingRef.current) return
+    scrubbingRef.current = false
+    doSeek(fracOfProgress(e) * durationRef.current)
+  }
+
+  // —— 波形面板折叠（T2）：localStorage 记忆；展开后画布尺寸恢复需置脏重绘 ——
+  const toggleWaveCollapsed = useCallback(() => {
+    setWaveCollapsed((c) => {
+      const nc = !c
+      try {
+        localStorage.setItem('st-wave-collapsed', nc ? '1' : '0')
+      } catch {
+        // 存储不可用时仅内存态生效
+      }
+      return nc
+    })
+  }, [])
+  useEffect(() => {
+    if (waveCollapsed) return
+    waveDirtyRef.current = true
+    waveKickRef.current()
+  }, [waveCollapsed])
 
   // —— 播放/暂停 与 试听 A/B ——
   const togglePlay = useCallback(async () => {
@@ -656,7 +797,8 @@ export default function SyncTunePage({ songId }: { songId: string }) {
 
   return (
     <div className="st-page" style={{ '--song-accent': song.accent } as React.CSSProperties}>
-      <header className="st-topbar">
+      <div className="st-topwrap">
+        <header className="st-topbar">
         <a className="st-back" href="/">
           ← 返回
         </a>
@@ -688,6 +830,39 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           导出 beats.json
         </button>
       </header>
+        {phase === 'ready' && (
+          <div className="st-transport">
+            <button
+              className="st-tbtn"
+              onClick={seekPrevMeasure}
+              title="回小节头（小节头附近再按退上一小节）"
+            >
+              ⏮
+            </button>
+            <button className="st-tbtn" onClick={() => void togglePlay()} title="播放/暂停（空格）">
+              {playingUi ? '⏸' : '▶'}
+            </button>
+            <button className="st-tbtn" onClick={seekNextMeasure} title="下一小节">
+              ⏭
+            </button>
+            <span className="st-pos" ref={measureLabelRef}>
+              m 1 / -
+            </span>
+            <div
+              className="st-progress"
+              onPointerDown={onProgressPointerDown}
+              onPointerMove={onProgressPointerMove}
+              onPointerUp={onProgressPointerUp}
+              title="进度条：点击/拖拽 seek（松手生效）"
+            >
+              <div className="st-progress-fill" ref={fillRef} />
+            </div>
+            <span className="st-time" ref={timeLabelRef}>
+              {fmtTime(0)}
+            </span>
+          </div>
+        )}
+      </div>
 
       {phase === 'loading' && <div className="st-status">正在装配曲谱 / 伴奏 / 锚点…</div>}
       {phase === 'error' && <div className="st-status err">装配失败：{errorMsg}</div>}
@@ -787,20 +962,82 @@ export default function SyncTunePage({ songId }: { songId: string }) {
                     {auditioning ? '试听中…' : '试听 A/B (Enter)'}
                   </button>
                 </div>
-                <p className="st-hint">
-                  {`[ / ] ±50ms · { / } ±200ms · 空格 播放/暂停`}
-                  <br />
-                  {`Enter 播放 基线→修正 各 −1s→+2s 窗口`}
-                </p>
               </>
             ) : (
               <p className="st-empty">在左侧列表、谱面或波形上选中一个音符开始微调</p>
             )}
+            {/* 操作说明（T2）：默认收起、展开不持久化；替代原先挤一行的 st-hint */}
+            <details className="st-help">
+              <summary>? 操作说明</summary>
+              <div className="st-help-body">
+                <p className="st-help-sec">快捷键</p>
+                <ul>
+                  <li>
+                    <kbd>[</kbd> / <kbd>]</kbd>：选中音符 −50 / +50 ms
+                  </li>
+                  <li>
+                    <kbd>{'{'}</kbd> / <kbd>{'}'}</kbd>：−200 / +200 ms
+                  </li>
+                  <li>
+                    <kbd>空格</kbd>：播放 / 暂停
+                  </li>
+                  <li>
+                    <kbd>Enter</kbd>：试听 A/B（基线 → 修正，各 −1s → +2s 窗口）
+                  </li>
+                  <li>
+                    <kbd>Ctrl</kbd>+<kbd>Z</kbd>：撤销
+                  </li>
+                </ul>
+                <p className="st-help-sec">鼠标操作</p>
+                <ul>
+                  <li>列表点行 / 谱面点音符 / 波形点刻度：选中音符</li>
+                  <li>波形拖拽：平移；滚轮：缩放</li>
+                  <li>波形点空白处：seek 到该时刻</li>
+                  <li>⏯ 按钮：播放 / 暂停</li>
+                  <li>进度条点 / 拖：seek（松手生效）</li>
+                  <li>⏮ / ⏭：回小节头 / 下一小节</li>
+                </ul>
+              </div>
+            </details>
           </aside>
         </div>
       )}
 
-      <footer className="st-wave">
+      <footer className={`st-wave${waveCollapsed ? ' collapsed' : ''}`}>
+        <div
+          className="st-wave-head"
+          onClick={toggleWaveCollapsed}
+          title={waveCollapsed ? '展开波形面板' : '收起波形面板'}
+        >
+          <span className={`st-wave-caret${waveCollapsed ? ' closed' : ''}`}>▾</span>
+          <span className="st-wave-title">伴奏波形</span>
+          <div className="st-legend">
+            <span>
+              <i className="sw h" style={{ background: 'rgba(255,255,255,0.13)' }} />
+              白细线=基线期望
+            </span>
+            <span>
+              <i className="sw h" style={{ background: 'rgba(95,184,168,0.45)' }} />
+              青线=当前网格
+            </span>
+            <span>
+              <i className="sw v" style={{ background: '#ff9f43' }} />
+              橙刻度=已调
+            </span>
+            <span>
+              <i className="sw v" style={{ background: 'var(--song-accent)' }} />
+              亮刻度=选中
+            </span>
+            <span>
+              <i className="sw h" style={{ background: '#e8e8e2' }} />
+              白竖线=播放头
+            </span>
+          </div>
+          <span className="st-flex" />
+          <span className="st-wave-hint" ref={waveHintRef}>
+            {fmtTime(viewRef.current.t0)} – {fmtTime(viewRef.current.t1)}
+          </span>
+        </div>
         <canvas
           ref={canvasRef}
           onPointerDown={onWavePointerDown}
@@ -808,10 +1045,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           onPointerUp={onWavePointerUp}
           onWheel={onWaveWheel}
         />
-        <span className="st-wave-hint" ref={waveHintRef}>
-          拖拽平移 · 滚轮缩放 · 点刻度选中 · 点空白 seek ｜ {fmtTime(viewRef.current.t0)} –{' '}
-          {fmtTime(viewRef.current.t1)}
-        </span>
       </footer>
     </div>
   )
