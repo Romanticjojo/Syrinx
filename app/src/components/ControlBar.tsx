@@ -9,6 +9,8 @@ interface Props {
   onToggle: () => void
   onRecToggle: () => void
   onRestart: () => void
+  /** 停止演奏：封存本段 Take 并进入回放（t_53aa8b7a） */
+  onStop: () => void
   onVolume: (v: number) => void
   onExit: () => void
 }
@@ -22,6 +24,7 @@ export default function ControlBar({
   onToggle,
   onRecToggle,
   onRestart,
+  onStop,
   onVolume,
   onExit,
 }: Props) {
@@ -64,6 +67,15 @@ export default function ControlBar({
       </button>
       <button className="ctl" onClick={onRestart} aria-label="回开头" title="回开头">
         ↺
+      </button>
+      <button
+        className="ctl stop"
+        onClick={onStop}
+        disabled={ended || !playing}
+        aria-label="停止演奏"
+        title="停止演奏并进入回放"
+      >
+        ■
       </button>
 
       <label className="ctl-volume" aria-label="伴奏音量">

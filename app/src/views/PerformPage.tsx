@@ -369,6 +369,13 @@ export default function PerformPage() {
     }
   }, [wake])
 
+  /** 停止演奏：走与自然结束相同的 finish() 封存流程（伴奏停在点击时刻、
+   *  Take.durationSec 截断为该时刻，回放页按截断口径统计与播放） */
+  const stop = useCallback(() => {
+    if (phaseRef.current !== 'performing') return
+    finish()
+  }, [finish])
+
   /** 回开头：seek 0 + 光标 reset + 录音开着则丢弃旧段重录（录音起点回到 0） */
   const restart = useCallback(() => {
     if (phaseRef.current !== 'performing') return
@@ -557,6 +564,7 @@ export default function PerformPage() {
           onToggle={toggle}
           onRecToggle={toggleRec}
           onRestart={restart}
+          onStop={stop}
           onVolume={changeVolume}
           onExit={exit}
         />

@@ -39,6 +39,14 @@
   background: var(--song-accent, var(--accent));
   filter: brightness(1.12);
 }
+/* 停止演奏：方块图标小于文字按钮基线，hover 转警示色提示「收束本段」 */
+.ctl.stop {
+  font-size: 13px;
+}
+.ctl.stop:not(:disabled):hover {
+  color: var(--rec);
+  background: rgba(243, 114, 127, 0.12);
+}
 /* 录音开关：麦克风图标，开着时红色呼吸 + REC 徽标 */
 .ctl.rec {
   width: auto;
