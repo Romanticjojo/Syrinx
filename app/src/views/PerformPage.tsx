@@ -11,6 +11,7 @@ import { yinDetect } from '../pitch/yin'
 import ScoreSheet from '../components/ScoreSheet'
 import type { OSMDScore } from '../score/OSMDScore'
 import { getSong, loadSong, SONGS } from '../songs'
+import { assetUrl } from '../lib/assetUrl'
 import { useAppStore } from '../store'
 import type { Timeline } from '../types'
 import './PerformPage.css'
@@ -151,6 +152,7 @@ export default function PerformPage() {
             URL.revokeObjectURL(r.url)
             return
           }
+          if (r.silent) showToast('警告：录音电平接近 0，回放将无声；请检查麦克风/系统输入设备')
           const prev = useAppStore.getState().lastTake
           if (prev?.audioUrl) URL.revokeObjectURL(prev.audioUrl)
           useAppStore.getState().setTake({
@@ -188,7 +190,7 @@ export default function PerformPage() {
         let buffer: AudioBuffer | null = null
         if (song.accompanimentUrl) {
           try {
-            const res = await fetch(song.accompanimentUrl)
+            const res = await fetch(assetUrl(song.accompanimentUrl))
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             buffer = await audioEngine.decode(await res.arrayBuffer())
           } catch (e: unknown) {
@@ -229,7 +231,7 @@ export default function PerformPage() {
     if (!song.backgroundVideoUrl) return
     const v = bgVideoRef.current
     if (!v) return
-    v.src = song.backgroundVideoUrl
+    v.src = assetUrl(song.backgroundVideoUrl)
     v.play().catch(() => {})
     return () => {
       v.pause()
