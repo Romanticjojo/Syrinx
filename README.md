@@ -1,5 +1,7 @@
 <div align="center">
 
+<a href="README.en.md">English</a>
+
 <img src="docs/img/logo.jpg" alt="Syrinx Logo" width="200"/>
 
 # 🎶 Syrinx · 长笛流光
@@ -13,19 +15,19 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white)
 ![Node](https://img.shields.io/badge/node-%3E%3D20.19-339933?style=flat-square&logo=node.js&logoColor=white)
-![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-lightgrey?style=flat-square)
+![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)
 
 *介于「智能乐谱播放器」与「音乐节奏游戏」之间的长笛演奏辅助应用。*
 
 </div>
 
 <p align="center">
-  <img src="docs/img/overview.png" alt="Syrinx 演奏视图：光标走谱 + 动态背景" width="100%"/>
+  <img src="docs/img/overview.png" alt="Syrinx 入场画面：女神吹笛徽记、品牌字标与进入按钮" width="100%"/>
 </p>
 
 ## ✅ 功能总览
 
-上面这一屏就是 Syrinx 的核心体验：顶部 HUD 实时显示小节与时间，谱面上光标逐音符跟随伴奏前进，three.js 动态背景随音乐呼吸，底部控制条把暂停 / 录音 / 缩放 / 退出收在一处。围绕这条演奏主线，各子系统能力如下：
+上面这一屏是打开 Syrinx 的第一眼：深色舞台上女神吹笛徽记与品牌字标，点击「进入应用」直达曲库。进入后的核心体验则是：顶部 HUD 实时显示小节与时间，谱面上光标逐音符跟随伴奏前进，three.js 动态背景随音乐呼吸，底部控制条把暂停 / 录音 / 缩放 / 退出收在一处。围绕这条演奏主线，各子系统能力如下：
 
 | 状态 | 功能 |
 |:---:|---|
@@ -70,7 +72,6 @@ npm install
 
 npm start          # 启动 Electron 桌面应用（开发模式，Vite + Electron 并起）
 npm run dev        # 仅浏览器模式 → http://localhost:5173
-npm test           # Vitest 单元测试
 npm run build      # 生产构建
 npm run dist       # Windows 安装包（NSIS）
 npm run dist:portable  # Windows 便携版 exe
@@ -181,8 +182,9 @@ A：打包脚本目前仅配置 Windows（NSIS / portable）；应用本体是�
 
 ## 📄 License
 
-本项目暂未选择开源许可证：**All Rights Reserved** © 2026 Syrinx contributors。
-在许可证确定之前，禁止未经作者授权复制、分发或商业使用。后续如以 MIT / Apache-2.0 开源，将在此处与仓库根目录同步 `LICENSE` 文件。
+本项目以 **Apache License 2.0** 开源发布，完整许可证文本见根目录 [LICENSE](LICENSE)。
+
+Apache License 2.0 © 2026 Syrinx contributors——可自由使用、修改、分发（含商用），唯须保留版权与许可证声明；附带明确专利授权，衍生作品需显著标注修改。
 
 <div align="center">
 <sub>吹奏愉快 🎶 — S Y R I N X · 长笛流光</sub>
