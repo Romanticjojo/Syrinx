@@ -39,23 +39,25 @@
   background: var(--song-accent, var(--accent));
   filter: brightness(1.12);
 }
-/* 录音开关：圆点指示，开着时红点呼吸 */
-.ctl.rec .rec-dot {
-  display: block;
-  width: 12px;
-  height: 12px;
-  margin: 0 auto;
-  border-radius: 50%;
-  border: 1.5px solid currentColor;
-  background: transparent;
-  transition: background 0.15s ease;
+/* 录音开关：麦克风图标，开着时红色呼吸 + REC 徽标 */
+.ctl.rec {
+  width: auto;
+  min-width: 40px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.ctl.rec .rec-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
 }
 .ctl.rec.on {
   color: var(--rec);
 }
-.ctl.rec.on .rec-dot {
-  background: var(--rec);
-  border-color: var(--rec);
+.ctl.rec.on svg {
   animation: rec-pulse 1.6s ease-in-out infinite;
 }
 @keyframes rec-pulse {
@@ -64,7 +66,7 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.45;
+    opacity: 0.4;
   }
 }
 .ctl.rec.on:hover {

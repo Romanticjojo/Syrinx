@@ -44,7 +44,23 @@ export default function ControlBar({
         aria-pressed={recOn}
         title={recOn ? '关闭录音（丢弃当前段，重新开启即重录）' : '开启录音（从头重录）'}
       >
-        <i className="rec-dot" aria-hidden="true" />
+        <svg className="rec-mic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path
+            d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M6.5 11a5.5 5.5 0 0 0 11 0M12 16.5V20M9 20h6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+          />
+        </svg>
+        {recOn && <span className="rec-badge">REC</span>}
       </button>
       <button className="ctl" onClick={onRestart} aria-label="回开头" title="回开头">
         ↺
