@@ -83,4 +83,29 @@ describe('scoreAgainst', () => {
     const inA2 = result.annotatedTrack.filter((p) => p.time > 2.1 && p.time < 2.9)
     expect(inA2.every((p) => Math.abs(p.cents - 1200) < 1)).toBe(true)
   })
+
+  it('评分窗口掐头 15% 去尾 10%：起音/收尾段帧不进中位数', () => {
+    // 音符 0-1s：窗口应为 [0.15, 0.9)。给掐头区 0.05s、去尾区 0.95s 各一个 880Hz 干扰点，
+    // 窗口中段 0.4s/0.6s 两个 440Hz 点 -> 中位数必须是 440
+    const track = [
+      { time: 0.05, hz: 880, cents: 0 },
+      { time: 0.4, hz: 440, cents: 0 },
+      { time: 0.6, hz: 440, cents: 0 },
+      { time: 0.95, hz: 880, cents: 0 },
+    ]
+    const r = scoreAgainst(track, timeline)
+    expect(r.notes[0].measuredHz).toBe(440)
+    expect(r.notes[0].inTune).toBe(true)
+  })
+
+  it('全部帧落在跳过区 -> 该音符 miss，且不进统计分母', () => {
+    const track = [
+      { time: 1.05, hz: 440, cents: 0 }, // 音符2(1-2s) 的掐头区内（<1.15）
+      { time: 2.95, hz: 440, cents: 0 }, // 音符3(2-3s) 的去尾区内（>=2.9）
+    ]
+    const r = scoreAgainst(track, timeline)
+    expect(r.notes[1].measuredHz).toBeNull()
+    expect(r.stats.noteCount).toBe(0)
+    expect(r.stats.inTuneRatio).toBe(0)
+  })
 })

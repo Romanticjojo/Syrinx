@@ -182,6 +182,12 @@
   color: var(--ink-faint);
   letter-spacing: 0.04em;
 }
+.stats-note {
+  margin-top: 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+}
 
 .chart-section {
   margin-top: 18px;

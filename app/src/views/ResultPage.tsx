@@ -175,7 +175,7 @@ export default function ResultPage() {
       </header>
 
       <section className="result-hero">
-        <div className="kicker">演奏回放 · TAKE</div>
+        <div className="kicker">演奏回放 · REPLAY</div>
         <h1>{song.title}</h1>
         <div className="result-meta">
           {new Date(take.startedAt).toLocaleString('zh-CN')} · 演奏时长 {fmt(take.durationSec)}
@@ -211,7 +211,8 @@ export default function ResultPage() {
             <div className="stats-state warn">分析出错：{analysis.message.slice(0, 120)}</div>
           )}
           {analysis.status === 'done' && stats && (
-            <div className="stats-grid">
+            <>
+              <div className="stats-grid">
               <div className="stat">
                 <b style={{ color: stats.inTuneRatio >= 0.7 ? song.accent : 'var(--rec)' }}>
                   {Math.round(stats.inTuneRatio * 100)}%
@@ -234,6 +235,10 @@ export default function ResultPage() {
                 <span>演奏时长</span>
               </div>
             </div>
+            <p className="stats-note">
+              口径：录音逐帧 YIN 测音 vs 谱面目标音，±50 音分内计准；每个音符掐头 15%、去尾 10% 后取中位频率；无实测帧的音符记漏、不计入分母。
+            </p>
+            </>
           )}
         </div>
       </section>
