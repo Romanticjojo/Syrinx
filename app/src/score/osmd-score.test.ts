@@ -156,4 +156,24 @@ describe('OSMDScore 音值感知光标推进', () => {
     expect(cursor.nextCount).toBe(0) // EndReached 立即为真，无停靠点可走
     expect(fired).toEqual([1])
   })
+
+  // —— sync-tune 调试页可选扩展（noteAtPoint/setMarkers）：fake OSMD（无 GraphicSheet/
+  //    无 svg）下降级不崩溃，演奏页路径不受影响 ——
+  it('noteAtPoint：无渲染谱面时返回 null，不抛异常', async () => {
+    const { score } = await makeScore([0, 1])
+    expect(score.noteAtPoint(10, 10)).toBeNull()
+  })
+
+  it('setMarkers：空数组清除整层；无 svg 时不建层', async () => {
+    const container = document.createElement('div')
+    const cursor = new FakeCursor([0, 1])
+    const s2 = new OSMDScore(container, '#3ddfae', makeFakeOsmd(cursor))
+    await s2.load('<score/>', MINI_TIMELINE)
+    expect(container.querySelector('.sync-marker-layer')).toBeNull() // 未调用不建层
+    s2.setMarkers([{ measure: 1, rvInMeasure: 0.5, color: '#fff' }])
+    expect(container.querySelector('.sync-marker-layer')).toBeNull() // 无 svg：忽略
+    s2.setMarkers([])
+    expect(container.querySelector('.sync-marker-layer')).toBeNull()
+    s2.dispose()
+  })
 })

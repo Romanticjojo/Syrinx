@@ -4,6 +4,20 @@
   overflow-y: auto;
 }
 
+/* dev-only：同步调试页入口（不进曲库导航） */
+.debug-link {
+  display: block;
+  margin: 24px auto 40px;
+  width: max-content;
+  font-size: 12px;
+  color: #5c6c73;
+  text-decoration: none;
+  border-bottom: 1px dashed #2a3942;
+}
+.debug-link:hover {
+  color: #8fb8ae;
+}
+
 .home-topbar {
   position: sticky;
   top: 0;

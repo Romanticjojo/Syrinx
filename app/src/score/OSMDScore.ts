@@ -239,6 +239,122 @@ export class OSMDScore {
     return bestSystem ? bestSystem.num : null
   }
 
+  /** [sync-tune 调试页扩展] 点击反查音符级位置：y 最近小节行内取 x 最近的
+   *  staffEntry，返回 { 小节号, 小节内全音符位置 }；谱面无谱/未渲染返回 null。
+   *  独立可选方法：演奏页不调用，缺省行为不变。 */
+  noteAtPoint(clientX: number, clientY: number): { measure: number; rvInMeasure: number } | null {
+    const svg = this.containerEl.querySelector('svg')
+    if (!svg) return null
+    const unitPx = 10 * (this.osmd.Zoom || 1)
+    const svgRect = svg.getBoundingClientRect()
+    const x = clientX - svgRect.left
+    const y = clientY - svgRect.top
+    const ml = this.osmd.GraphicSheet?.MeasureList
+    if (!ml) return null
+    // y 最近的小节行（与 measureAtPoint 同距离策略）
+    let bestRow: { measures: (typeof ml)[number]; d: number } | null = null
+    for (const systemMeasures of ml) {
+      if (!systemMeasures?.length) continue
+      let top = Infinity
+      let bottom = -Infinity
+      for (const m of systemMeasures) {
+        const ps = m.PositionAndShape
+        top = Math.min(top, ps.AbsolutePosition.y * unitPx)
+        bottom = Math.max(bottom, (ps.AbsolutePosition.y + ps.Size.height) * unitPx)
+      }
+      const dy = y < top ? top - y : y > bottom ? y - bottom : 0
+      if (!bestRow || dy < bestRow.d) bestRow = { measures: systemMeasures, d: dy }
+    }
+    if (!bestRow) return null
+    // 行内 x 最近的 staffEntry（staffEntry 位置相对小节，叠上小节 x 得 svg 坐标）
+    let best: { measure: number; rv: number; d: number } | null = null
+    for (const m of bestRow.measures) {
+      const mx = m.PositionAndShape.AbsolutePosition.x * unitPx
+      for (const se of m.staffEntries) {
+        const sx = mx + se.PositionAndShape.AbsolutePosition.x * unitPx
+        const d = Math.abs(x - sx)
+        if (!best || d < best.d) {
+          best = { measure: m.MeasureNumber, rv: se.sourceStaffEntry?.Timestamp?.RealValue ?? 0, d }
+        }
+      }
+    }
+    return best ? { measure: best.measure, rvInMeasure: best.rv } : null
+  }
+
+  /**
+   * [sync-tune 调试页扩展] 控制点标记层：谱面上叠加定位刻度（如 beats 微调页的
+   * 控制点/选中音标记）。空数组清除整层；OSMD 未渲染时忽略。纯 overlay，
+   * 不触碰谱面图形树，缺省（不调用）行为不变。
+   */
+  setMarkers(markers: { measure: number; rvInMeasure: number; color: string; title?: string }[]): void {
+    const layer =
+      this.containerEl.querySelector<HTMLElement>('.sync-marker-layer') ??
+      document.createElement('div')
+    layer.className = 'sync-marker-layer'
+    if (!markers.length) {
+      layer.remove()
+      return
+    }
+    const svg = this.containerEl.querySelector('svg')
+    const ml = this.osmd.GraphicSheet?.MeasureList
+    if (!svg || !ml) return
+    layer.innerHTML = ''
+    // 容器可能带内边距：svg 相对容器的偏移叠进标记坐标
+    const cRect = this.containerEl.getBoundingClientRect()
+    const svgRect = svg.getBoundingClientRect()
+    const offX = svgRect.left - cRect.left
+    const offY = svgRect.top - cRect.top
+    const unitPx = 10 * (this.osmd.Zoom || 1)
+    // 小节号 → 几何（首个同名项）+ 小节内 rv→x 映射（staffEntry 线性插值，缺数据回退比例）
+    const geom = new Map<number, { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }>()
+    for (const systemMeasures of ml) {
+      if (!systemMeasures?.length) continue
+      for (const m of systemMeasures) {
+        if (geom.has(m.MeasureNumber)) continue
+        const ps = m.PositionAndShape
+        geom.set(m.MeasureNumber, {
+          x: ps.AbsolutePosition.x * unitPx,
+          y: ps.AbsolutePosition.y * unitPx,
+          w: ps.Size.width * unitPx,
+          h: ps.Size.height * unitPx,
+          se: m.staffEntries.map((se) => ({
+            rv: se.sourceStaffEntry?.Timestamp?.RealValue ?? 0,
+            x: se.PositionAndShape.AbsolutePosition.x,
+          })),
+        })
+      }
+    }
+    for (const mk of markers) {
+      const g = geom.get(mk.measure)
+      if (!g) continue
+      // rv→x：夹取到 staffEntry 时间戳范围后按相邻项线性插值（符距与音值近似成正比）；
+      // 无 staffEntry 数据时回退小节宽度比例（fx 与 g.x 同为 OSMD 单位）
+      const last = g.se.at(-1)
+      const rel = Math.max(0, Math.min(last?.rv ?? 1, mk.rvInMeasure))
+      let fx: number
+      if (!last) fx = 0
+      else if (rel >= last.rv) fx = last.x
+      else {
+        const i = g.se.findIndex((p) => p.rv > rel)
+        if (i <= 0) fx = g.se[0].x
+        else {
+          const a = g.se[i - 1]
+          const b = g.se[i]
+          fx = a.x + ((b.x - a.x) * (rel - a.rv)) / Math.max(b.rv - a.rv, 1e-9)
+        }
+      }
+      const el = document.createElement('div')
+      el.className = 'sync-marker'
+      el.style.left = `${offX + g.x + fx * unitPx}px`
+      el.style.top = `${offY + g.y}px`
+      el.style.height = `${g.h}px`
+      el.style.borderColor = mk.color
+      if (mk.title) el.title = mk.title
+      layer.appendChild(el)
+    }
+    if (layer.parentElement !== this.containerEl) this.containerEl.appendChild(layer)
+  }
+
   dispose(): void {
     this.disposed = true
     // OSMD 无 dispose API；清空容器释放 DOM

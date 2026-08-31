@@ -1,0 +1,276 @@
+/* 同步调试页（/sync-tune）：三栏 + 底部波形。仅开发/调试用，视觉从简 */
+
+.st-page {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  background: #0b0f12;
+  color: #d7d7cf;
+  font: 13px/1.5 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  overflow: hidden;
+}
+
+.st-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-bottom: 1px solid #1d262c;
+  background: #0e1317;
+}
+.st-back {
+  color: #8fb8ae;
+  text-decoration: none;
+}
+.st-meta {
+  color: #7a8a90;
+}
+.st-meta em {
+  font-style: normal;
+  color: #7a8a90;
+}
+.st-meta em.on {
+  color: #ff9f43;
+}
+.st-dirty {
+  margin-left: 8px;
+  font-style: normal;
+  font-size: 11px;
+  color: #ffb26b;
+  border: 1px solid #6b4a26;
+  border-radius: 8px;
+  padding: 0 6px;
+}
+.st-flex {
+  flex: 1;
+}
+
+.st-btn {
+  background: #18222a;
+  color: #cfd8d4;
+  border: 1px solid #2a3942;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.st-btn:hover:not(:disabled) {
+  border-color: var(--song-accent, #5fb8a8);
+}
+.st-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.st-btn.primary {
+  border-color: var(--song-accent, #5fb8a8);
+  color: var(--song-accent, #5fb8a8);
+}
+.st-btn.live {
+  background: var(--song-accent, #5fb8a8);
+  color: #081013;
+}
+
+.st-status {
+  padding: 24px;
+  color: #7a8a90;
+}
+.st-status.err {
+  color: #ff8d7a;
+}
+
+.st-main {
+  display: grid;
+  grid-template-columns: 300px 1fr 300px;
+  min-height: 0;
+}
+
+/* 左栏：音符列表 */
+.st-list {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #1d262c;
+  min-height: 0;
+}
+.st-list-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #1d262c;
+  color: #7a8a90;
+}
+.st-list-head span {
+  margin-right: auto;
+}
+.st-chip {
+  background: transparent;
+  border: 1px solid #2a3942;
+  border-radius: 10px;
+  color: #7a8a90;
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.st-chip.on {
+  color: var(--song-accent, #5fb8a8);
+  border-color: var(--song-accent, #5fb8a8);
+}
+.st-list-body {
+  overflow: auto;
+  min-height: 0;
+}
+.st-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #141b20;
+  color: inherit;
+  font: inherit;
+  padding: 5px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.st-row:hover {
+  background: #131b21;
+}
+.st-row.sel {
+  background: #17242a;
+  box-shadow: inset 2px 0 0 var(--song-accent, #5fb8a8);
+}
+.st-row .m {
+  color: #7a8a90;
+  width: 34px;
+  flex: none;
+}
+.st-row .p {
+  color: #e8e8e2;
+  width: 38px;
+  flex: none;
+}
+.st-row .q {
+  color: #5c6c73;
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+.st-row .t {
+  color: #9aa8ad;
+  font-variant-numeric: tabular-nums;
+}
+.st-row .delta {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.delta.pos {
+  color: #ff9f43;
+}
+.delta.neg {
+  color: #6ec3ff;
+}
+
+/* 中栏：谱面 */
+.st-score {
+  overflow: auto;
+  min-height: 0;
+  background: #0b0f12;
+}
+.st-score-container {
+  position: relative; /* 控制点标记层（sync-marker-layer）定位基准 */
+  min-width: max-content;
+  padding: 8px 12px;
+}
+
+/* OSMDScore.setMarkers 注入的标记层 */
+.st-score-container .sync-marker-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.st-score-container .sync-marker {
+  position: absolute;
+  width: 0;
+  border-left: 2px solid;
+  opacity: 0.9;
+}
+
+/* 右栏：属性面板 */
+.st-props {
+  border-left: 1px solid #1d262c;
+  padding: 12px 14px;
+  min-height: 0;
+  overflow: auto;
+}
+.st-props h3 {
+  margin: 0 0 10px;
+  color: #e8e8e2;
+}
+.st-props dl {
+  margin: 0 0 12px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+}
+.st-props dt {
+  color: #7a8a90;
+}
+.st-props dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.st-props dd.pos {
+  color: #ff9f43;
+}
+.st-props dd.neg {
+  color: #6ec3ff;
+}
+.st-tag {
+  font-style: normal;
+  font-size: 11px;
+  color: #ffb26b;
+}
+.st-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.st-btn-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.st-hint {
+  color: #5c6c73;
+  font-size: 12px;
+  margin: 0;
+}
+.st-empty {
+  color: #5c6c73;
+  padding: 16px 4px;
+}
+
+/* 底部：伴奏波形总览 */
+.st-wave {
+  position: relative;
+  border-top: 1px solid #1d262c;
+  height: 130px;
+}
+.st-wave canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+.st-wave-hint {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  font-size: 11px;
+  color: #5c6c73;
+  pointer-events: none;
+}

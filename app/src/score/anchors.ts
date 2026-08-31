@@ -17,6 +17,8 @@ export interface BeatsFile {
    * 小节级线性等分抹平），否则回退小节级逻辑。beat0 与 anchors 同源。
    */
   beatAnchors?: { q: number; t: number }[]
+  /** 版本说明/人工微调记录（/sync-tune 导出时追加），离线产线可忽略 */
+  note?: string
   end?: number
 }
 

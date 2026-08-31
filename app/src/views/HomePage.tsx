@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import About from '../components/About'
 import { DIFFICULTY_LABEL, SONGS } from '../songs'
+import { assetUrl } from '../lib/assetUrl'
 import type { SongManifest } from '../types'
 import { useAppStore } from '../store'
 import './HomePage.css'
@@ -89,7 +90,7 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
         {(
           <img
             className="art-img"
-            src={song.coverUrl ?? '/brand/flute.jpg'}
+            src={song.coverUrl ? assetUrl(song.coverUrl) : assetUrl('/brand/flute.jpg')}
             alt=""
             loading="lazy"
             style={positionOf(song)}
@@ -101,7 +102,7 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
             ref={videoRef}
             className="art-preview"
             style={{ visibility: previewing ? 'visible' : 'hidden' }}
-            src={song.hoverVideoUrl ?? song.backgroundVideoUrl}
+            src={assetUrl(song.hoverVideoUrl ?? song.backgroundVideoUrl ?? '')}
             muted
             loop
             playsInline
@@ -131,13 +132,16 @@ export default function HomePage() {
   const go = useAppStore((s) => s.go)
   const featured = SONGS[0]
   const [aboutOpen, setAboutOpen] = useState(false)
+  // 同步调试页入口：仅 DEV 或 ?debug=1 可见（不进曲库导航）
+  const showSyncTune =
+    import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')
 
 
   return (
     <div className="home">
       <header className="home-topbar">
         <div className="home-logo">
-          <img src="/brand/syrinx-logo-white.jpg" alt="" aria-hidden="true" />
+          <img src={assetUrl("/brand/syrinx-logo-white.jpg")} alt="" aria-hidden="true" />
           Syrinx
         </div>
         <nav className="home-nav">
@@ -159,7 +163,7 @@ export default function HomePage() {
       >
         <div className="hero-bg" style={coverStyle(featured.accent)} />
         {featured.coverUrl && (
-          <img className="hero-bg-img" src={featured.coverUrl} alt="" style={positionOf(featured)} />
+          <img className="hero-bg-img" src={assetUrl(featured.coverUrl ?? '')} alt="" style={positionOf(featured)} />
         )}
         <div className="hero-shade" />
         <div className="hero-body">
@@ -193,6 +197,11 @@ export default function HomePage() {
         </div>
       </section>
       {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
+      {showSyncTune && (
+        <a className="debug-link" href={`/sync-tune/${featured.id}`}>
+          同步调试（beats 微调）
+        </a>
+      )}
     </div>
   )
 }
