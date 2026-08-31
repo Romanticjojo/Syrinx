@@ -64,12 +64,17 @@ describe('luv-letter Soundslice 精校谱 timeline', () => {
     expect(sums[44]).toBe(64)
   })
 
-  it('vibrato 波浪线仅 m70 长音 Bb5：start+stop 成对盖住单音，m72 无波浪线（修复长波浪线 bug）', () => {
+  it('vibrato 波浪线 m70 长音 Bb5 与 m72 终音各 start+stop 成对盖住单音', () => {
     const wavy = xml.match(/<wavy-line[^>]*\/>/g) ?? []
-    expect(wavy).toEqual(['<wavy-line type="start" />', '<wavy-line type="stop" />'])
-    // m72（终音 C4 + fermata）不再带波浪线
+    expect(wavy).toEqual([
+      '<wavy-line type="start" />',
+      '<wavy-line type="stop" />',
+      '<wavy-line type="start" />',
+      '<wavy-line type="stop" />',
+    ])
+    // m72（终音 C4 + fermata）带成对波浪线
     const m72 = xml.slice(xml.indexOf('<measure number="72">'))
-    expect(m72).not.toContain('wavy-line')
+    expect(m72).toContain('wavy-line')
   })
 
   it('单声部清洗到位：无 backup/chord 残留（Soundslice 导出省略 voice 标签）', () => {
