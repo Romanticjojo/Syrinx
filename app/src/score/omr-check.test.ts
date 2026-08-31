@@ -5,7 +5,7 @@ import { expandRepeats, parseMusicXml } from './musicxml'
 /**
  * Luv Letter Soundslice 精校谱（任务 t_76c0cbff）回归测试：
  * 用户在 Soundslice 精校并导出（software=Soundslice MusicXML exporter）+ m45 时值修复
- * + 3 处 <wavy-line>（m70 长音 Bb5 两端、m72 尾音）。72 小节印谱、divisions=16、
+ * + 6 个 <wavy-line>（m3/m52/m56 首音各 start+stop 成对，演奏序 3/67/75 小节首音）。72 小节印谱、divisions=16、
  * 真实 tempo 标记 76/86/76、7 对反复记号 + volta（一房/二房）。
  * 注：OSMD 真实渲染验证用浏览器 e2e（happy-dom 无 canvas，OSMD 文字测量会崩）。
  */
@@ -64,17 +64,20 @@ describe('luv-letter Soundslice 精校谱 timeline', () => {
     expect(sums[44]).toBe(64)
   })
 
-  it('vibrato 波浪线 m70 长音 Bb5 与 m72 终音各 start+stop 成对盖住单音', () => {
+  it('vibrato 波浪线仅在 m3/m52/m56 首音（演奏序 3/67/75 小节第一音），start+stop 成对', () => {
     const wavy = xml.match(/<wavy-line[^>]*\/>/g) ?? []
-    expect(wavy).toEqual([
-      '<wavy-line type="start" />',
-      '<wavy-line type="stop" />',
-      '<wavy-line type="start" />',
-      '<wavy-line type="stop" />',
-    ])
-    // m72（终音 C4 + fermata）带成对波浪线
-    const m72 = xml.slice(xml.indexOf('<measure number="72">'))
-    expect(m72).toContain('wavy-line')
+    expect(wavy).toHaveLength(6) // 3 音 × (start+stop)
+    for (const mnum of ['3', '52', '56']) {
+      const seg = xml.slice(xml.indexOf(`<measure number="${mnum}">`))
+      const firstNote = seg.slice(seg.indexOf('<note>'), seg.indexOf('</note>'))
+      expect((firstNote.match(/<wavy-line/g) ?? []).length).toBe(2)
+    }
+    // m70 长音与 m72 终音不再带波浪线（旧错误位置）
+    for (const mnum of ['70', '72']) {
+      const i = xml.indexOf(`<measure number="${mnum}">`)
+      const seg = xml.slice(i, xml.indexOf('</measure>', i))
+      expect(seg).not.toContain('wavy-line')
+    }
   })
 
   it('单声部清洗到位：无 backup/chord 残留（Soundslice 导出省略 voice 标签）', () => {

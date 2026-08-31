@@ -8,6 +8,7 @@ import type { Timeline } from '../types'
  * - 音符高亮：光标所在音符染成 accent 色（演奏主视觉），离开恢复白色——
  *   「吹到哪个音，哪个音符变色」（任务 t_a857b79e Bug 4）
  * - syncToTime(t)：由伴奏音频时钟每帧驱动，光标推进到时间 t
+ *   （音值感知：光标停在正在响的音上，直到该音时值结束、下一停靠点开始）
  * - followCursor 自动滚动；小节变化通过 onMeasureChange 回调（不进响应式 store）
  */
 export class OSMDScore {
@@ -23,14 +24,26 @@ export class OSMDScore {
   private disposed = false
   /** 上一帧被染色的 GraphicalNote：一帧至多一个当前音，离开时恢复 */
   private highlighted: { setColor: (c: string, o?: unknown) => void } | null = null
+  /**
+   * 预扫缓存的光标停靠点（voiceEntry 级，全音符 RealValue 单位）。
+   * syncToTime 用「下一停靠点的开始时刻已到才前进」实现音值感知推进：
+   * 旧逻辑是「当前停靠点已开始即前进」，光标高亮永远趴在下一个还没响的音上，
+   * 长音（二分/全音符）被瞬间掠过（2026-08-31 光标拍子修复）。
+   */
+  private stopQuarters: number[] = []
+  /** 下一可跨越的停靠点下标：光标停在 stopQuarters[nextIdx-1] 上，随 reset 归 1 */
+  private nextIdx = 0
+  /** 预扫结果为空时回退旧的推进逻辑（防御：OSMD 行为异常不致命） */
+  private useStopTable = false
   /** 小节变化回调（rAF 中触发，直接操作 DOM，勿 setState） */
   onMeasureChange?: (measure: number, total: number) => void
 
-  constructor(container: HTMLElement, accent = '#3ddfae') {
+  constructor(container: HTMLElement, accent = '#3ddfae', osmdInstance?: OpenSheetMusicDisplay) {
     this.containerEl = container
     this.accent = accent
     this.baseNoteColor = '#e8e8e2' // 暗底下降一档对比：纯白刺眼（t_3b9cfc25）
-    this.osmd = new OpenSheetMusicDisplay(container, {
+    // osmdInstance：测试注入口（happy-dom 下不真正渲染 OSMD），缺省构造真实实例
+    this.osmd = osmdInstance ?? new OpenSheetMusicDisplay(container, {
       autoResize: true,
       backend: 'svg',
       followCursor: true,
@@ -63,6 +76,29 @@ export class OSMDScore {
     this.totalMeasures = timeline.measureTimes.filter((e) => !e.end).length
     this.lastMeasure = 0
     this.highlighted = null
+    this.prescanCursorStops()
+  }
+
+  /**
+   * 预扫光标停靠点：load 完成后用 cursor iterator 走一遍（记录后 reset），
+   * 缓存每个停靠点的全音符位置。OSMD cursor 在 voiceEntry 级停靠，
+   * 预扫即可拿到全部停靠点，无需改 OSMD 源码。结果为空则回退旧推进逻辑。
+   */
+  private prescanCursorStops(): void {
+    const cursor = this.osmd.cursor
+    cursor.reset()
+    const it = cursor.iterator
+    const stops: number[] = []
+    let guard = 0
+    while (!it.EndReached && guard < 8192) {
+      stops.push(it.currentTimeStamp.RealValue)
+      cursor.next()
+      guard++
+    }
+    cursor.reset()
+    this.useStopTable = stops.length > 0
+    this.stopQuarters = stops
+    this.nextIdx = 1
   }
 
   /** 显示光标并置于起点 */
@@ -70,12 +106,14 @@ export class OSMDScore {
     this.osmd.cursor.reset()
     this.osmd.cursor.show()
     this.lastMeasure = 0
+    this.nextIdx = 1
   }
 
   /** 重置光标到起点（seek 用） */
   resetCursor(): void {
     this.osmd.cursor.reset()
     this.lastMeasure = 0
+    this.nextIdx = 1
   }
 
   /** 把当前光标下的音符染成 accent 色，上一帧的恢复原色 */
@@ -118,16 +156,34 @@ export class OSMDScore {
     return mt[k].time + ((rv - mt[k].quarters) * (mt[k + 1].time - mt[k].time)) / dq
   }
 
-  /** 每帧调用：把光标推进到曲目时间 t（秒）。由 rAF 驱动，只前进不后退 */
+  /** 每帧调用：把光标推进到曲目时间 t（秒）。由 rAF 驱动，只前进不后退。
+   *  音值感知推进（任务 A）：下一个停靠点的开始时刻已到才前进——光标/高亮
+   *  停在正在响的音上，直到该音实际时值结束；只前进语义与 seek 快进机制不变 */
   syncToTime(t: number): void {
     const cursor = this.osmd.cursor
     const it = cursor.iterator
-    let guard = 0
     let advanced = false
-    while (!it.EndReached && this.timeAtQuarters(it.currentTimeStamp.RealValue) <= t && guard < 2048) {
-      cursor.next()
-      advanced = true
-      guard++
+    if (this.useStopTable) {
+      while (
+        this.nextIdx < this.stopQuarters.length &&
+        this.timeAtQuarters(this.stopQuarters[this.nextIdx]) <= t
+      ) {
+        cursor.next()
+        this.nextIdx++
+        advanced = true
+      }
+    } else {
+      // 回退：预扫结果为空时沿用旧「当前停靠点已开始即前进」（防御）
+      let guard = 0
+      while (
+        !it.EndReached &&
+        this.timeAtQuarters(it.currentTimeStamp.RealValue) <= t &&
+        guard < 2048
+      ) {
+        cursor.next()
+        advanced = true
+        guard++
+      }
     }
     if (advanced) this.updateHighlight()
     // 当前小节：由 measureTimes 反查（iterator.currentMeasure 是私有成员）；终点标记不计
