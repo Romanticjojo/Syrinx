@@ -443,20 +443,6 @@ export default function PerformPage() {
     [seekTo],
   )
 
-  /** 点谱面小节 → 从该小节头继续：小节号经 measureTimes（伴奏锚点表）反查时间。
-   *  终点标记的 measure 号是虚构的末小节+1，点击反查不会命中，无需特判 */
-  const seekToMeasure = useCallback(
-    (m: number) => {
-      if (phaseRef.current !== 'performing') return
-      const tl = timelineRef.current
-      if (!tl) return
-      const entry = tl.measureTimes.find((e) => e.measure === m)
-      if (!entry) return
-      seekTo(entry.time)
-    },
-    [seekTo],
-  )
-
   /** 录音开关：只控采集支路，实时音准反馈不受影响；关=丢当前段，开=从头录这段 */
   const toggleRec = useCallback(() => {
     if (phaseRef.current !== 'performing') return
@@ -546,7 +532,6 @@ export default function PerformPage() {
             accent={song.accent}
             scoreRef={scoreRef}
             onMeasureChange={handleMeasure}
-            onMeasureClick={seekToMeasure}
           />
         )}
       </div>

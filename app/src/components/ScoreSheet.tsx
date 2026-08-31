@@ -11,12 +11,10 @@ interface Props {
   /** 小节变化回调：随实例一起挂/摘（实例在本组件内创建，挂接放这里才不会
       错过 StrictMode remount 换出来的新实例——演奏页侧挂会扑空，t_b22f5467 项 3） */
   onMeasureChange?: (measure: number, total: number) => void
-  /** 点击谱面小节（t_b22f5467 项 4）：反查命中小节号后上抛 */
-  onMeasureClick?: (measure: number) => void
 }
 
 /** 谱面容器：挂载 OSMDScore，负责加载/重渲染生命周期 */
-export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef, onMeasureChange, onMeasureClick }: Props) {
+export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef, onMeasureChange }: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const osmdRef = useRef<OSMDScore | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -55,13 +53,7 @@ export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef
   }, [xml, timeline, onMeasureChange])
 
   return (
-    <div
-      className="score-sheet"
-      onClick={(e) => {
-        const m = osmdRef.current?.measureAtPoint(e.clientX, e.clientY)
-        if (m != null) onMeasureClick?.(m)
-      }}
-    >
+    <div className="score-sheet">
       {error && <div className="sheet-error">曲谱渲染失败：{error}</div>}
       <div ref={divRef} className="sheet-container" />
     </div>
