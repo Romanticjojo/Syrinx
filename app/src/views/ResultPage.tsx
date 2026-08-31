@@ -3,7 +3,7 @@ import { audioEngine } from '../audio/AudioEngine'
 import { encodeWav } from '../audio/wav'
 import PlaybackDeck from '../components/PlaybackDeck'
 import PitchChart from '../components/PitchChart'
-import { extractPitchTrack, scoreAgainst, type ScoreResult } from '../pitch/compare'
+import { extractPitchTrack, scoreAgainst, timelineUpTo, type ScoreResult } from '../pitch/compare'
 import { getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import { useAppStore } from '../store'
@@ -33,6 +33,10 @@ export default function ResultPage() {
   // 音高分析：解码录音 → 逐帧 YIN → 与目标时间轴对比（不支持解码的浏览器保留纯回放）
   useEffect(() => {
     if (!take) return
+    // 停止时刻（伴奏时间轴绝对位置）= 封存时 finish() 记录的 audioEngine.time：
+    // 自然结束 ≈ 全曲时长（timelineUpTo 原引用直通）；停止演奏 = 点击时刻，
+    // 之后的音符未被演奏、不进统计，伴奏对照也只播到这（下方截断守卫）。
+    const stopSec = take.durationSec
     let alive = true
     if (take.stats && take.pitchTrack) {
       // 已有缓存结果：仅重建图表数据（属性收窄不进闭包，先取局部量）
@@ -40,7 +44,7 @@ export default function ResultPage() {
       void (async () => {
         const { timeline } = await loadSong(song)
         if (!alive) return
-        setAnalysis({ status: 'done', result: scoreAgainst(cachedTrack, timeline) })
+        setAnalysis({ status: 'done', result: scoreAgainst(cachedTrack, timelineUpTo(timeline, stopSec)) })
       })()
       return () => {
         alive = false
@@ -57,7 +61,7 @@ export default function ResultPage() {
         if (!alive) return
         // 录音起点对齐伴奏时间轴：中途开录/回开头重录时，轨迹时间整体平移 startSec
         const track = extractPitchTrack(buffer, { offsetSec: take.startSec })
-        const result = scoreAgainst(track, timeline)
+        const result = scoreAgainst(track, timelineUpTo(timeline, stopSec))
         setAnalysis({ status: 'done', result })
         setTake({ ...take, pitchTrack: result.annotatedTrack, stats: result.stats })
       } catch (e) {
@@ -89,6 +93,25 @@ export default function ResultPage() {
       audioEngine.pause()
     }
   }, [])
+
+  // 对照播放截断：伴奏只播到停止时刻（录音 ended 通常同时刻先到，此处兜底
+  // 录音时长偏差/静音尾场景；自然结束 stopSec≈buffer 末尾，行为与现状一致）
+  useEffect(() => {
+    if (!syncPlaying || !take) return
+    const stopSec = take.durationSec
+    let raf = 0
+    const check = () => {
+      if (audioEngine.playing && audioEngine.time >= stopSec) {
+        audioRef.current?.pause()
+        audioEngine.pause()
+        setSyncPlaying(false)
+        return
+      }
+      raf = requestAnimationFrame(check)
+    }
+    raf = requestAnimationFrame(check)
+    return () => cancelAnimationFrame(raf)
+  }, [syncPlaying, take])
 
   const toggleSyncPlay = useCallback(async () => {
     const el = audioRef.current
