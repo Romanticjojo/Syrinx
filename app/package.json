@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "npm run electron:dev",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "lint": "oxlint",
