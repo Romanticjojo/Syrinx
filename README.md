@@ -1,7 +1,5 @@
 <div align="center">
 
-<a href="README.en.md">English</a>
-
 <img src="docs/img/logo.jpg" alt="Syrinx Logo" width="200"/>
 
 # 🎶 Syrinx · 长笛流光
