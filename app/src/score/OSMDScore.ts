@@ -1,6 +1,14 @@
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
 import type { Timeline } from '../types'
 
+/** 小节几何缓存结构（markerGeom）：标记层（t_perf_sync_tune）与小节聚焦（T3）共用 */
+type MarkerGeom = {
+  map: Map<number, { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }>
+  offX: number
+  offY: number
+  unitPx: number
+}
+
 /**
  * OSMD 曲谱渲染封装：
  * - 暗色谱面（白色音符、透明背景，融入暗色界面）
@@ -24,6 +32,8 @@ export class OSMDScore {
   private disposed = false
   /** 上一帧被染色的 GraphicalNote：一帧至多一个当前音，离开时恢复 */
   private highlighted: { setColor: (c: string, o?: unknown) => void } | null = null
+  /** [sync-tune T3] 选中的 GraphicalNote（三向选中染色持有者，独立于光标高亮） */
+  private selNote: { setColor: (c: string, o?: unknown) => void } | null = null
   /**
    * 预扫缓存的光标停靠点（voiceEntry 级，全音符 RealValue 单位）。
    * syncToTime 用「下一停靠点的开始时刻已到才前进」实现音值感知推进：
@@ -40,12 +50,7 @@ export class OSMDScore {
 
   // —— 标记层性能缓存（t_perf_sync_tune）——
   /** 小节几何缓存：load 渲染后首算，谱面不变则复用（601 标记共享一份） */
-  private markerGeom: {
-    map: Map<number, { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }>
-    offX: number
-    offY: number
-    unitPx: number
-  } | null = null
+  private markerGeom: MarkerGeom | null = null
   /** 标记 DOM 元素池：key → 已定位元素，setMarkers 复用不再重建 */
   private markerEls = new Map<string, HTMLDivElement>()
   private markerLayer: HTMLElement | null = null
@@ -78,6 +83,16 @@ export class OSMDScore {
     this.osmd.FollowCursor = true
   }
 
+  /** 恢复一个高亮音符的底色；若同时被另一持有者（选中/光标）持有则保持 accent（T3） */
+  private restore(g: { setColor: (c: string, o?: unknown) => void }): void {
+    if (g === this.highlighted || g === this.selNote) return
+    try {
+      g.setColor(this.baseNoteColor)
+    } catch {
+      /* 渲染层可能已重排，忽略单帧恢复失败 */
+    }
+  }
+
   async load(xml: string, timeline: Timeline): Promise<void> {
     await this.osmd.load(xml)
     if (this.disposed) return
@@ -92,6 +107,7 @@ export class OSMDScore {
     this.totalMeasures = timeline.measureTimes.filter((e) => !e.end).length
     this.lastMeasure = 0
     this.highlighted = null
+    this.selNote = null
     this.prescanCursorStops()
   }
 
@@ -139,14 +155,9 @@ export class OSMDScore {
       | { setColor: (c: string, o?: unknown) => void; sourceNote?: unknown }
       | null
     if (next === this.highlighted) return
-    if (this.highlighted) {
-      try {
-        this.highlighted.setColor(this.baseNoteColor)
-      } catch {
-        /* 渲染层可能已重排，忽略单帧恢复失败 */
-      }
-    }
+    const prev = this.highlighted
     this.highlighted = null
+    if (prev) this.restore(prev)
     if (next) {
       try {
         next.setColor(this.accent)
@@ -256,9 +267,14 @@ export class OSMDScore {
   }
 
   /** [sync-tune 调试页扩展] 点击反查音符级位置：y 最近小节行内取 x 最近的
-   *  staffEntry，返回 { 小节号, 小节内全音符位置 }；谱面无谱/未渲染返回 null。
-   *  独立可选方法：演奏页不调用，缺省行为不变。 */
-  noteAtPoint(clientX: number, clientY: number): { measure: number; rvInMeasure: number } | null {
+   *  staffEntry，返回 { 小节号, 小节内全音符位置, 与命中音符的欧氏距离(px) }；
+   *  命中半径内无 staffEntry 时 fallback 最近小节行最近音符（现有逻辑），
+   *  dist 供调用方在距离超阈值（120px）时提示「已选最近音符」（T3 决策 4）。
+   *  谱面无谱/未渲染返回 null。独立可选方法：演奏页不调用，缺省行为不变。 */
+  noteAtPoint(
+    clientX: number,
+    clientY: number,
+  ): { measure: number; rvInMeasure: number; dist: number } | null {
     const svg = this.containerEl.querySelector('svg')
     if (!svg) return null
     const unitPx = 10 * (this.osmd.Zoom || 1)
@@ -294,7 +310,126 @@ export class OSMDScore {
         }
       }
     }
-    return best ? { measure: best.measure, rvInMeasure: best.rv } : null
+    return best
+      ? { measure: best.measure, rvInMeasure: best.rv, dist: Math.hypot(best.d, bestRow.d) }
+      : null
+  }
+
+  /** [sync-tune T3] 在 MeasureList 中找 (measure, rvInMeasure) 最近的非休止
+   *  GraphicalNote（选中染色用；同小节跨行时取首个匹配小节） */
+  private findGNote(
+    measure: number,
+    rvInMeasure: number,
+  ): { setColor: (c: string, o?: unknown) => void } | null {
+    const ml = this.osmd.GraphicSheet?.MeasureList
+    if (!ml) return null
+    for (const systemMeasures of ml) {
+      if (!systemMeasures?.length) continue
+      for (const m of systemMeasures) {
+        if (m.MeasureNumber !== measure) continue
+        // 行内 rv 最近的含非休止音符的 staffEntry（该 entry 只有休止符时顺延到更近的）
+        let best: { d: number; g: { setColor: (c: string, o?: unknown) => void } } | null = null
+        for (const se of m.staffEntries) {
+          const rv = se.sourceStaffEntry?.Timestamp?.RealValue ?? 0
+          const d = Math.abs(rv - rvInMeasure)
+          if (best && d >= best.d) continue
+          const gn = (
+            (se.graphicalVoiceEntries ?? [])
+              .flatMap((v) => v.notes ?? [])
+              .find((n) => !n.sourceNote?.isRest?.()) ?? null
+          ) as { setColor: (c: string, o?: unknown) => void } | null
+          if (gn) best = { d, g: gn }
+        }
+        if (best) return best.g
+      }
+    }
+    return null
+  }
+
+  /** [sync-tune 调试页扩展（T3）] 选中音染色：把 (measure, rvInMeasure) 处最近的
+   *  notehead 染成 accent 色，旧选中恢复白色；measure 传 null 仅清除选中。
+   *  复用 updateHighlight 的 setColor 机制做单音符操作（不重建标记层、不动图形树），
+   *  与光标高亮互不干扰：同一音符被光标/选中双方持有时保持 accent。
+   *  独立可选方法：演奏页不调用，缺省行为不变。 */
+  highlightNoteAt(measure: number | null, rvInMeasure = 0): void {
+    const prev = this.selNote
+    this.selNote = null
+    if (measure !== null) {
+      const gn = this.findGNote(measure, rvInMeasure)
+      if (gn) {
+        try {
+          gn.setColor(this.accent)
+          this.selNote = gn
+        } catch {
+          /* 渲染层可能已重排，忽略本次染色失败 */
+        }
+      }
+    }
+    if (prev) this.restore(prev)
+  }
+
+  /** [sync-tune 调试页扩展（T3）] 小节自动聚焦：把第 m 小节所在行滚动到最近滚动
+   *  祖先视口中部（markerGeom 同源的 MeasureList 几何）。只写 scrollTop--程序性
+   *  滚动不派发 wheel/pointerdown，与页面侧「手动滚动 5 秒让位」逻辑不冲突。
+   *  独立可选方法：演奏页不调用，缺省行为不变。 */
+  scrollToMeasure(m: number): void {
+    const geom = this.ensureMarkerGeom()
+    const g = geom?.map.get(m)
+    if (!geom || !g) return
+    // 向上找 overflowY auto/scroll 的滚动祖先（sync-tune 页为 .st-score）
+    let sc = this.containerEl.parentElement
+    while (sc && sc !== document.body) {
+      const oy = getComputedStyle(sc).overflowY
+      if (oy === 'auto' || oy === 'scroll') break
+      sc = sc.parentElement
+    }
+    if (!sc) return
+    // 行中心换算到滚动祖先坐标：容器在视口中偏移 + 已滚距离 + svg 相对容器偏移 + 行几何
+    const cRect = this.containerEl.getBoundingClientRect()
+    const sRect = sc.getBoundingClientRect()
+    const yInSc = cRect.top - sRect.top + sc.scrollTop + geom.offY + g.y + g.h / 2
+    sc.scrollTop = Math.max(0, yInSc - sc.clientHeight / 2)
+  }
+
+  /** 小节几何缓存（t_perf_sync_tune，T3 起与 scrollToMeasure 共用）：
+   *  MeasureList -> 小节号到行内几何/staffEntry 表，渲染后首算，谱面不变复用。
+   *  容器可能带内边距：svg 相对容器的偏移叠进标记坐标。 */
+  private ensureMarkerGeom(): MarkerGeom | null {
+    if (this.markerGeom) return this.markerGeom
+    const svg = this.containerEl.querySelector('svg')
+    const ml = this.osmd.GraphicSheet?.MeasureList
+    if (!svg || !ml) return null
+    const cRect = this.containerEl.getBoundingClientRect()
+    const svgRect = svg.getBoundingClientRect()
+    const unitPx = 10 * (this.osmd.Zoom || 1)
+    const map = new Map<
+      number,
+      { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }
+    >()
+    for (const systemMeasures of ml) {
+      if (!systemMeasures?.length) continue
+      for (const m of systemMeasures) {
+        if (map.has(m.MeasureNumber)) continue
+        const ps = m.PositionAndShape
+        map.set(m.MeasureNumber, {
+          x: ps.AbsolutePosition.x * unitPx,
+          y: ps.AbsolutePosition.y * unitPx,
+          w: ps.Size.width * unitPx,
+          h: ps.Size.height * unitPx,
+          se: m.staffEntries.map((se) => ({
+            rv: se.sourceStaffEntry?.Timestamp?.RealValue ?? 0,
+            x: se.PositionAndShape.AbsolutePosition.x,
+          })),
+        })
+      }
+    }
+    this.markerGeom = {
+      map,
+      offX: svgRect.left - cRect.left,
+      offY: svgRect.top - cRect.top,
+      unitPx,
+    }
+    return this.markerGeom
   }
 
   /**
@@ -311,8 +446,7 @@ export class OSMDScore {
       return
     }
     const svg = this.containerEl.querySelector('svg')
-    const ml = this.osmd.GraphicSheet?.MeasureList
-    if (!svg || !ml) return
+    if (!svg) return
     let layer = this.markerLayer
     if (!layer || layer.parentElement !== this.containerEl) {
       layer =
@@ -322,37 +456,8 @@ export class OSMDScore {
       if (layer.parentElement !== this.containerEl) this.containerEl.appendChild(layer)
       this.markerLayer = layer
     }
-    // 容器可能带内边距：svg 相对容器的偏移叠进标记坐标（几何首次算好后缓存）
-    if (!this.markerGeom) {
-      const cRect = this.containerEl.getBoundingClientRect()
-      const svgRect = svg.getBoundingClientRect()
-      const unitPx = 10 * (this.osmd.Zoom || 1)
-      const map = new Map<number, { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }>()
-      for (const systemMeasures of ml) {
-        if (!systemMeasures?.length) continue
-        for (const m of systemMeasures) {
-          if (map.has(m.MeasureNumber)) continue
-          const ps = m.PositionAndShape
-          map.set(m.MeasureNumber, {
-            x: ps.AbsolutePosition.x * unitPx,
-            y: ps.AbsolutePosition.y * unitPx,
-            w: ps.Size.width * unitPx,
-            h: ps.Size.height * unitPx,
-            se: m.staffEntries.map((se) => ({
-              rv: se.sourceStaffEntry?.Timestamp?.RealValue ?? 0,
-              x: se.PositionAndShape.AbsolutePosition.x,
-            })),
-          })
-        }
-      }
-      this.markerGeom = {
-        map,
-        offX: svgRect.left - cRect.left,
-        offY: svgRect.top - cRect.top,
-        unitPx,
-      }
-    }
-    const geom = this.markerGeom
+    const geom = this.ensureMarkerGeom()
+    if (!geom) return
     // rv→x：夹取到 staffEntry 时间戳范围后按相邻项线性插值（符距与音值近似成正比）；
     // 无 staffEntry 数据时回退小节宽度比例（fx 与 g.x 同为 OSMD 单位）
     const rvToX = (g: { se: { rv: number; x: number }[] }, rvInMeasure: number): number => {
@@ -403,6 +508,8 @@ export class OSMDScore {
     this.markerGeom = null
     this.markerEls.clear()
     this.markerLayer = null
+    this.highlighted = null
+    this.selNote = null
     this.containerEl.innerHTML = ''
   }
 }

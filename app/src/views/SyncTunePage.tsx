@@ -27,6 +27,10 @@ import './SyncTunePage.css'
  * 时间唯一来源 audioEngine（不新起时钟）；q↔t 换算走局部段速率（logic.ts）。
  * R2（T2）：顶栏播放控制条（⏮⏯⏭ + 进度条 + 时间/小节）、波形图例/可折叠、
  * 右栏「? 操作说明」面板；进度/时间走 rAF 帧直写 DOM，不进每帧 React 渲染。
+ * R2（T3）：三向选中（谱面/列表/波形）谱面 notehead 染 accent（OSMDScore
+ * .highlightNoteAt，单音符 setColor）；播放/选中变化自动滚动聚焦当前小节
+ * （scrollToMeasure），谱面手动 wheel/pointerdown 后 5 秒内不抢滚动；
+ * 谱面点击命中距离 >120px 时右栏提示「已选最近音符」。
  */
 
 type Phase = 'loading' | 'ready' | 'error'
@@ -42,6 +46,9 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   const [markersReady, setMarkersReady] = useState(false)
   const [curMeasure, setCurMeasure] = useState(1)
   const [auditioning, setAuditioning] = useState(false)
+  // 命中距离提示（T3 决策 4）：点谱面 120px 内无音符仍选最近时在右栏提示（5s 自动消隐）
+  const [nearHint, setNearHint] = useState<string | null>(null)
+  const nearHintTimerRef = useRef(0)
   // 音频状态徽标（T1）：仅事件驱动更新（启用/播放尝试后 set），不进 rAF 帧路径
   const [audioState, setAudioState] = useState<AudioContextState>(() => audioEngine.state)
   const audioBadgeRef = useRef<HTMLButtonElement>(null)
@@ -89,6 +96,10 @@ export default function SyncTunePage({ songId }: { songId: string }) {
 
   const scoreRef = useRef<OSMDScore | null>(null)
   const scoreDivRef = useRef<HTMLDivElement>(null)
+  // 谱面滚动容器（.st-score，overflow:auto）：T3 让位时间戳监听挂这里
+  const scoreSectionRef = useRef<HTMLElement>(null)
+  /** 谱面手动滚动时间戳（T3 决策 6）：wheel/pointerdown 后 5 秒内暂停自动跟随 */
+  const lastUserScrollRef = useRef(0)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const beatsRef = useRef<BeatsFile | null>(null)
@@ -139,6 +150,14 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     },
     [],
   )
+
+  /** 小节自动聚焦（T3 决策 6）：滚动到第 m 小节所在行；谱面手动 wheel/拖动后
+   *  5 秒内让位不抢滚动（点击音符的 pointerdown 也会记时间戳——点哪儿哪儿就
+   *  在视口里，本就无需跟随）。稳定回调，rAF/回调路径可直接引用 */
+  const followMeasure = useCallback((m: number) => {
+    if (Date.now() - lastUserScrollRef.current < 5000) return
+    scoreRef.current?.scrollToMeasure(m)
+  }, [])
 
   // —— 装配：曲谱解析（恒速系，q 换算基准）+ beats.json + 伴奏解码 ——
   useEffect(() => {
@@ -216,6 +235,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     return () => {
       alive = false
       auditionSeqRef.current++
+      window.clearTimeout(nearHintTimerRef.current)
       audioEngine.pause()
     }
     // song 由路由参数派生，进入本页装配一次
@@ -230,7 +250,11 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     if (!div || !tl) return
     const osmd = new OSMDScore(div, song.accent)
     scoreRef.current = osmd
-    osmd.onMeasureChange = (m) => setCurMeasure(m)
+    // 小节号显示 + 播放中自动聚焦当前小节（T3 决策 6：rAF 回调路径，不 setState）
+    osmd.onMeasureChange = (m) => {
+      setCurMeasure(m)
+      if (audioEngine.playing) followMeasure(m)
+    }
     let cancelled = false
     osmd
       .load(xml, tl)
@@ -248,9 +272,26 @@ export default function SyncTunePage({ songId }: { songId: string }) {
       osmd.dispose()
       if (scoreRef.current === osmd) scoreRef.current = null
     }
-    // accent/xml 随曲目变化时重建
+    // accent/xml 随曲目变化时重建（followMeasure 为稳定回调）
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, xml, song.accent])
+  }, [phase, xml, song.accent, followMeasure])
+
+  // —— 谱面手动滚动让位（T3 决策 6）：滚动容器上的 wheel/pointerdown 记时间戳，
+  //  followMeasure 5 秒内据此跳过自动跟随，避免抢用户的滚动条 ——
+  useEffect(() => {
+    if (phase !== 'ready') return
+    const el = scoreSectionRef.current
+    if (!el) return
+    const mark = () => {
+      lastUserScrollRef.current = Date.now()
+    }
+    el.addEventListener('wheel', mark, { passive: true })
+    el.addEventListener('pointerdown', mark)
+    return () => {
+      el.removeEventListener('wheel', mark)
+      el.removeEventListener('pointerdown', mark)
+    }
+  }, [phase])
 
   // —— 控制点标记层：working/选中变化即重画（q 是谱面空间位置，微调 t 不动标记） ——
   useEffect(() => {
@@ -271,6 +312,23 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     })
     score.setMarkers(markers)
   }, [working, baseline, selView.note, markersReady, measureForQ, song.accent])
+
+  // —— 三向选中染色 + 小节聚焦（T3 决策 3/6）：谱面点击/列表/波形三入口都走
+  //  store 选中，此单一 effect 收口——选中变化 -> notehead 染 accent + 聚焦
+  //  所在小节；单音符 setColor，不重建标记层，无每帧 React 渲染 ——
+  useEffect(() => {
+    const score = scoreRef.current
+    if (!score || !markersReady) return
+    const n = selView.note
+    if (!n) {
+      score.highlightNoteAt(null)
+      return
+    }
+    const entry = measureTableRef.current.find((x) => x.m === n.measure)
+    if (!entry) return
+    score.highlightNoteAt(n.measure, (n.q - entry.quarters) / 4)
+    followMeasure(n.measure)
+  }, [selView.note, markersReady, followMeasure])
 
   // —— 波形派生缓存：working/baseline/选中变化时重建（订阅级，渲染外） ——
   useEffect(() => {
@@ -785,13 +843,22 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     listRef.current?.querySelector('[data-sel="1"]')?.scrollIntoView({ block: 'nearest' })
   }, [selectedIdx, filter])
 
-  /** 谱面点音符（三向同步之一）：noteAtPoint → 小节+小节内拍位 → 最近音符 */
+  /** 谱面点音符（三向同步之一）：noteAtPoint → 小节+小节内拍位 → 最近音符。
+   *  命中半径内无音符时 fallback 最近音符（OSMDScore 现有逻辑），距离 >120px
+   *  仍选最近并在右栏提示（T3 决策 4）；提示 5s 自动消隐，离散点击路径不进帧渲染 */
   const onScoreClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const hit = scoreRef.current?.noteAtPoint(e.clientX, e.clientY)
     if (!hit) return
     const entry = measureTableRef.current.find((x) => x.m === hit.measure)
     if (!entry) return
     cancelAudition()
+    window.clearTimeout(nearHintTimerRef.current)
+    if (hit.dist > 120) {
+      setNearHint(`已选最近音符（点击处 ${Math.round(hit.dist)}px 内无音符）`)
+      nearHintTimerRef.current = window.setTimeout(() => setNearHint(null), 5000)
+    } else {
+      setNearHint(null)
+    }
     st.getState().selectByQ(entry.quarters + hit.rvInMeasure * 4)
   }
 
@@ -917,7 +984,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
             </div>
           </aside>
 
-          <section className="st-score" onClick={onScoreClick}>
+          <section className="st-score" ref={scoreSectionRef} onClick={onScoreClick}>
             <div ref={scoreDivRef} className="st-score-container" />
           </section>
 
@@ -927,6 +994,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
                 <h3>
                   m{selView.note.measure} · {midiName(selView.note.midi)}
                 </h3>
+                {nearHint && <p className="st-near-hint">{nearHint}</p>}
                 <dl>
                   <dt>q（四分音符位）</dt>
                   <dd>{selView.note.q.toFixed(3)}</dd>

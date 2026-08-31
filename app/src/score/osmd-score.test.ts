@@ -18,6 +18,8 @@ class FakeCursor {
   nextCount = 0
   resetCount = 0
   colorLog: string[] = []
+  /** 可注入：当前光标下音符（T3 高亮共存测试用），缺省返回内置单音符（每次新建） */
+  notesUnder: { setColor: (c: string) => void; sourceNote: { isRest: () => boolean } }[] | null = null
 
   constructor(stops: number[]) {
     this.stops = stops
@@ -51,7 +53,11 @@ class FakeCursor {
   }
 
   GNotesUnderCursor(): { setColor: (c: string) => void; sourceNote: { isRest: () => boolean } }[] {
-    return [{ setColor: (c) => this.colorLog.push(c), sourceNote: { isRest: () => false } }]
+    return (
+      this.notesUnder ?? [
+        { setColor: (c) => this.colorLog.push(c), sourceNote: { isRest: () => false } },
+      ]
+    )
   }
 }
 
@@ -175,5 +181,140 @@ describe('OSMDScore 音值感知光标推进', () => {
     s2.setMarkers([])
     expect(container.querySelector('.sync-marker-layer')).toBeNull()
     s2.dispose()
+  })
+})
+
+// -- T3：选中染色 / 小节聚焦 / 命中距离（fake MeasureList 几何，happy-dom 不真渲染 OSMD）--
+/** 可断言染色历史的 GraphicalNote 替身 */
+type FakeGNote = {
+  colors: string[]
+  setColor: (c: string) => void
+  sourceNote: { isRest: () => boolean }
+}
+function mkGNote(): FakeGNote {
+  const colors: string[] = []
+  return { colors, setColor: (c) => colors.push(c), sourceNote: { isRest: () => false } }
+}
+/** 单小节假几何：staffEntry 相对 x = rv*4（OSMD 单位），y/w/h 与真实谱面同量级 */
+function fakeMeasure(num: number, entries: { rv: number; note: FakeGNote }[]) {
+  return {
+    MeasureNumber: num,
+    PositionAndShape: {
+      AbsolutePosition: { x: num * 10, y: 20 },
+      Size: { width: 8, height: 6 },
+    },
+    staffEntries: entries.map((e) => ({
+      PositionAndShape: { AbsolutePosition: { x: e.rv * 4 } },
+      sourceStaffEntry: { Timestamp: { RealValue: e.rv } },
+      graphicalVoiceEntries: [{ notes: [e.note] }],
+    })),
+  }
+}
+/** 带假 MeasureList 与容器内 svg 的 OSMDScore（不 load，几何方法直接可用） */
+function makeGeomScore(ml: unknown[][]): {
+  score: OSMDScore
+  cursor: FakeCursor
+  container: HTMLElement
+} {
+  const cursor = new FakeCursor([0, 1])
+  const container = document.createElement('div')
+  container.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
+  const score = new OSMDScore(
+    container,
+    '#3ddfae',
+    {
+      load: async () => {},
+      render: () => {},
+      cursor,
+      GraphicSheet: { MeasureList: ml },
+    } as unknown as OpenSheetMusicDisplay,
+  )
+  return { score, cursor, container }
+}
+
+describe('OSMDScore T3 选中染色与小节聚焦', () => {
+  // m1 两个 staffEntry（rv 0 / 0.25 -> 音符 A / B），m2 一个（rv 0 -> C）
+  const A = mkGNote()
+  const B = mkGNote()
+  const C = mkGNote()
+  const ml = [
+    [fakeMeasure(1, [
+      { rv: 0, note: A },
+      { rv: 0.25, note: B },
+    ]), fakeMeasure(2, [{ rv: 0, note: C }])],
+  ]
+  const BASE = '#e8e8e2'
+
+  it('highlightNoteAt：选中 notehead 染 accent，切换时旧选中恢复白', () => {
+    const { score } = makeGeomScore(ml)
+    score.highlightNoteAt(1, 0.25)
+    expect(B.colors.at(-1)).toBe('#3ddfae')
+    score.highlightNoteAt(2, 0)
+    expect(B.colors.at(-1)).toBe(BASE) // 旧选中恢复 baseNoteColor
+    expect(C.colors.at(-1)).toBe('#3ddfae')
+  })
+
+  it('highlightNoteAt(null)：清除选中恢复白，未选中的不动', () => {
+    const { score } = makeGeomScore(ml)
+    score.highlightNoteAt(1, 0.25)
+    score.highlightNoteAt(null)
+    expect(B.colors.at(-1)).toBe(BASE)
+    expect(A.colors).toEqual([]) // 从未被染色
+  })
+
+  it('与光标高亮共存：光标离开选中音不褪色，清除选中不影响光标音', () => {
+    const { score, cursor } = makeGeomScore(ml)
+    cursor.stops = [0, 1, 2] // 需要第二个可推进停靠点（stop2 时间 = 8*SPQ）
+    cursor.notesUnder = [A]
+    score.syncToTime(4 * SPQ) // 光标推进 -> A 染 accent
+    expect(A.colors.at(-1)).toBe('#3ddfae')
+    score.highlightNoteAt(1, 0) // 选中同为 A
+    cursor.notesUnder = [C]
+    score.syncToTime(8 * SPQ) // 光标移走：A 仍是选中持有者，保持 accent
+    expect(A.colors.at(-1)).toBe('#3ddfae')
+    expect(C.colors.at(-1)).toBe('#3ddfae')
+    score.highlightNoteAt(null) // 清除选中：A 恢复白，光标音 C 不动
+    expect(A.colors.at(-1)).toBe(BASE)
+    expect(C.colors.at(-1)).toBe('#3ddfae')
+  })
+
+  it('noteAtPoint：返回与最近音符的欧氏距离', () => {
+    const { score } = makeGeomScore(ml)
+    // svgRect 全零（happy-dom）：行 y=200..260px，点击 (150,230) 在行内（dy=0）；
+    // m1 x=100px，staffEntry rv0/rv0.25 -> x=100/110px，最近为 rv0.25（dx=40）
+    const hit = score.noteAtPoint(150, 230)
+    expect(hit?.measure).toBe(1)
+    expect(hit?.rvInMeasure).toBe(0.25)
+    expect(hit?.dist).toBeCloseTo(40, 5)
+    // 行外点击：dy 叠入距离（y=80 -> dy=120，dist=hypot(40,120)）
+    const far = score.noteAtPoint(150, 80)
+    expect(far?.dist).toBeCloseTo(Math.hypot(40, 120), 5)
+  })
+
+  it('scrollToMeasure：滚动祖先 scrollTop 定位到小节行中部；未知小节 no-op', () => {
+    const scroller = document.createElement('div')
+    scroller.style.overflowY = 'auto'
+    const cursor = new FakeCursor([0, 1])
+    const container = document.createElement('div')
+    container.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
+    scroller.appendChild(container)
+    document.body.appendChild(scroller)
+    const score = new OSMDScore(
+      container,
+      '#3ddfae',
+      {
+        load: async () => {},
+        render: () => {},
+        cursor,
+        GraphicSheet: { MeasureList: ml },
+      } as unknown as OpenSheetMusicDisplay,
+    )
+    // m2：y=20 单位 * unitPx10 = 200px，h=60px -> 行中心 200+30
+    score.scrollToMeasure(2)
+    const expected = 230 - scroller.clientHeight / 2
+    expect(scroller.scrollTop).toBe(expected)
+    score.scrollToMeasure(99) // 未知小节：不抛、不动
+    expect(scroller.scrollTop).toBe(expected)
+    document.body.removeChild(scroller)
   })
 })

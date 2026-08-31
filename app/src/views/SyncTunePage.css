@@ -328,6 +328,12 @@
   font-size: 11px;
   color: #ffb26b;
 }
+/* 命中距离提示（T3）：点谱面 120px 内无音符、仍选最近时右栏提示 */
+.st-near-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #ffb26b;
+}
 .st-btn-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
