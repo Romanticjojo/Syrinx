@@ -92,6 +92,15 @@ const IN_TUNE_CENTS = 50
 const ONSET_SKIP = 0.15
 const OFFSET_SKIP = 0.1
 
+/** 截断时间轴：只保留 time < stopSec 的音符（停止演奏的统计口径，t_53aa8b7a）。
+ *  stopSec = Take 封存时的 audioEngine.time（绝对停止时刻）：自然结束 ≈ 全曲时长
+ *  （不早于 durationSec 时返回原引用零开销）；停止演奏 = 点击时刻，之后的音符
+ *  未被演奏，不进命中率/漏音统计。 */
+export function timelineUpTo(timeline: Timeline, stopSec: number): Timeline {
+  if (!Number.isFinite(stopSec) || stopSec >= timeline.durationSec) return timeline
+  return { ...timeline, notes: timeline.notes.filter((n) => n.time < stopSec) }
+}
+
 export function scoreAgainst(track: PitchPoint[], timeline: Timeline): ScoreResult {
   const notes: NoteScore[] = timeline.notes.map((note) => {
     const targetHz = midiToHz(note.midi)

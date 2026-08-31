@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Timeline } from '../types'
-import { extractPitchTrack, scoreAgainst } from './compare'
+import { extractPitchTrack, scoreAgainst, timelineUpTo } from './compare'
 
 const SR = 44100
 
@@ -107,5 +107,30 @@ describe('scoreAgainst', () => {
     expect(r.notes[1].measuredHz).toBeNull()
     expect(r.stats.noteCount).toBe(0)
     expect(r.stats.inTuneRatio).toBe(0)
+  })
+})
+
+describe('timelineUpTo（停止演奏截断口径）', () => {
+  it('停止时刻在中段：只保留 time < stopSec 的音符', () => {
+    const t = timelineUpTo(timeline, 1.5)
+    expect(t.notes.map((n) => n.midi)).toEqual([69, 60])
+  })
+
+  it('停止时刻不晚于首音符起点：音符清空（不抛异常）', () => {
+    const t = timelineUpTo(timeline, 0)
+    expect(t.notes).toEqual([])
+  })
+
+  it('停止时刻不早于全曲时长：返回原引用（自然结束零开销不截断）', () => {
+    expect(timelineUpTo(timeline, 3)).toBe(timeline)
+    expect(timelineUpTo(timeline, 99)).toBe(timeline)
+  })
+
+  it('与 scoreAgainst 组合：截断后第三秒音符不进统计', () => {
+    // stopSec=2.0（第三音符 2.0s 起未被演奏）：只留前两个音符
+    const r = scoreAgainst(extractPitchTrack(makeBuffer()), timelineUpTo(timeline, 2))
+    expect(r.notes).toHaveLength(2)
+    expect(r.notes.map((n) => n.note.midi)).toEqual([69, 60])
+    expect(r.stats.noteCount).toBeLessThanOrEqual(2)
   })
 })
