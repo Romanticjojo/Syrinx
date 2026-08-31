@@ -7,9 +7,10 @@ const STEP_SEMITONE: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A:
  * 反复记号展开：把 forward→backward 之间的段落复制成实体小节，光标/高亮即可线性走谱。
  * 为什么展开而不是让光标跳：OSMD cursor iterator 默认不跳 repeat，跳段需要自定义路径，
  * 且展开后 timeline 小节序与谱面渲染序一一对应，音符变色（accent 高亮）顺序天然一致。
- * 约定：单层反复、每段演奏两遍（标准写法）；检测到 D.C./D.S./Coda 不支持，原样返回。
- * luv-letter 的伴奏经时长论证为线性覆盖版（反复段按印刷顺序物化为独立小节，
- * 73 小节完整谱，t_d02450b9），谱面无 repeat 标记，本函数对其是 no-op。
+ * 约定：单层反复、每段演奏两遍（标准写法）；支持 volta（ending 一房/二房，第二遍
+ * 跳过一房子整块）；检测到 D.C./D.S./Coda 不支持，原样返回。
+ * luv-letter Soundslice 精校谱（t_76c0cbff）带 7 对反复记号 + volta，由本函数物化成
+ * 播放序线性谱；beats.json v3 锚点按展开后小节序标定（离线 DTW，omr-work/t_76c0cbff/）。
  */
 export function expandRepeats(xml: string): string {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
@@ -24,7 +25,7 @@ export function expandRepeats(xml: string): string {
   let expandedAny = false
   for (const part of parts) {
     const measures = Array.from(part.querySelectorAll('measure'))
-    // 每小节标记：右 barline 上的 forward / backward repeat
+    // 每小节标记：右 barline 上的 forward / backward repeat + volta（ending）起止
     const hasForward = measures.map(
       (m) => !!Array.from(m.querySelectorAll('barline repeat')).find((r) => r.getAttribute('direction') === 'forward'),
     )
@@ -32,20 +33,61 @@ export function expandRepeats(xml: string): string {
       (m) => !!Array.from(m.querySelectorAll('barline repeat')).find((r) => r.getAttribute('direction') === 'backward'),
     )
     if (!hasBackward.some(Boolean)) continue
+    // volta：小节左 barline 的 ending start（number 可为 "1" / "1, 2"）与其 stop 所在小节
+    const endingStart = measures.map((m) => {
+      const el = Array.from(m.querySelectorAll('barline ending')).find((e) => e.getAttribute('type') === 'start')
+      if (!el) return null
+      return (el.getAttribute('number') ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    })
+    const endingStopOf = new Map<number, number>() // ending start 小节 → stop 所在小节
+    measures.forEach((m, idx) => {
+      const stop = Array.from(m.querySelectorAll('barline ending')).find((e) => e.getAttribute('type') === 'stop')
+      if (!stop) return
+      // 向前找最近的、尚未配对的同号 start
+      const num = stop.getAttribute('number') ?? ''
+      for (let k = idx; k >= 0; k--) {
+        if (endingStart[k]?.includes(num) && !endingStopOf.has(k)) {
+          endingStopOf.set(k, idx)
+          break
+        }
+      }
+    })
 
-    // 模拟演奏序：遇到未跳过的 backward 回退到最近的 forward（没有则回开头），每处最多跳一次
+    // 模拟演奏序：遇到未跳过的 backward 回退到最近的 forward（没有则回开头），每处最多跳一次；
+    // volta（ending）：第二遍起，遍数不在 bracket number 列表内的小节块整块跳过（一房子只奏一遍）
     const order: number[] = []
     const jumped = new Set<number>()
     const forwardStack: number[] = []
+    const passOf = new Map<number, number>() // 段落起点小节 → 当前遍数（1 起）
+    let pass = 1 // 当前所在段落的遍数（无 forward 记号时兜底）
     let i = 0
     let guard = 0
     while (i < measures.length && guard < measures.length * 4) {
       guard++
+      // 遍数不匹配的 volta 块：跳到 stop 之后继续
+      if (endingStart[i] && !endingStart[i]!.includes(String(pass))) {
+        const stopAt = endingStopOf.get(i)
+        if (stopAt !== undefined) {
+          i = stopAt + 1
+          continue
+        }
+      }
       order.push(i)
-      if (hasForward[i]) forwardStack.push(i)
+      if (hasForward[i]) {
+        if (forwardStack.length === 0 || forwardStack[forwardStack.length - 1] !== i) forwardStack.push(i)
+        if (!passOf.has(i)) passOf.set(i, 1)
+        pass = passOf.get(i)!
+      }
       if (hasBackward[i] && !jumped.has(i)) {
         jumped.add(i)
-        i = forwardStack.length > 0 ? (forwardStack.pop() as number) : 0
+        const f = forwardStack.length > 0 ? (forwardStack.pop() as number) : 0
+        const next = (passOf.get(f) ?? 1) + 1
+        passOf.set(f, next)
+        pass = next
+        i = f
         continue
       }
       i++
@@ -54,12 +96,13 @@ export function expandRepeats(xml: string): string {
     // 无实际反复（backward 都没生效）则不动
     if (order.length === measures.length) continue
 
-    // 按演奏序重建小节：克隆 + 顺序重编号 + 摘除 repeat 标记（语义已物化）
+    // 按演奏序重建小节：克隆 + 顺序重编号 + 摘除 repeat/ending 标记（volta 语义已物化，
+    // 展开 OSMD 渲染线性谱；ending 不摘会在展开谱上残留volta括号）
     const frag = doc.createDocumentFragment()
     order.forEach((idx, seq) => {
       const clone = measures[idx].cloneNode(true) as Element
       clone.setAttribute('number', String(seq + 1))
-      clone.querySelectorAll('repeat').forEach((r) => r.remove())
+      clone.querySelectorAll('repeat, ending').forEach((r) => r.remove())
       frag.appendChild(clone)
     })
     measures.forEach((m) => m.remove())

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { applyBeats, type BeatsFile } from './anchors'
-import { parseMusicXml } from './musicxml'
+import { expandRepeats, parseMusicXml } from './musicxml'
 
 /** 最小时间轴替身：3 小节 4/4，假 tempo=50（m2 起换 100 模拟假变速） */
 const FAKE_XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -75,25 +75,40 @@ describe('applyBeats 伴奏锚点重写', () => {
     expect(applyBeats(tl, beats)).toBe(tl)
   })
 
-  it('luv-letter 真实数据：73 小节锚点落地，m1≈0.2s、m73≈256s（t_d02450b9）', () => {
-    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8')
+  it('luv-letter 真实数据：Soundslice 精校谱 + v3 锚点（97 播放序）落地（t_76c0cbff）', () => {
+    // 新谱带反复记号：与应用 loadSong 一致，先 expandRepeats 再 parse → applyBeats
+    const raw = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8').replace(
+      /^<\?xml[^>]*\?>/,
+      (m) => m.replace(/'/g, '"'),
+    )
     const beats = JSON.parse(
       readFileSync('public/songs/luv-letter/beats.json', 'utf-8'),
     ) as BeatsFile
-    expect(beats.anchors).toHaveLength(73)
-    const out = applyBeats(parseMusicXml(xml), beats)
+    // v3：锚点按展开后播放序 1..97 标定，严格递增、无负值
+    expect(beats.version).toBe(3)
+    expect(beats.anchors).toHaveLength(97)
+    const ts = beats.anchors.map((a) => a.t)
+    expect(ts[0]).toBeGreaterThanOrEqual(0)
+    for (const [i, t] of ts.entries()) {
+      if (i === 0) continue
+      expect(t, `anchor#${i + 1}`).toBeGreaterThan(ts[i - 1])
+    }
+    const out = applyBeats(parseMusicXml(expandRepeats(raw)), beats)
     expect(out.tempo).toBe(90)
+    expect(out.measureTimes).toHaveLength(98) // 97 播放小节 + 终点标记
     expect(out.measureTimes[0].time).toBeCloseTo(beats.anchors[0].t, 2)
-    expect(out.measureTimes[72].time).toBeCloseTo(beats.anchors[72].t, 2)
+    expect(out.measureTimes[96].time).toBeCloseTo(beats.anchors[96].t, 2)
     // 终点标记：末锚点 + 4 拍 @90bpm 外推
-    expect(out.measureTimes[73].time).toBeCloseTo(beats.anchors[72].t + 4 * (60 / 90), 2)
-    // durationSec 同步重映射到锚定系（t_d02450b9）：否则恒速网格旧值（≈194.7s）
-    // 会让演奏主循环在 ~197s 提前判定结束
-    expect(out.durationSec).toBeCloseTo(beats.anchors[72].t + 4 * (60 / 90), 2)
-    // 音符重映射后不早于其小节锚点（抽查补全小节 m62 与末小节 m73）
-    for (const mno of [62, 73]) {
+    expect(out.measureTimes[97].time).toBeCloseTo(beats.anchors[96].t + 4 * (60 / 90), 2)
+    // durationSec 同步重映射到锚定系（否则恒速网格旧值会让主循环提前结束）
+    expect(out.durationSec).toBeGreaterThanOrEqual(beats.anchors[96].t)
+    // 抽查印谱 m36（播放序 46）与 m70 首遍（播放序 92）：锚点值原样落地
+    expect(out.measureTimes[45].time).toBeCloseTo(beats.anchors[45].t, 2)
+    expect(out.measureTimes[91].time).toBeCloseTo(beats.anchors[91].t, 2)
+    // 音符重映射后不早于其小节锚点（抽查 m36 / m70 / 末小节 m72 播放序 97）
+    for (const mno of [46, 92, 97]) {
       const ns = out.notes.filter((n) => n.measure === mno)
-      expect(ns.length).toBeGreaterThan(0)
+      expect(ns.length, `m${mno}`).toBeGreaterThan(0)
       expect(Math.min(...ns.map((n) => n.time))).toBeGreaterThanOrEqual(
         out.measureTimes[mno - 1].time - 0.01,
       )

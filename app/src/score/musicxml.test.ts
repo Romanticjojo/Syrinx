@@ -101,8 +101,12 @@ describe('parseMusicXml', () => {
     expect(t.durationSec).toBeGreaterThan(30)
   })
 
-  it('解析 luv-letter Song Pack 曲谱（正式曲目接入格式）', () => {
-    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8')
+  it('解析 luv-letter Song Pack 曲谱（Soundslice 精校谱，t_76c0cbff）', () => {
+    // happy-dom 不支持单引号属性（浏览器/Electron 原生 DOMParser 无此问题），读取时归一化
+    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8').replace(
+      /^<\?xml[^>]*\?>/,
+      (m) => m.replace(/'/g, '"'),
+    )
     const t = parseMusicXml(xml)
     expect(t.notes.length).toBeGreaterThan(0)
     expect(t.measureTimes.length).toBeGreaterThan(0)
@@ -147,9 +151,47 @@ describe('expandRepeats 反复展开', () => {
     expect(expanded).not.toContain('<repeat')
   })
 
-  it('无反复的谱原样返回（luv-letter 清洗谱 no-op）', () => {
-    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8')
-    expect(expandRepeats(xml)).toBe(xml)
+  it('luv-letter 精校谱展开后无 repeat/ending 残留（volta 语义已物化，t_76c0cbff）', () => {
+    // happy-dom 不支持单引号属性（浏览器/Electron 原生 DOMParser 无此问题），读取时归一化
+    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8').replace(
+      /^<\?xml[^>]*\?>/,
+      (m) => m.replace(/'/g, '"'),
+    )
+    const expanded = expandRepeats(xml)
+    expect(expanded).not.toContain('<repeat')
+    expect(expanded).not.toContain('<ending')
+  })
+
+  /** volta 结构：|: C |1 D :|2 E（一房子 m2、二房子 m3），对齐 luv-letter 新谱的 ending 写法 */
+  const VOLTA_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <barline location="left"><repeat direction="forward"/></barline>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <barline location="left"><ending number="1" type="start"/></barline>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+      <barline location="right"><ending number="1" type="stop"/><repeat direction="backward"/></barline>
+    </measure>
+    <measure number="3">
+      <barline location="left"><ending number="2" type="start"/></barline>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+      <barline location="right"><ending number="2" type="stop"/></barline>
+    </measure>
+  </part>
+</score-partwise>`
+
+  it('volta 一房/二房：第二遍跳过一房子直接进二房子（A B A C）', () => {
+    const expanded = expandRepeats(VOLTA_XML)
+    const tl = parseMusicXml(expanded)
+    // C D C E：演奏序 4 小节（+终点标记），一房子 D 只奏一遍
+    expect(tl.measureTimes.filter((m) => !m.end).map((m) => m.measure)).toEqual([1, 2, 3, 4])
+    expect(tl.notes.map((n) => n.midi)).toEqual([72, 74, 72, 76])
+    expect(expanded).not.toContain('<repeat')
   })
 
   it('含 D.C. 的谱不支持展开，原样返回', () => {
