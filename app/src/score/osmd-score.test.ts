@@ -318,3 +318,17 @@ describe('OSMDScore T3 选中染色与小节聚焦', () => {
     document.body.removeChild(scroller)
   })
 })
+
+describe('OSMDScore zoom（谱面缩窄，t_53aa8b7a）', () => {
+  it('构造时写入 OSMD 实例（渲染前设置安全）', () => {
+    const fake = makeFakeOsmd(new FakeCursor([0, 1]))
+    new OSMDScore(document.createElement('div'), '#3ddfae', fake, 1.15)
+    expect((fake as unknown as { Zoom: number }).Zoom).toBe(1.15)
+  })
+
+  it('缺省 zoom=1：不改变现有几何口径（unitPx=10×Zoom）', () => {
+    const fake = makeFakeOsmd(new FakeCursor([0, 1]))
+    new OSMDScore(document.createElement('div'), '#3ddfae', fake)
+    expect((fake as unknown as { Zoom: number }).Zoom).toBe(1)
+  })
+})

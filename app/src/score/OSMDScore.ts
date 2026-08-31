@@ -55,7 +55,13 @@ export class OSMDScore {
   private markerEls = new Map<string, HTMLDivElement>()
   private markerLayer: HTMLElement | null = null
 
-  constructor(container: HTMLElement, accent = '#3ddfae', osmdInstance?: OpenSheetMusicDisplay) {
+  constructor(
+    container: HTMLElement,
+    accent = '#3ddfae',
+    osmdInstance?: OpenSheetMusicDisplay,
+    /** 谱面缩放（t_53aa8b7a）：配合容器 max-width 减少每行小节数，缺省 1 不改变现状 */
+    zoom = 1,
+  ) {
     this.containerEl = container
     this.accent = accent
     this.baseNoteColor = '#e8e8e2' // 暗底下降一档对比：纯白刺眼（t_3b9cfc25）
@@ -81,6 +87,9 @@ export class OSMDScore {
       ],
     })
     this.osmd.FollowCursor = true
+    // Zoom 在 load/render 前设置（setter 只存值+置脏标，可选链保护未初始化状态）；
+    // noteAtPoint/setMarkers 的 unitPx=10×Zoom 已随动，几何自洽
+    this.osmd.Zoom = zoom
   }
 
   /** 恢复一个高亮音符的底色；若同时被另一持有者（选中/光标）持有则保持 accent（T3） */

@@ -11,10 +11,12 @@ interface Props {
   /** 小节变化回调：随实例一起挂/摘（实例在本组件内创建，挂接放这里才不会
       错过 StrictMode remount 换出来的新实例——演奏页侧挂会扑空，t_b22f5467 项 3） */
   onMeasureChange?: (measure: number, total: number) => void
+  /** 谱面缩放（配合容器限宽调整每行小节数，默认 1） */
+  zoom?: number
 }
 
 /** 谱面容器：挂载 OSMDScore，负责加载/重渲染生命周期 */
-export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef, onMeasureChange }: Props) {
+export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef, onMeasureChange, zoom = 1 }: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const osmdRef = useRef<OSMDScore | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -22,7 +24,7 @@ export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef
   // 创建实例（每曲一次）
   useEffect(() => {
     if (!divRef.current) return
-    const osmd = new OSMDScore(divRef.current, accent)
+    const osmd = new OSMDScore(divRef.current, accent, undefined, zoom)
     osmdRef.current = osmd
     if (scoreRef) scoreRef.current = osmd
     if (onMeasureChange) osmd.onMeasureChange = onMeasureChange
@@ -33,7 +35,7 @@ export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef
       if (scoreRef) scoreRef.current = null
     }
     // accent 变化意味着换曲，需要重建
-  }, [accent, scoreRef, onMeasureChange])
+  }, [accent, scoreRef, onMeasureChange, zoom])
 
   // 加载曲谱
   useEffect(() => {

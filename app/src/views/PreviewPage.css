@@ -305,6 +305,11 @@
   align-items: center;
   justify-content: space-between;
 }
+/* 谱面缩窄（t_53aa8b7a）：与演奏页同口径（预览容器外距已收窄一档） */
+.score-section .sheet-container {
+  max-width: min(820px, 100%);
+  margin-inline: auto;
+}
 .score-load-error {
   color: var(--ink-dim);
   font-size: 13px;
