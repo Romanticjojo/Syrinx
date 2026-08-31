@@ -26,8 +26,38 @@
   background: linear-gradient(rgba(14, 14, 14, 0.92), rgba(14, 14, 14, 0.4) 70%, transparent);
 }
 .result-topbar .logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--serif);
+  font-size: 19px;
   font-weight: 700;
-  font-size: 17px;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+.result-topbar .logo img {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--circ);
+  border: 1px solid var(--line-strong);
+}
+.result-topbar .back-ghost {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  background: rgba(11, 12, 12, 0.32);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.result-topbar .back-ghost:hover {
+  border-color: var(--ink-dim);
+  background: rgba(11, 12, 12, 0.5);
 }
 
 .result-hero {

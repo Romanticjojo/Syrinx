@@ -5,6 +5,7 @@ import PlaybackDeck from '../components/PlaybackDeck'
 import PitchChart from '../components/PitchChart'
 import { extractPitchTrack, scoreAgainst, type ScoreResult } from '../pitch/compare'
 import { getSong, loadSong, SONGS } from '../songs'
+import { assetUrl } from '../lib/assetUrl'
 import { useAppStore } from '../store'
 import './ResultPage.css'
 
@@ -166,11 +167,21 @@ export default function ResultPage() {
   return (
     <main className="result" style={{ '--song-accent': song.accent } as React.CSSProperties}>
       <header className="result-topbar">
-        <button className="back-pill" onClick={() => go('home')} aria-label="返回曲库">
-          ‹
+        <button className="back-ghost" onClick={() => go('home')} aria-label="返回曲库">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <path
+              d="M10 3 5 8l5 5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
         <div className="logo">
-          Syrinx<i style={{ fontStyle: 'normal', color: song.accent }}>·</i>长笛流光
+          <img src={assetUrl('/brand/syrinx-logo-white.jpg')} alt="" aria-hidden="true" />
+          Syrinx
         </div>
       </header>
 
