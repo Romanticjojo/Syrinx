@@ -1,20 +1,27 @@
 /**
  * 麦克风会话封装：getUserMedia（关闭回声消除/降噪/自动增益，保留原始
- * 音高信息供 YIN 分析）+ 两条支路：
- * - 分析流：MediaStreamSource（挂在主 AudioContext 上，与伴奏同一时钟域，
- *   避免双上下文漂移）→ AnalyserNode，getFloatTimeDomainData 逐帧喂 YIN。
- *   演奏全程保持开启，不受录音开关影响。
- * - 写入流：MediaRecorder 分片落 blob；暂停伴奏 ⟺ 暂停写入（录制内容与
- *   伴奏时间轴严格对齐），恢复播放 ⟺ 继续写入；关掉开关 ⟺ 丢弃整段。
+ * 音高信息供 YIN 分析）+ 两条支路，共享同一个 MediaStreamAudioSourceNode：
+ * - 分析流：source -> AnalyserNode（挂主 AudioContext，与伴奏同一时钟域），
+ *   getFloatTimeDomainData 逐帧喂 YIN。演奏全程保持开启，不受录音开关影响。
+ * - 写入流（t_静音修复）：source -> 直采节点（AudioWorklet 优先，旧浏览器回退
+ *   ScriptProcessorNode），PCM Float32 分片经 MessagePort 回主线程收集。
+ *   与分析支路同源同节点--分析听得到就一定录得到；此前 MediaRecorder 写入
+ *   支路在部分环境产出全静音 blob（音高图为空、下载无声），故弃用。
+ *   stop() 时拼接分片、RMS 诊断（整段≈0 打 warn 并带 silent 标记）、
+ *   重采样 32kHz 单声道后 encodeWav。
  *
+ * 暂停/恢复/重开/丢弃语义与旧 MediaRecorder 版一致（MicSession 契约不变）。
  * stop() 定稿采集并释放音轨（共享上下文不关闭）；release() 用于中途退出，
  * 丢弃一切且不产出 blob。
  */
+import { buildRecordingWav } from './pcm'
 
 export interface RecordingResult {
   blob: Blob
   url: string
   mime: string
+  /** 整段 RMS 接近 0（疑似麦克风静音）的诊断标记，上层可提示 */
+  silent: boolean
 }
 
 export interface MicSession {
@@ -38,23 +45,117 @@ export interface MicSession {
   release(): void
 }
 
-/** 探测当前浏览器可用的录音容器（webm 优先，Safari 回退 mp4） */
-function pickMime(): string {
-  if (typeof MediaRecorder === 'undefined') throw new Error('该浏览器不支持 MediaRecorder 录音')
-  return MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+/** AudioWorklet 处理器源码（内联字符串 + Blob URL 注册，避免打包器路径问题）。
+ *  主线程 gate 消息控制写入开关；分片回传带段 id，旧段在途分片在主线程作废。 */
+const WORKLET_SRC = `
+class MicTapProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super()
+    this.gateOn = false
+    this.id = -1
+    this.port.onmessage = (e) => {
+      if (e.data && e.data.type === 'gate') {
+        this.gateOn = e.data.on
+        this.id = e.data.id
+      }
+    }
+  }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0]
+    if (ch && this.gateOn) {
+      const copy = new Float32Array(ch)
+      this.port.postMessage({ id: this.id, pcm: copy }, [copy.buffer])
+    }
+    return true
+  }
+}
+registerProcessor('mic-tap', MicTapProcessor)
+`
+
+/** 直采节点统一门控接口（worklet 与 fallback 同构） */
+interface Tap {
+  /** 开/关写入（on=false 时样本直接丢弃，等价 MediaRecorder pause 语义） */
+  setGate(on: boolean, id: number): void
+  /** 断开 source 连接并释放节点 */
+  dispose(): void
 }
 
-/** 一段进行中的采集：写入器 + 累积分片 */
-interface Capture {
-  rec: MediaRecorder
-  chunks: Blob[]
+/** 已注册过 mic-tap 模块的上下文（同上下文重复 addModule 会抛异常） */
+const workletReady = new WeakSet<AudioContext>()
+
+/** AudioWorklet 直采节点；注册失败抛异常由调用方回退 */
+async function createWorkletTap(
+  ctx: AudioContext,
+  source: AudioNode,
+  onChunk: (id: number, pcm: Float32Array) => void,
+): Promise<Tap> {
+  if (!workletReady.has(ctx)) {
+    const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'application/javascript' }))
+    try {
+      await ctx.audioWorklet.addModule(url)
+    } finally {
+      URL.revokeObjectURL(url)
+    }
+    workletReady.add(ctx)
+  }
+  const node = new AudioWorkletNode(ctx, 'mic-tap', { numberOfInputs: 1, numberOfOutputs: 0 })
+  node.port.onmessage = (e: MessageEvent<{ id: number; pcm: Float32Array }>) => onChunk(e.data.id, e.data.pcm)
+  source.connect(node)
+  return {
+    setGate: (on, id) => void node.port.postMessage({ type: 'gate', on, id }),
+    dispose: () => {
+      node.port.onmessage = null
+      node.port.close()
+      try {
+        source.disconnect(node)
+      } catch {
+        // 未连接时 disconnect 抛异常，忽略
+      }
+      node.disconnect()
+    },
+  }
+}
+
+/** ScriptProcessorNode 回退：必须接 destination 才跑，经零增益接地（不外放） */
+function createFallbackTap(
+  ctx: AudioContext,
+  source: AudioNode,
+  onChunk: (id: number, pcm: Float32Array) => void,
+): Tap {
+  const sp = ctx.createScriptProcessor(4096, 1, 1)
+  const mute = ctx.createGain()
+  mute.gain.value = 0
+  sp.connect(mute)
+  mute.connect(ctx.destination)
+  source.connect(sp)
+  let gateOn = false
+  let id = -1
+  sp.onaudioprocess = (e) => {
+    if (!gateOn) return
+    onChunk(id, new Float32Array(e.inputBuffer.getChannelData(0)))
+  }
+  return {
+    setGate: (on, nextId) => {
+      gateOn = on
+      id = nextId
+    },
+    dispose: () => {
+      sp.onaudioprocess = null
+      try {
+        source.disconnect(sp)
+      } catch {
+        // 未连接时 disconnect 抛异常，忽略
+      }
+      sp.disconnect()
+      mute.disconnect()
+    },
+  }
 }
 
 export async function openMic(ctx: AudioContext): Promise<MicSession> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('该环境不支持麦克风采集')
   }
-  const mime = pickMime()
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: {
       echoCancellation: false,
@@ -70,26 +171,40 @@ export async function openMic(ctx: AudioContext): Promise<MicSession> {
   source.connect(analyser)
   const frameBuf = new Float32Array(analyser.fftSize)
 
-  // 写入支路
-  let cap: Capture | null = null
-  const makeCapture = (): Capture => {
-    const rec = new MediaRecorder(stream, { mimeType: mime })
-    const chunks: Blob[] = []
-    rec.ondataavailable = (e) => {
-      if (e.data.size) chunks.push(e.data)
-    }
-    rec.start(250)
-    return { rec, chunks }
+  // 写入支路：收集当前段分片（id 作废旧段在途分片）；gate 由采集语义驱动
+  let chunks: Float32Array[] = []
+  let captureId = -1 // -1 = 无进行中的段
+  const onChunk = (id: number, pcm: Float32Array) => {
+    if (id === captureId && id >= 0) chunks.push(pcm)
   }
-  /** 丢弃一段采集（分片引用一并作废，onstop 事件不再写入） */
-  const killCapture = (c: Capture): void => {
-    c.rec.ondataavailable = null
-    c.rec.onerror = null
-    try {
-      if (c.rec.state !== 'inactive') c.rec.stop()
-    } catch {
-      // 已停止的写入器再 stop 会抛异常，忽略
+
+  // AudioWorklet 优先（无静音修复问题、主线程外采集）；注册失败回退 ScriptProcessor
+  let tap: Tap
+  try {
+    tap = await createWorkletTap(ctx, source, onChunk)
+  } catch {
+    tap = createFallbackTap(ctx, source, onChunk)
+  }
+
+  const releaseTracks = () => stream.getTracks().forEach((t) => t.stop())
+
+  const finalize = (): RecordingResult => {
+    const collected = chunks
+    chunks = []
+    captureId = -1
+    if (!collected.length) {
+      // 一分片都没到（极少见：stop 早于首个回调）--产出空 WAV 保持契约
+      const blob = new Blob()
+      return { blob, url: URL.createObjectURL(blob), mime: 'audio/wav', silent: false }
     }
+    const { blob, silent } = buildRecordingWav(collected, ctx.sampleRate)
+    if (silent) {
+      // 诊断输出：写入支路本身有产出但电平≈0，说明输入源静音（静音表/系统输入）
+      console.warn(
+        `[recorder] 录音整段 RMS < 1e-4（疑似静音）：${collected.length} 分片，请检查麦克风输入`,
+      )
+    }
+    return { blob, url: URL.createObjectURL(blob), mime: 'audio/wav', silent }
   }
 
   return {
@@ -100,53 +215,31 @@ export async function openMic(ctx: AudioContext): Promise<MicSession> {
       return frameBuf
     },
     restartCapture() {
-      if (cap) killCapture(cap)
-      cap = makeCapture()
+      chunks = []
+      captureId += 1
+      tap.setGate(true, captureId)
     },
     pauseCapture() {
-      if (cap && cap.rec.state === 'recording') cap.rec.pause()
+      tap.setGate(false, captureId)
     },
     resumeCapture() {
-      if (cap && cap.rec.state === 'paused') cap.rec.resume()
+      if (captureId >= 0) tap.setGate(true, captureId)
     },
     discardCapture() {
-      if (cap) killCapture(cap)
-      cap = null
+      chunks = []
+      captureId = -1
+      tap.setGate(false, -1)
     },
-    stop: () =>
-      new Promise<RecordingResult>((resolve, reject) => {
-        const releaseTracks = () => stream.getTracks().forEach((t) => t.stop())
-        const finalize = (chunks: Blob[]) => {
-          const blob = new Blob(chunks, { type: mime })
-          resolve({ blob, url: URL.createObjectURL(blob), mime })
-        }
-        if (!cap || cap.rec.state === 'inactive') {
-          releaseTracks()
-          finalize([])
-          return
-        }
-        const { rec, chunks } = cap
-        cap = null
-        rec.onerror = () => {
-          releaseTracks()
-          reject(new Error('录音过程出错'))
-        }
-        rec.onstop = () => {
-          releaseTracks()
-          finalize(chunks)
-        }
-        try {
-          // 不从 paused 恢复再停：直接定稿，保留「写入关」时段不进文件的语义
-          rec.stop()
-        } catch (e) {
-          releaseTracks()
-          reject(e instanceof Error ? e : new Error(String(e)))
-        }
-      }),
+    stop: async () => {
+      tap.setGate(false, -1)
+      tap.dispose()
+      releaseTracks()
+      return finalize()
+    },
     release() {
-      if (cap) killCapture(cap)
-      cap = null
-      stream.getTracks().forEach((t) => t.stop())
+      tap.setGate(false, -1)
+      tap.dispose()
+      releaseTracks()
     },
   }
 }
