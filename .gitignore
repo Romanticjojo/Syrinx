@@ -20,3 +20,57 @@ app/scripts/tmp-*.*
 dev-server.log
 resources/luv-letter/score/omr-work/
 .kanban_check.py
+
+# --- 大体积媒体资源（不发布） ---
+resources/
+app/public/songs/
+*.mp3
+*.wav
+*.m4a
+*.mp4
+*.mov
+*.webm
+*.ogg
+*.flac
+*.aac
+
+# --- 日志与临时产物 ---
+*.log
+claude-replay-fix*.log
+electron-log.txt
+
+# --- 密钥 / 环境变量（防泄露） ---
+.env
+.env.*
+*.pem
+*.key
+
+# macOS
+.DS_Store
+
+# --- 内部工作文件 / 一次性调试脚本（不发布） ---
+.claude-task-*.md
+docs/github-release-brief.md
+docs/deployment/
+docs/需求与调研/
+app/electron_test/
+app/public/score-dump.html
+app/scripts/probe-*
+app/scripts/dump-*
+app/scripts/smoke-*
+app/scripts/trace-*
+app/scripts/wrapper-trace*
+app/scripts/min-repro.cjs
+app/scripts/main-console-log.cjs
+app/scripts/hud-topbar-shot.mjs
+app/scripts/shot-hud-360.mjs
+app/scripts/render-order-debug.mjs
+app/scripts/diag-resize-osmd.mjs
+app/scripts/win-enum.cjs
+app/scripts/verify-*
+app/scripts/debug-expand.mjs
+app/scripts/align-measures.mjs
+app/scripts/compare-scores.mjs
+docs/screenshots/verify-*
+docs/screenshots/t3b9-*
+docs/screenshots/t76c0cbff-*
