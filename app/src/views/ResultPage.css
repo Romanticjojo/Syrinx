@@ -109,6 +109,21 @@
   color: var(--ink-dim);
   margin-bottom: 14px;
 }
+/* 回放卡与统计卡等高：flex 列布局，回放控件在剩余空间垂直居中，
+   操作按钮沉底，避免内容挤在上半、下半空心 */
+.playback-card {
+  display: flex;
+  flex-direction: column;
+}
+.playback-card h3 {
+  margin-bottom: 0;
+}
+.pdeck-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 14px 0;
+}
 /* 自绘回放控件（PlaybackDeck）：与 stats-card 同 token */
 .pdeck-row {
   display: flex;
@@ -169,10 +184,6 @@
 .btn-pill.sync:disabled {
   opacity: 0.4;
   cursor: default;
-}
-.playback-actions .hint {
-  font-size: 11px;
-  color: var(--ink-faint);
 }
 
 .stats-state {
