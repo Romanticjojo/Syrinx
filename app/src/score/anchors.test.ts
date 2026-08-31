@@ -194,10 +194,10 @@ describe('applyBeats 伴奏锚点重写', () => {
     const beats = JSON.parse(
       readFileSync('public/songs/luv-letter/beats.json', 'utf-8'),
     ) as BeatsFile
-    // v5b：97 小节锚点不变 + 音符级控制点（442：beat0 偶发 + 吸附成功的音符 onset + 段落边界）
-    expect(beats.version).toBe(5)
+    // v6：97 小节锚点不变 + 音符级控制点（~600：谐波通量+音高门控吸附 + 段落边界）
+    expect(beats.version).toBe(6)
     expect(beats.anchors).toHaveLength(97)
-    expect(beats.beatAnchors!.length).toBeGreaterThan(400)
+    expect(beats.beatAnchors!.length).toBeGreaterThan(500)
     const ts = beats.anchors.map((a) => a.t)
     expect(ts[0]).toBeGreaterThanOrEqual(0)
     for (const [i, t] of ts.entries()) {
