@@ -25,6 +25,9 @@ class FakeCursor {
     this.stops = stops
   }
 
+  /** [T3c] 光标元素替身（updateCursorSpan 覆写宽度用；happy-dom 下无真实 img） */
+  cursorElement = { width: 0 }
+
   next(): void {
     this.pos++
     this.nextCount++
@@ -557,6 +560,58 @@ describe('OSMDScore T3c 行归并与坐标系修正', () => {
     expect(el!.style.height).toBe('60px')
     score.setMarkers([])
     expect(container.querySelector('.sync-marker')).toBeNull()
+  })
+})
+
+// -- T3c：光标跨时值高亮（cursorSpan 可选参数，缺省兼容红线）--
+describe('OSMDScore T3c 光标跨时值高亮（cursorSpan）', () => {
+  // m1 三个 staffEntry：rv 0/0.5/1 -> 行内绝对 x 10/12/14 单位（100/120/140px）
+  const mlSpan = [[fakeMeasure(1, [
+    { rv: 0, note: mkGNote() },
+    { rv: 0.5, note: mkGNote() },
+    { rv: 1, note: mkGNote() },
+  ])]]
+
+  async function makeSpanScore(cursorSpan?: boolean) {
+    const cursor = new FakeCursor([0, 0.5, 1])
+    const container = document.createElement('div')
+    container.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
+    const score = new OSMDScore(
+      container,
+      '#3ddfae',
+      {
+        load: async () => {},
+        render: () => {},
+        cursor,
+        GraphicSheet: { MeasureList: mlSpan },
+      } as unknown as OpenSheetMusicDisplay,
+      1,
+      undefined,
+      cursorSpan,
+    )
+    await score.load('<score/>', MINI_TIMELINE)
+    return { score, cursor }
+  }
+
+  it('推进后光标元素宽度覆盖当前音到下一停靠点的跨度（(12-10)单位×10px=20px）', async () => {
+    const { score, cursor } = await makeSpanScore(true)
+    score.syncToTime(2 * SPQ) // rv0.5 停靠点开始（4/3s）-> 推进到中间停靠点
+    expect(cursor.pos).toBe(1)
+    expect(cursor.cursorElement.width).toBe(20)
+  })
+
+  it('末站无下一停靠点：宽度不覆写（保持 OSMD 缺省窄条）', async () => {
+    const { score, cursor } = await makeSpanScore(true)
+    score.syncToTime(99)
+    expect(cursor.pos).toBe(2)
+    expect(cursor.cursorElement.width).toBe(0)
+  })
+
+  it('缺省不传：光标宽度不被改写（演奏页兼容红线）', async () => {
+    const { score, cursor } = await makeSpanScore()
+    score.syncToTime(2 * SPQ)
+    expect(cursor.pos).toBe(1)
+    expect(cursor.cursorElement.width).toBe(0)
   })
 })
 

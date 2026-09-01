@@ -9,6 +9,9 @@ type MarkerGeom = {
   unitPx: number
   /** [T3b] 命中测试行表（noteAtPoint 用） */
   hitRows: HitRow[]
+  /** [T3c] 光标跨度查表：全谱 staffEntry 的 {全局 rv(全音符), 行内绝对 x(单位)}，
+   *  按 rv 升序去重（updateCursorSpan 用） */
+  cursorStops: { rv: number; x: number }[]
 }
 
 /** [T3b] 命中测试表项：x = 音符头绘制包络中心（svg px），ys = 各音符头中心 y，
@@ -57,6 +60,9 @@ export class OSMDScore {
   /** [T3b] 选中音染色：与播放光标 accent 视觉分离（sync-tune 传 #ff9f43）；
    *  缺省跟随 accent——演奏页不传第 5 参，行为与 T3b 前完全一致 */
   private selColor: string
+  /** [T3c] 光标跨时值高亮开关：开启后光标元素宽度覆盖当前音完整时值（sync-tune）；
+   *  缺省 false，演奏页不传即维持 OSMD ThinLeft 窄条 */
+  private cursorSpan: boolean
   /**
    * 预扫缓存的光标停靠点（voiceEntry 级，全音符 RealValue 单位）。
    * syncToTime 用「下一停靠点的开始时刻已到才前进」实现音值感知推进：
@@ -87,10 +93,14 @@ export class OSMDScore {
     /** [T3b] 选中音颜色（可选）：与播放光标 accent 分离（sync-tune 传 #ff9f43）；
      *  缺省跟随 accent，演奏页不传即保持旧观感 */
     selectionColor?: string,
+    /** [T3c] 光标高亮覆盖当前音完整时值跨度（宽度=当前停靠点→下一停靠点）；
+     *  缺省 false：OSMD ThinLeft 窄条行为，演奏页不传即不变 */
+    cursorSpan = false,
   ) {
     this.containerEl = container
     this.accent = accent
     this.selColor = selectionColor ?? accent
+    this.cursorSpan = cursorSpan
     this.baseNoteColor = '#e8e8e2' // 暗底下降一档对比：纯白刺眼（t_3b9cfc25）
     // osmdInstance：测试注入口（happy-dom 下不真正渲染 OSMD），缺省构造真实实例
     this.osmd = osmdInstance ?? new OpenSheetMusicDisplay(container, {
@@ -190,6 +200,7 @@ export class OSMDScore {
     this.osmd.cursor.show()
     this.lastMeasure = 0
     this.nextIdx = 1
+    this.updateCursorSpan()
   }
 
   /** 重置光标到起点（seek 用） */
@@ -197,6 +208,7 @@ export class OSMDScore {
     this.osmd.cursor.reset()
     this.lastMeasure = 0
     this.nextIdx = 1
+    this.updateCursorSpan()
   }
 
   /** 把当前光标下的音符染成 accent 色，上一帧的恢复原色 */
@@ -218,6 +230,43 @@ export class OSMDScore {
         /* 同上 */
       }
     }
+  }
+
+  /** [T3c] 光标跨时值高亮（可选功能，cursorSpan 开启时）：把光标元素（OSMD 公开
+   *  的 cursorElement img）宽度覆写为「当前停靠点 → 下一停靠点」的横向跨度——
+   *  即正在响的音的完整时值。OSMD ThinLeft 每次 cursor.next()/reset() 的 update()
+   *  会把宽度重置为 5*zoom，故推进/重置后再覆写。末站（无下一停靠点）、跨行
+   *  （下一停靠点 x 反而更小）、查表缺失时不覆写，保持 OSMD 缺省窄条。 */
+  private updateCursorSpan(): void {
+    if (!this.cursorSpan) return
+    const img = (this.osmd.cursor as unknown as { cursorElement?: HTMLImageElement }).cursorElement
+    if (!img) return
+    const geom = this.ensureMarkerGeom()
+    if (!geom) return
+    const cur = this.stopQuarters[this.nextIdx - 1]
+    const nxt = this.stopQuarters[this.nextIdx]
+    if (cur === undefined || nxt === undefined) return
+    const x0 = this.stopXAt(geom, cur)
+    const x1 = this.stopXAt(geom, nxt)
+    if (x0 === null || x1 === null || x1 <= x0) return
+    const w = Math.round((x1 - x0) * geom.unitPx)
+    if (w > 0) img.width = w
+  }
+
+  /** [T3c] 全局 rv（全音符）-> 最近 cursorStops 表项的行内绝对 x（单位）；空表 null */
+  private stopXAt(geom: MarkerGeom, rv: number): number | null {
+    const cs = geom.cursorStops
+    if (!cs.length) return null
+    let best = 0
+    let bd = Math.abs(cs[0].rv - rv)
+    for (let i = 1; i < cs.length; i++) {
+      const d = Math.abs(cs[i].rv - rv)
+      if (d < bd) {
+        bd = d
+        best = i
+      }
+    }
+    return cs[best].x
   }
 
   /** 四分音符位置 → 曲目时间（秒）：按 measureTimes（含伴奏锚点，t_3b9cfc25）分段线性插值。
@@ -264,7 +313,10 @@ export class OSMDScore {
         guard++
       }
     }
-    if (advanced) this.updateHighlight()
+    if (advanced) {
+      this.updateHighlight()
+      this.updateCursorSpan()
+    }
     // 当前小节：由 measureTimes 反查（iterator.currentMeasure 是私有成员）；终点标记不计
     let m = 1
     for (let i = 0; i < this.measureTimes.length; i++) {
@@ -425,6 +477,13 @@ export class OSMDScore {
       { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }
     >()
     const hitRows: HitRow[] = []
+    // [T3c] 光标跨度查表：小节号 -> 起始 quarters（终点标记除外），配合
+    // staffEntry 锚点得到全谱 {全局 rv, 行内绝对 x} 表
+    const qByM = new Map<number, number>()
+    for (const e of this.measureTimes) {
+      if (!e.end && !qByM.has(e.measure)) qByM.set(e.measure, e.quarters)
+    }
+    const cursorStops: { rv: number; x: number }[] = []
     let row: HitRow | null = null
     for (const measureStaves of ml) {
       if (!measureStaves?.length) continue
@@ -449,11 +508,16 @@ export class OSMDScore {
           })
         }
         // 命中表不去重：多 staff（钢琴上下谱表）的 staffEntries 各自入表
+        const q0 = qByM.get(m.MeasureNumber)
         for (const se of m.staffEntries) {
           const entry = this.hitEntryFor(se, m.MeasureNumber, unitPx, svgRect)
           if (entry) {
             entries.push(entry)
             hasEntry = true
+          }
+          if (q0 !== undefined) {
+            const rv = se.sourceStaffEntry?.Timestamp?.RealValue
+            if (rv !== undefined) cursorStops.push({ rv: q0 / 4 + rv, x: se.PositionAndShape.AbsolutePosition.x })
           }
         }
       }
@@ -470,12 +534,18 @@ export class OSMDScore {
         hitRows.push(row)
       }
     }
+    cursorStops.sort((a, b) => a.rv - b.rv || a.x - b.x)
+    const stopsDedup: { rv: number; x: number }[] = []
+    for (const s of cursorStops) {
+      if (!stopsDedup.length || stopsDedup.at(-1)!.rv !== s.rv) stopsDedup.push(s)
+    }
     this.markerGeom = {
       map,
       offX: svgRect.left - cRect.left,
       offY: svgRect.top - cRect.top,
       unitPx,
       hitRows,
+      cursorStops: stopsDedup,
     }
     return this.markerGeom
   }
