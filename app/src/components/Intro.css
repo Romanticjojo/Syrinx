@@ -17,7 +17,8 @@
   background:
     radial-gradient(90% 70% at 50% 110%, rgba(61, 223, 174, 0.14), transparent 60%),
     linear-gradient(180deg, #0a0c0b 0%, #0e0e0e 60%, #101312 100%);
-  animation: intro-in 0.6s ease;
+  /* 铁律：全屏覆盖层容器从第一帧必须不透明（首帧闪底坑，见 syrinx-dev skill）——
+     入场动画只留给容器内部元素（emblem/brand 各自已有 animation），禁止整层 opacity 动画 */
   overflow: hidden;
 }
 .intro.leaving {
