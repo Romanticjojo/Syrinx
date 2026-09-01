@@ -16,6 +16,12 @@ import {
   type SyncNote,
 } from '../synctune/logic'
 import { selectedNoteView, tunedCount, useSyncTuneStore, visibleNotes } from '../synctune/store'
+import {
+  computeRmsEnvelope,
+  normalizeGain,
+  sampleEnvelopeView,
+  smoothEnvelope,
+} from '../synctune/waveform'
 import './SyncTunePage.css'
 
 /**
@@ -42,12 +48,20 @@ import './SyncTunePage.css'
  * R2（T4）：标记层局部化——微调/选中只 patchMarker 改受影响标记的色/title
  * （元素池差异更新），全量重建仅在 q 键集/基线变化时走；rowMeta 单 q2t 闭包
  * （去逐音符 makeQ2T 重排序）、波形刻度 q→t 查表（去 baseline.some 嵌套）。
+ * R2（T6）：波形可读性——min/max 包络改 RMS 能量包络（waveform.ts 纯函数，
+ * TDD 单测）：滑动平均抹平相邻桶跳变、峰值归一化把低电平伴奏拉到 85% 高度
+ * （不再趴 mid 线像毛刺）、视口按像素列聚合桶 RMS 最大值（宽视图能量视角）；
+ * 交互与 dirty+rAF 按需重绘预算不变。
  */
 
 type Phase = 'loading' | 'ready' | 'error'
 
-/** 波形峰值预计算步长（样本数）：~11.6ms/桶（44.1k），总览分辨率足够 */
+/** 波形包络预计算步长（样本数）：~11.6ms/桶（44.1k），总览分辨率足够 */
 const PEAK_STEP = 512
+/** [T6] 包络平滑窗口（桶数，居中滑动平均）：11.6ms×5 ≈ 58ms，抹平相邻桶跳变 */
+const RMS_SMOOTH_WIN = 5
+/** [T6] 峰值归一化目标：全局最大 RMS 桶拉到 85% 振幅（低电平伴奏不再趴底） */
+const WAVE_PEAK_TARGET = 0.85
 
 export default function SyncTunePage({ songId }: { songId: string }) {
   const song = getSong(songId) ?? SONGS[0]
@@ -112,7 +126,9 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const beatsRef = useRef<BeatsFile | null>(null)
-  const peaksRef = useRef<Float32Array | null>(null)
+  /** [T6] RMS 能量包络（waveform.ts 预计算，语义不再是 min/max 峰值）+ 归一化增益 */
+  const envRef = useRef<Float32Array | null>(null)
+  const envGainRef = useRef(1)
   const stepSecRef = useRef(0)
   const durationRef = useRef(0)
   const displayTlRef = useRef<ReturnType<typeof parseMusicXml> | null>(null)
@@ -208,21 +224,11 @@ export default function SyncTunePage({ songId }: { songId: string }) {
             // 装载为 play() 数据源：decode 只解码不装载，缺这行冷启动 play() 恒 false
             await audioEngine.load(buf)
             const ch = buf.getChannelData(0)
-            const n = Math.ceil(ch.length / PEAK_STEP)
-            const peaks = new Float32Array(n * 2)
-            for (let i = 0; i < n; i++) {
-              let mn = 1
-              let mx = -1
-              const end = Math.min(ch.length, (i + 1) * PEAK_STEP)
-              for (let j = i * PEAK_STEP; j < end; j++) {
-                const v = ch[j]
-                if (v < mn) mn = v
-                if (v > mx) mx = v
-              }
-              peaks[i * 2] = mn
-              peaks[i * 2 + 1] = mx
-            }
-            peaksRef.current = peaks
+            // [T6] 包络链：每桶 RMS（能量，抑制高频毛刺）→ 滑动平均（去相邻桶
+            // 跳变）→ 峰值归一化增益（低电平伴奏拉到 85% 振幅）
+            const env = smoothEnvelope(computeRmsEnvelope(ch, PEAK_STEP), RMS_SMOOTH_WIN)
+            envRef.current = env
+            envGainRef.current = normalizeGain(env, WAVE_PEAK_TARGET)
             stepSecRef.current = PEAK_STEP / buf.sampleRate
             durationRef.current = buf.duration
             viewRef.current = { t0: 0, t1: buf.duration }
@@ -483,13 +489,16 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
 
-  /** 波形绘制：包络 + 基线/工作期望线 + 控制点刻度 + 播放头
+  /** 波形绘制：包络（[T6] RMS 能量包络×归一化增益，上下对称）+ 基线/工作
+   *  期望线 + 控制点刻度 + 播放头
    *  性能（t_perf_sync_tune）：q2t 闭包/刻度表/选中 q 全部来自缓存 refs
    *  （store 订阅预构建，绘制帧零 getState/零 Map 构建），期望线两遍循环
-   *  各合并单 path；页脚刻度文本直写 DOM，拖拽/缩放不再触发 React 重渲染 */
+   *  各合并单 path；页脚刻度文本直写 DOM，拖拽/缩放不再触发 React 重渲染；
+   *  [T6] 包络采样（sampleEnvelopeView O(w+视口桶数)）仍在 dirty+rAF 按需
+   *  重绘路径内，播放头每帧零波形重算 */
   const drawWave = (playT: number) => {
     const canvas = canvasRef.current
-    const peaks = peaksRef.current
+    const env = envRef.current
     if (!canvas) return
     const dpr = window.devicePixelRatio || 1
     const w = canvas.clientWidth
@@ -505,7 +514,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     ctx.fillStyle = '#10151a'
     ctx.fillRect(0, 0, w, h)
     const dur = durationRef.current
-    if (!peaks || dur <= 0) {
+    if (!env || dur <= 0) {
       ctx.fillStyle = '#5a6a72'
       ctx.font = '12px sans-serif'
       ctx.fillText('波形不可用（伴奏解码失败）', 12, h / 2)
@@ -516,26 +525,19 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     const xOf = (t: number) => ((t - t0) / span) * w
     const mid = h * 0.42
     const amp = h * 0.36
-    // 包络
+    // 包络（T6）：视口按像素列聚合桶能量最大值（宽视图能量视角、深缩放收敛
+    // 覆盖桶），乘归一化增益画上下对称能量包络（低电平伴奏拉到 85% 振幅；
+    // 全静音包络为零，a<=0 跳过只留网格/刻度）
     const stepSec = stepSecRef.current || PEAK_STEP / 44100
+    const col = sampleEnvelopeView(env, stepSec, t0, t0 + span, w)
+    const gain = envGainRef.current
     ctx.strokeStyle = '#3d5a63'
     ctx.beginPath()
-    for (let x = 0; x < w; x++) {
-      const ta = t0 + (x / w) * span
-      const tb = ta + span / w
-      let b0 = Math.floor(ta / stepSec)
-      const b1 = Math.min(Math.floor(tb / stepSec), peaks.length / 2 - 1)
-      if (b1 < b0) b0 = Math.max(0, b1)
-      let mn = 1
-      let mx = -1
-      for (let b = b0; b <= b1; b++) {
-        if (b < 0 || b * 2 + 1 >= peaks.length) continue
-        mn = Math.min(mn, peaks[b * 2])
-        mx = Math.max(mx, peaks[b * 2 + 1])
-      }
-      if (mn > mx) continue
-      ctx.moveTo(x + 0.5, mid + mn * amp)
-      ctx.lineTo(x + 0.5, mid + mx * amp)
+    for (let x = 0; x < col.length; x++) {
+      const a = Math.min(col[x] * gain, 1) * amp
+      if (a <= 0) continue
+      ctx.moveTo(x + 0.5, mid - a)
+      ctx.lineTo(x + 0.5, mid + a)
     }
     ctx.stroke()
     // 期望线：基线（暗）与工作网格（亮）——微调时亮线实时移动
