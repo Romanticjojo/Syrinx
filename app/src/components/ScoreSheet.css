@@ -10,7 +10,13 @@
   max-height: 100%;
   -webkit-mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
   mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
-  scrollbar-width: thin;
+  /* 隐藏滚动条（横竖都藏）：滚动能力保留（滚轮/触摸/键盘），位置提示交给
+     上下渐变 mask；触屏 overscroll 链隔断，防谱面滚到头带跑整页 */
+  scrollbar-width: none; /* Firefox */
+  overscroll-behavior: contain;
+}
+.sheet-container::-webkit-scrollbar {
+  display: none; /* Chromium / WebKit */
 }
 
 .sheet-error {

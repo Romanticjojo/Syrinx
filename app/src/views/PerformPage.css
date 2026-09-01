@@ -168,7 +168,9 @@ video.perform-bg {
 .perform-stage .sheet-container {
   height: 100%;
   overflow-y: auto; /* 谱面滚动容器：OSMD 光标 scrollIntoView 只卷这里，不卷窗口 */
+  overflow-x: hidden; /* 滚动条已隐藏（ScoreSheet.css），防子像素溢出顶出横条 */
   width: min(92vh, 1280px, 100%);
+  width: min(92svh, 1280px, 100%); /* 移动端：svh 排除地址栏/安全区，vh 虚高会溢出屏 */
   margin-inline: auto;
   /* 谱面半透面板：压谱可读，但背景动画必须透出来可见（t_a857b79e：0.66 压暗过重）；
      backdrop blur 把透出的动画柔化成光影，不再与谱线打架（t_3b9cfc25） */

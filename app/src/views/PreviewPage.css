@@ -309,6 +309,7 @@
    对齐纸质谱扫描件的页宽/谱线间距比（≈118） */
 .score-section .sheet-container {
   width: min(92vh, 1280px, 100%);
+  width: min(92svh, 1280px, 100%); /* 移动端：svh 排除地址栏/安全区 */
   margin-inline: auto;
 }
 .score-load-error {
