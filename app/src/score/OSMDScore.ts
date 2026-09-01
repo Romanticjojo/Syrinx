@@ -703,6 +703,23 @@ export class OSMDScore {
     }
   }
 
+  /** [T4] 标记层局部更新：微调/选中变化只改受影响 marker 的 borderColor/title，
+   *  不触碰其它 marker 的定位样式（left/top/height 由 setMarkers 全量路径管理，
+   *  元素池 key 同源 `m<measure>@rv<rvInMeasure>`）。key 未命中（谱面未渲染/
+   *  键集未就位）返回 false，由调用方的全量路径兜底。独立可选方法：演奏页
+   *  不调用，缺省行为不变。 */
+  patchMarker(
+    measure: number,
+    rvInMeasure: number,
+    patch: { color?: string; title?: string },
+  ): boolean {
+    const el = this.markerEls.get(`m${measure}@rv${rvInMeasure}`)
+    if (!el) return false
+    if (patch.color !== undefined) el.style.borderColor = patch.color
+    if (patch.title !== undefined) el.title = patch.title
+    return true
+  }
+
   dispose(): void {
     this.disposed = true
     // OSMD 无 dispose API；清空容器释放 DOM

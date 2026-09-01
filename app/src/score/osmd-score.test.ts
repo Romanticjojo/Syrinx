@@ -671,3 +671,51 @@ describe('OSMDScore zoom（谱面缩窄，t_53aa8b7a）', () => {
     expect((fake as unknown as { Zoom: number }).Zoom).toBe(1)
   })
 })
+
+// -- T4：标记层局部更新（微调/选中只 patch 受影响 marker 的 borderColor/title）--
+describe('OSMDScore T4 patchMarker（标记层局部更新）', () => {
+  function geomScoreWithMarkers() {
+    const a = mkGNote()
+    const b = mkGNote()
+    // m1 两个 entry（rv 0 / 0.5），行内绝对坐标同 T3c 语义
+    const { score, container } = makeGeomScore([[fakeMeasure(1, [{ rv: 0, note: a }, { rv: 0.5, note: b }])]])
+    score.setMarkers([
+      { measure: 1, rvInMeasure: 0, color: 'rgb(255,255,255)' },
+      { measure: 1, rvInMeasure: 0.5, color: 'rgb(255,255,255)' },
+    ])
+    return { score, container }
+  }
+  it('patch 存在的 marker：只改 borderColor/title，left/top/height 不动', () => {
+    const { score, container } = geomScoreWithMarkers()
+    const el = [...container.querySelectorAll('.sync-marker')].at(1)! as HTMLElement
+    const left = el.style.left
+    const top = el.style.top
+    const height = el.style.height
+    const ok = score.patchMarker(1, 0.5, { color: '#ff9f43', title: 'q=2 t=1.500（已调）' })
+    expect(ok).toBe(true)
+    // happy-dom 对 hex 颜色原样保留（真浏览器会转 rgb()，此处断言写入值）
+    expect(el.style.borderColor).toBe('#ff9f43')
+    expect(el.title).toBe('q=2 t=1.500（已调）')
+    expect(el.style.left).toBe(left)
+    expect(el.style.top).toBe(top)
+    expect(el.style.height).toBe(height)
+  })
+  it('patch 不存在的键：返回 false，不建元素不抛异常', () => {
+    const { score, container } = geomScoreWithMarkers()
+    const n = container.querySelectorAll('.sync-marker').length
+    expect(score.patchMarker(99, 0.5, { color: '#000' })).toBe(false)
+    expect(container.querySelectorAll('.sync-marker').length).toBe(n)
+  })
+  it('patch 与 setMarkers 键匹配：全量刷新后 patch 仍命中同一元素', () => {
+    const { score, container } = geomScoreWithMarkers()
+    const el0 = [...container.querySelectorAll('.sync-marker')].at(1)!
+    score.setMarkers([
+      { measure: 1, rvInMeasure: 0, color: 'rgb(1,2,3)' },
+      { measure: 1, rvInMeasure: 0.5, color: 'rgb(1,2,3)', title: 'full' },
+    ])
+    const el1 = [...container.querySelectorAll('.sync-marker')].at(1)!
+    expect(el1).toBe(el0) // 元素池复用（不重建）
+    expect(score.patchMarker(1, 0.5, { color: 'rgb(9,9,9)' })).toBe(true)
+    expect((el1 as HTMLElement).style.borderColor).toBe('rgb(9, 9, 9)')
+  })
+})
