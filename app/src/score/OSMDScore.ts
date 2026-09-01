@@ -172,6 +172,15 @@ export class OSMDScore {
     this.prescanCursorStops()
   }
 
+  /** [sync-tune T3c] 就地更换时间轴（保存修改后播放即新节奏）：谱面不重渲，
+   *  仅更新 measureTimes/secPerQuarter——停靠点 quarters 是谱面几何（不变），
+   *  时间轴只改「quarters → 秒」的映射。独立可选方法：演奏页不调用，缺省行为不变。 */
+  setTimeline(timeline: Timeline): void {
+    this.secPerQuarter = timeline.secPerQuarter
+    this.measureTimes = timeline.measureTimes
+    this.totalMeasures = timeline.measureTimes.filter((e) => !e.end).length
+  }
+
   /**
    * 预扫光标停靠点：load 完成后用 cursor iterator 走一遍（记录后 reset），
    * 缓存每个停靠点的全音符位置。OSMD cursor 在 voiceEntry 级停靠，

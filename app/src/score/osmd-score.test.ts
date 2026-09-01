@@ -615,6 +615,47 @@ describe('OSMDScore T3c 光标跨时值高亮（cursorSpan）', () => {
   })
 })
 
+// -- T3c：setTimeline 就地换时间轴（保存修改后播放即新节奏）--
+describe('OSMDScore T3c setTimeline', () => {
+  it('换时间轴后 syncToTime 按新 measureTimes 推进（quarters 不变）', async () => {
+    const { score, cursor } = await makeScore([0, 1])
+    // 新时间轴：m1 0s、m2 10s（同 quarters 0/4）——90bpm 下原 m2 在 8/3s
+    const slow: Timeline = {
+      ...MINI_TIMELINE,
+      secPerQuarter: 2.5,
+      measureTimes: [
+        { measure: 1, time: 0, quarters: 0 },
+        { measure: 2, time: 10, quarters: 4 },
+        { measure: 3, time: 12.5, quarters: 5, end: true },
+      ],
+    }
+    score.setTimeline(slow)
+    score.syncToTime(5) // 旧轴会推进（5 > 8/3），新轴不应（5 < 10）
+    expect(cursor.pos).toBe(0)
+    score.syncToTime(10)
+    expect(cursor.pos).toBe(1)
+  })
+
+  it('onMeasureChange 也按新轴反查小节', async () => {
+    const { score } = await makeScore([0, 1])
+    const slow: Timeline = {
+      ...MINI_TIMELINE,
+      secPerQuarter: 2.5,
+      measureTimes: [
+        { measure: 1, time: 0, quarters: 0 },
+        { measure: 2, time: 10, quarters: 4 },
+        { measure: 3, time: 12.5, quarters: 5, end: true },
+      ],
+    }
+    score.setTimeline(slow)
+    const fired: number[] = []
+    score.onMeasureChange = (m) => fired.push(m)
+    score.syncToTime(5)
+    score.syncToTime(10)
+    expect(fired).toEqual([1, 2])
+  })
+})
+
 describe('OSMDScore zoom（谱面缩窄，t_53aa8b7a）', () => {
   it('构造时写入 OSMD 实例（渲染前设置安全）', () => {
     const fake = makeFakeOsmd(new FakeCursor([0, 1]))
