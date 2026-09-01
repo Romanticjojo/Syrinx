@@ -603,6 +603,7 @@ export default function PerformPage() {
         <ControlBar
           playing={playing}
           ended={phase === 'ended'}
+          active={phase === 'performing'}
           recOn={recOn}
           volume={volume}
           cursorMode={cursorMode}

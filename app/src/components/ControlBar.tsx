@@ -4,6 +4,8 @@ import './ControlBar.css'
 interface Props {
   playing: boolean
   ended: boolean
+  /** 处于演奏阶段（含播放与暂停）：停止键的可用窗口（t_c10d648d 后续：暂停也可停止进回放） */
+  active: boolean
   /** 录音采集开关状态（只控采集，实时音准反馈不受其影响） */
   recOn: boolean
   volume: number
@@ -23,6 +25,7 @@ interface Props {
 export default function ControlBar({
   playing,
   ended,
+  active,
   recOn,
   volume,
   cursorMode,
@@ -77,7 +80,7 @@ export default function ControlBar({
       <button
         className="ctl stop"
         onClick={onStop}
-        disabled={ended || !playing}
+        disabled={ended || !active}
         aria-label="停止演奏"
         title="停止演奏并进入回放"
       >
