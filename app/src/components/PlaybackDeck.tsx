@@ -11,6 +11,9 @@ interface Props {
   audioRef: RefObject<HTMLAudioElement | null>
   /** 纯录音时长未知时的兜底显示（秒） */
   fallbackDurationSec?: number
+  /** 伴奏滑杆仅在对照播放时需要（t_5957a725）：false/缺省不渲染、也不写
+   *  audioEngine（伴奏增益与演奏页背景伴奏共用，只回听录音不该动它） */
+  showAccVol?: boolean
 }
 
 const fmt = (sec: number): string => {
@@ -23,7 +26,7 @@ const fmt = (sec: number): string => {
  * 伴奏直接走 audioEngine 音量（对照播放页间共享，演奏页调过则无缝衔接）。
  * MediaRecorder webm 在 <audio> 里 duration 常为 Infinity，
  * loadedmetadata 后用「先 seek 大时间再归零」逼出真实时长。 */
-export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSec = 0 }: Props) {
+export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSec = 0, showAccVol = false }: Props) {
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(fallbackDurationSec)
@@ -91,10 +94,13 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
     }
   }, [audioRef, recVol])
 
-  // 伴奏音量：未开对照播放也可预先调（audioEngine 增益常驻）
+  // 伴奏音量：仅在滑杆显示（对照播放开启）时接管引擎增益（t_5957a725）。
+  // 取舍：accVol 初值本就取自引擎，显隐切换时写入幂等无害；但隐藏时彻底
+  // 不写更简单也更稳——回放页挂载不再可能污染演奏页的伴奏音量。
   useEffect(() => {
+    if (!showAccVol) return
     audioEngine.setVolume(accVol)
-  }, [accVol])
+  }, [accVol, showAccVol])
 
   const toggle = () => {
     const el = audioRef.current
@@ -184,26 +190,28 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
             title="录音音量（含增益补偿）"
           />
         </label>
-        <label className="pdeck-vol">
-          <span className="pdeck-vol-label">
-            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-              <path d="M6 12.5V3.5l7-1.5v9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-              <circle cx="4" cy="12.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-              <circle cx="11" cy="11" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-            </svg>
-            伴奏
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.01}
-            value={accVol}
-            onChange={(e) => setAccVol(Number(e.target.value))}
-            aria-label="伴奏音量"
-            title="伴奏音量（对照播放时生效）"
-          />
-        </label>
+        {showAccVol && (
+          <label className="pdeck-vol">
+            <span className="pdeck-vol-label">
+              <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                <path d="M6 12.5V3.5l7-1.5v9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                <circle cx="4" cy="12.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                <circle cx="11" cy="11" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+              </svg>
+              伴奏
+            </span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={accVol}
+              onChange={(e) => setAccVol(Number(e.target.value))}
+              aria-label="伴奏音量"
+              title="伴奏音量（对照播放时生效）"
+            />
+          </label>
+        )}
       </div>
     </div>
   )

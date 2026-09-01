@@ -44,7 +44,9 @@ export default function PerformPage() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [playing, setPlaying] = useState(false)
   const [recOn, setRecOn] = useState(false)
-  const [volume, setVolume] = useState(1)
+  // 初值读引擎实际增益（t_5957a725）：audioEngine 全局单例，回放页「对照伴奏」
+  // 拖过的音量跨页留存——写死 1 会显示假满格而实际 gain=0，背景伴奏无声
+  const [volume, setVolume] = useState(() => audioEngine.getVolume())
   const [errorMsg, setErrorMsg] = useState('')
   const [xml, setXml] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<Timeline | null>(null)

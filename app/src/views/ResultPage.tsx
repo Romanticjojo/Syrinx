@@ -229,7 +229,14 @@ export default function ResultPage() {
         <div className="playback-card">
           <h3>录音回放</h3>
           <div className="pdeck-area">
-            <PlaybackDeck src={take.audioUrl} accent={song.accent} audioRef={audioRef} />
+            {/* 伴奏滑杆只在对照播放开启时出现（t_5957a725）：只回听录音不需要，
+                且伴奏增益与演奏页共用，不该在回放页随手可动 */}
+            <PlaybackDeck
+              src={take.audioUrl}
+              accent={song.accent}
+              audioRef={audioRef}
+              showAccVol={syncPlaying}
+            />
           </div>
           <div className="playback-actions">
             <button
@@ -309,7 +316,7 @@ export default function ResultPage() {
                 <i className="sw off" /> 偏音（超 ±50 音分）
               </span>
               <span>
-                <i className="sw miss" /> 漏音（无实测）
+                <i className="sw miss" /> 漏音
               </span>
             </div>
           </>
