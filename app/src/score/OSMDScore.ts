@@ -7,7 +7,27 @@ type MarkerGeom = {
   offX: number
   offY: number
   unitPx: number
+  /** [T3b] 命中测试行表（noteAtPoint 用） */
+  hitRows: HitRow[]
 }
+
+/** [T3b] 命中测试表项：x = 音符头绘制包络中心（svg px），ys = 各音符头中心 y，
+ *  hw = 音符头半宽（precise 判定阈值） */
+type HitEntry = { m: number; rv: number; x: number; ys: number[]; hw: number }
+/** [T3b] 命中测试行：noteAtPoint 用——行几何 + 行内全部 HitEntry */
+type HitRow = { top: number; bottom: number; entries: HitEntry[] }
+
+/** [T3b] 命中路径上 GraphicalNote 可用的几何来源（DOM SVG 元素 / PositionAndShape） */
+type HitDomNote = {
+  getNoteheadSVGs?: () => { getBoundingClientRect(): ClientRectLike }[]
+  getModifierSVGs?: () => { getBoundingClientRect(): ClientRectLike }[]
+  PositionAndShape?: {
+    AbsolutePosition: { x: number; y: number }
+    Size: { width: number; height: number }
+  }
+}
+/** DOM rect 最小面（含 right/bottom 的计算字段） */
+type ClientRectLike = { left: number; right: number; top: number; bottom: number; width: number; height: number }
 
 /**
  * OSMD 曲谱渲染封装：
@@ -258,53 +278,51 @@ export class OSMDScore {
     }
   }
 
-  /** [sync-tune 调试页扩展] 点击反查音符级位置：y 最近小节行内取 x 最近的
-   *  staffEntry，返回 { 小节号, 小节内全音符位置, 与命中音符的欧氏距离(px) }；
-   *  命中半径内无 staffEntry 时 fallback 最近小节行最近音符（现有逻辑），
-   *  dist 供调用方在距离超阈值（120px）时提示「已选最近音符」（T3 决策 4）。
+  /** [sync-tune 调试页扩展（T3b 强化）] 点击反查音符级位置：markerGeom 的
+   *  hitRows 缓存（行几何 + 音符头绘制 x，ensureMarkerGeom 一次构建复用），
+   *  行内取「音符头绘制 x」最近的非休止 entry——staffEntry 锚点是时间位置 x，
+   *  与音符头绘制 x 有横向偏差（accidental/宽头/密集段），按锚点最近邻会点 A 选 B。
+   *  返回 { 小节号, 小节内全音符位置, 欧氏距离(px), 是否精确命中 }：
+   *  - 行判定收紧：点击处与行几何 y 距离超行高一半 -> null（无效点击，不跨行乱选）
+   *  - 同 x 并列（±4px，多声部）时 y 更接近点击处者优先
+   *  - precise = 距离在音符头半宽内，供调用方三档提示（精确/附近/超距，T3b 决策 3）
    *  谱面无谱/未渲染返回 null。独立可选方法：演奏页不调用，缺省行为不变。 */
   noteAtPoint(
     clientX: number,
     clientY: number,
-  ): { measure: number; rvInMeasure: number; dist: number } | null {
+  ): { measure: number; rvInMeasure: number; dist: number; precise: boolean } | null {
     const svg = this.containerEl.querySelector('svg')
     if (!svg) return null
-    const unitPx = 10 * (this.osmd.Zoom || 1)
+    const geom = this.ensureMarkerGeom()
+    if (!geom || !geom.hitRows.length) return null
     const svgRect = svg.getBoundingClientRect()
     const x = clientX - svgRect.left
     const y = clientY - svgRect.top
-    const ml = this.osmd.GraphicSheet?.MeasureList
-    if (!ml) return null
-    // y 最近的小节行（最近行距离策略）
-    let bestRow: { measures: (typeof ml)[number]; d: number } | null = null
-    for (const systemMeasures of ml) {
-      if (!systemMeasures?.length) continue
-      let top = Infinity
-      let bottom = -Infinity
-      for (const m of systemMeasures) {
-        const ps = m.PositionAndShape
-        top = Math.min(top, ps.AbsolutePosition.y * unitPx)
-        bottom = Math.max(bottom, (ps.AbsolutePosition.y + ps.Size.height) * unitPx)
-      }
-      const dy = y < top ? top - y : y > bottom ? y - bottom : 0
-      if (!bestRow || dy < bestRow.d) bestRow = { measures: systemMeasures, d: dy }
+    // y 最近的小节行；行判定收紧（T3b）：超行高一半直接淘汰
+    let bestRow: { row: HitRow; d: number } | null = null
+    for (const row of geom.hitRows) {
+      const dy = y < row.top ? row.top - y : y > row.bottom ? y - row.bottom : 0
+      if (dy > (row.bottom - row.top) / 2) continue
+      if (!bestRow || dy < bestRow.d) bestRow = { row, d: dy }
     }
     if (!bestRow) return null
-    // 行内 x 最近的 staffEntry（staffEntry 位置相对小节，叠上小节 x 得 svg 坐标）
-    let best: { measure: number; rv: number; d: number } | null = null
-    for (const m of bestRow.measures) {
-      const mx = m.PositionAndShape.AbsolutePosition.x * unitPx
-      for (const se of m.staffEntries) {
-        const sx = mx + se.PositionAndShape.AbsolutePosition.x * unitPx
-        const d = Math.abs(x - sx)
-        if (!best || d < best.d) {
-          best = { measure: m.MeasureNumber, rv: se.sourceStaffEntry?.Timestamp?.RealValue ?? 0, d }
-        }
+    // 行内音符头绘制 x 最近邻；x 并列（±4px）时 y 更接近点击处者优先（多声部/同 x）
+    let best: { e: HitEntry; dx: number; dy: number } | null = null
+    for (const e of bestRow.row.entries) {
+      const dx = Math.abs(x - e.x)
+      const dy = e.ys.length ? Math.min(...e.ys.map((yy) => Math.abs(y - yy))) : bestRow.d
+      if (!best || dx < best.dx - 4 || (Math.abs(dx - best.dx) <= 4 && dy < best.dy)) {
+        best = { e, dx, dy }
       }
     }
-    return best
-      ? { measure: best.measure, rvInMeasure: best.rv, dist: Math.hypot(best.d, bestRow.d) }
-      : null
+    if (!best) return null
+    const dist = Math.hypot(best.dx, bestRow.d)
+    return {
+      measure: best.e.m,
+      rvInMeasure: best.e.rv,
+      dist,
+      precise: dist <= Math.max(best.e.hw, 3),
+    }
   }
 
   /** [sync-tune T3] 在 MeasureList 中找 (measure, rvInMeasure) 最近的非休止
@@ -386,7 +404,10 @@ export class OSMDScore {
 
   /** 小节几何缓存（t_perf_sync_tune，T3 起与 scrollToMeasure 共用）：
    *  MeasureList -> 小节号到行内几何/staffEntry 表，渲染后首算，谱面不变复用。
-   *  容器可能带内边距：svg 相对容器的偏移叠进标记坐标。 */
+   *  容器可能带内边距：svg 相对容器的偏移叠进标记坐标。
+   *  T3b 起同帧构建 hitRows（noteAtPoint 命中测试行表）：行几何 + 每个
+   *  staffEntry 的音符头「绘制 x」（DOM SVG 元素 rect 主路径、GraphicalNote
+   *  PositionAndShape 几何回退、staffEntry 锚点兜底），谱面不变一并复用。 */
   private ensureMarkerGeom(): MarkerGeom | null {
     if (this.markerGeom) return this.markerGeom
     const svg = this.containerEl.querySelector('svg')
@@ -399,30 +420,110 @@ export class OSMDScore {
       number,
       { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }
     >()
+    const hitRows: HitRow[] = []
     for (const systemMeasures of ml) {
       if (!systemMeasures?.length) continue
+      let top = Infinity
+      let bottom = -Infinity
+      const entries: HitEntry[] = []
       for (const m of systemMeasures) {
-        if (map.has(m.MeasureNumber)) continue
         const ps = m.PositionAndShape
-        map.set(m.MeasureNumber, {
-          x: ps.AbsolutePosition.x * unitPx,
-          y: ps.AbsolutePosition.y * unitPx,
-          w: ps.Size.width * unitPx,
-          h: ps.Size.height * unitPx,
-          se: m.staffEntries.map((se) => ({
-            rv: se.sourceStaffEntry?.Timestamp?.RealValue ?? 0,
-            x: se.PositionAndShape.AbsolutePosition.x,
-          })),
-        })
+        top = Math.min(top, ps.AbsolutePosition.y * unitPx)
+        bottom = Math.max(bottom, (ps.AbsolutePosition.y + ps.Size.height) * unitPx)
+        if (!map.has(m.MeasureNumber)) {
+          map.set(m.MeasureNumber, {
+            x: ps.AbsolutePosition.x * unitPx,
+            y: ps.AbsolutePosition.y * unitPx,
+            w: ps.Size.width * unitPx,
+            h: ps.Size.height * unitPx,
+            se: m.staffEntries.map((se) => ({
+              rv: se.sourceStaffEntry?.Timestamp?.RealValue ?? 0,
+              x: se.PositionAndShape.AbsolutePosition.x,
+            })),
+          })
+        }
+        // 命中表不去重：多 staff（钢琴上下谱表）的 staffEntries 各自入表
+        const mx = ps.AbsolutePosition.x * unitPx
+        for (const se of m.staffEntries) {
+          const entry = this.hitEntryFor(se, m.MeasureNumber, mx, unitPx, svgRect)
+          if (entry) entries.push(entry)
+        }
       }
+      if (entries.length) hitRows.push({ top, bottom, entries })
     }
     this.markerGeom = {
       map,
       offX: svgRect.left - cRect.left,
       offY: svgRect.top - cRect.top,
       unitPx,
+      hitRows,
     }
     return this.markerGeom
+  }
+
+  /** [T3b] staffEntry -> 命中表项：x 对齐音符头「绘制位置」而非 staffEntry 时间锚点
+   *  （升/降号、宽音符头、密集十六分时两者横向差可达半音符头以上，锚点最近邻
+   *  会选错邻）。DOM 主路径用 notehead/修饰符 SVG 元素 getBoundingClientRect——
+   *  与 svg 同帧两次测量相减，滚动/页面缩放自然抵消，得到的即真实绘制包络
+   *  （有 accidental 时取 accidental+notehead 包络中心）；SVG 元素不可用时回退
+   *  GraphicalNote 的 PositionAndShape 包络（乘 unitPx）；再不行退锚点旧口径。
+   *  纯休止 entry 不入命中表（不可选中）。 */
+  private hitEntryFor(
+    se: {
+      graphicalVoiceEntries?: { notes?: unknown[] }[]
+      sourceStaffEntry?: { Timestamp?: { RealValue?: number } }
+      PositionAndShape?: { AbsolutePosition?: { x: number } }
+    },
+    measure: number,
+    mx: number,
+    unitPx: number,
+    svgRect: { left: number; top: number },
+  ): HitEntry | null {
+    const gnotes = (se.graphicalVoiceEntries ?? [])
+      .flatMap((v) => v.notes ?? [])
+      .filter((n) => !(n as { sourceNote?: { isRest?: () => boolean } }).sourceNote?.isRest?.()) as HitDomNote[]
+    if (!gnotes.length) return null
+    const rv = se.sourceStaffEntry?.Timestamp?.RealValue ?? 0
+    const boxes = gnotes.map((gn) => {
+      const headRects = (gn.getNoteheadSVGs?.() ?? [])
+        .map((el) => el.getBoundingClientRect())
+        .filter((r) => r && (r.width > 0 || r.height > 0))
+      if (headRects.length) {
+        const modRects = (gn.getModifierSVGs?.() ?? [])
+          .map((el) => el.getBoundingClientRect())
+          .filter((r) => r && (r.width > 0 || r.height > 0))
+        return {
+          left: Math.min(...headRects.map((r) => r.left), ...modRects.map((r) => r.left)) - svgRect.left,
+          right: Math.max(...headRects.map((r) => r.right), ...modRects.map((r) => r.right)) - svgRect.left,
+          ys: headRects.map((r) => r.top + r.height / 2 - svgRect.top),
+          hw: Math.max(...headRects.map((r) => r.width / 2)),
+        }
+      }
+      // 几何回退：GraphicalNote 包络（OSMD bbox 含 accidental 时同样并入）
+      const bb = gn.PositionAndShape
+      if (bb && bb.Size.width > 0) {
+        return {
+          left: bb.AbsolutePosition.x * unitPx,
+          right: (bb.AbsolutePosition.x + bb.Size.width) * unitPx,
+          ys: [(bb.AbsolutePosition.y + bb.Size.height / 2) * unitPx],
+          hw: (bb.Size.width * unitPx) / 2,
+        }
+      }
+      return null
+    })
+    const ok = boxes.filter((b): b is NonNullable<typeof b> => b !== null)
+    if (!ok.length) {
+      // 兜底：DOM 与几何都不可用 -> staffEntry 锚点（T3b 前旧口径）
+      const ax = se.PositionAndShape?.AbsolutePosition?.x
+      return { m: measure, rv, x: mx + (ax ?? 0) * unitPx, ys: [], hw: 0 }
+    }
+    return {
+      m: measure,
+      rv,
+      x: (Math.min(...ok.map((b) => b.left)) + Math.max(...ok.map((b) => b.right))) / 2,
+      ys: ok.flatMap((b) => b.ys),
+      hw: Math.max(...ok.map((b) => b.hw)),
+    }
   }
 
   /**

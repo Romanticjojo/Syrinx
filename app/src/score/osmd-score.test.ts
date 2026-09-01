@@ -286,9 +286,11 @@ describe('OSMDScore T3 选中染色与小节聚焦', () => {
     expect(hit?.measure).toBe(1)
     expect(hit?.rvInMeasure).toBe(0.25)
     expect(hit?.dist).toBeCloseTo(40, 5)
-    // 行外点击：dy 叠入距离（y=80 -> dy=120，dist=hypot(40,120)）
-    const far = score.noteAtPoint(150, 80)
-    expect(far?.dist).toBeCloseTo(Math.hypot(40, 120), 5)
+    // 行内偏移点击：dy 叠入距离（y=190 -> 行顶 200，dy=10，dist=hypot(40,10)）
+    const near = score.noteAtPoint(150, 190)
+    expect(near?.dist).toBeCloseTo(Math.hypot(40, 10), 5)
+    // 行外超半行高：无效点击返回 null（T3b 行判定收紧，不再跨行乱选）
+    expect(score.noteAtPoint(150, 80)).toBeNull()
   })
 
   it('scrollToMeasure：滚动祖先 scrollTop 定位到小节行中部；未知小节 no-op', () => {
@@ -394,6 +396,113 @@ describe('OSMDScore T3b 选中色分离（selectionColor）', () => {
     cursor.notesUnder = [A2]
     score.syncToTime(4 * SPQ) // 光标推进到该音符：updateHighlight 跳过 selNote 染色
     expect(A2.colors.at(-1)).toBe(ORANGE)
+  })
+})
+
+// -- T3b：noteAtPoint 命中精度强化（音符头绘制 x 对齐，假 SVG 元素 rect 注入）--
+/** 可注入音符头绘制几何的 GraphicalNote 替身：headBoxes 为各 notehead 的
+ *  {left,top,width,height}（client px，happy-dom 下 svg 全零 rect，即绝对坐标）；
+ *  modBoxes 为修饰符（升/降号）box——只并入 x 包络，不贡献中心 y/半宽 */
+function mkGNoteGeom(
+  headBoxes: { left: number; top: number; width: number; height: number }[],
+  modBoxes: { left: number; top: number; width: number; height: number }[] = [],
+) {
+  const colors: string[] = []
+  const mkEl = (b: { left: number; top: number; width: number; height: number }) => ({
+    getBoundingClientRect: () => ({
+      left: b.left,
+      top: b.top,
+      right: b.left + b.width,
+      bottom: b.top + b.height,
+      width: b.width,
+      height: b.height,
+    }),
+  })
+  return {
+    colors,
+    setColor: (c: string) => colors.push(c),
+    sourceNote: { isRest: () => false },
+    getNoteheadSVGs: () => headBoxes.map(mkEl),
+    getModifierSVGs: () => modBoxes.map(mkEl),
+  }
+}
+
+describe('OSMDScore T3b 命中精度强化（音符头绘制 x 对齐）', () => {
+  /** m1（绝对 x=100px，行 y=200..260px）：rv0 锚点 x=100、rv0.25 锚点 x=110；
+   *  rv0 音符头绘制在 [112,124] 且带 accidental [104,112] -> 包络中心 114；
+   *  rv0.25 音符头绘制在 [130,142] -> 中心 136 */
+  const N0 = mkGNoteGeom([{ left: 112, top: 218, width: 12, height: 8 }], [
+    { left: 104, top: 218, width: 8, height: 8 },
+  ])
+  const N1 = mkGNoteGeom([{ left: 130, top: 218, width: 12, height: 8 }])
+  const mlHit = [
+    [
+      fakeMeasure(1, [
+        { rv: 0, note: N0 },
+        { rv: 0.25, note: N1 },
+      ]),
+    ],
+  ]
+  function makeHitScore(
+    ml: unknown[][] = mlHit,
+  ): { score: OSMDScore; cursor: FakeCursor } {
+    const cursor = new FakeCursor([0, 1])
+    const container = document.createElement('div')
+    container.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
+    const score = new OSMDScore(
+      container,
+      '#3ddfae',
+      {
+        load: async () => {},
+        render: () => {},
+        cursor,
+        GraphicSheet: { MeasureList: ml },
+      } as unknown as OpenSheetMusicDisplay,
+    )
+    return { score, cursor }
+  }
+
+  it('偏移修正：点击落在带 accidental 音符头上时选它而非锚点更近的邻音', () => {
+    // 旧逻辑（staffEntry 锚点 x）：|118-100|=18 > |118-110|=8 -> 误选 rv0.25；
+    // 新逻辑（绘制包络中心）：|118-114|=4 < |118-136|=18 -> 选中 rv0
+    const h = makeHitScore().score.noteAtPoint(118, 222)
+    expect(h?.measure).toBe(1)
+    expect(h?.rvInMeasure).toBe(0)
+    expect(h?.precise).toBe(true)
+  })
+
+  it('无偏移音符：正常按绘制 x 最近邻命中', () => {
+    const h = makeHitScore().score.noteAtPoint(138, 222)
+    expect(h?.rvInMeasure).toBe(0.25) // |138-136|=2 < |138-114|=24
+    expect(h?.precise).toBe(true)
+  })
+
+  it('precise=false：命中但在半个音符头宽度之外（供页面三档提示）', () => {
+    const h = makeHitScore().score.noteAtPoint(150, 222)
+    expect(h?.rvInMeasure).toBe(0.25) // 距最近绘制中心 14px > 半宽 6px
+    expect(h?.precise).toBe(false)
+  })
+
+  it('行判定收紧：点击处与行 y 距离超行高一半返回 null（不跨行乱选）', () => {
+    expect(makeHitScore().score.noteAtPoint(118, 160)).toBeNull() // dy=40 > 半行高 30
+    const near = makeHitScore().score.noteAtPoint(118, 180) // dy=20 <= 30：仍命中
+    expect(near?.rvInMeasure).toBe(0)
+    expect(near?.dist).toBeCloseTo(Math.hypot(4, 20), 5)
+  })
+
+  it('同 x 并列（多声部）：优先 y 更接近点击处的音符', () => {
+    const Hi = mkGNoteGeom([{ left: 100, top: 208, width: 12, height: 8 }]) // 上声部
+    const Lo = mkGNoteGeom([{ left: 100, top: 248, width: 12, height: 8 }]) // 下声部
+    const ml2 = [
+      [
+        fakeMeasure(1, [
+          { rv: 0, note: Hi },
+          { rv: 0.5, note: Lo },
+        ]),
+      ],
+    ]
+    expect(makeHitScore(ml2).score.noteAtPoint(106, 252)?.rvInMeasure).toBe(0.5) // 点下声部
+    expect(makeHitScore(ml2).score.noteAtPoint(106, 212)?.rvInMeasure).toBe(0) // 点上声部
   })
 })
 
