@@ -305,9 +305,10 @@
   align-items: center;
   justify-content: space-between;
 }
-/* A4 纵版比例（t_c10d648d）：与演奏页同口径（66vh + 860px 兜底，zoom 同为 1.05） */
+/* 印刷谱比例：与演奏页同口径（92vh + 1280px 兜底，zoom 同为 0.85）——
+   对齐纸质谱扫描件的页宽/谱线间距比（≈118） */
 .score-section .sheet-container {
-  width: min(66vh, 860px, 100%);
+  width: min(92vh, 1280px, 100%);
   margin-inline: auto;
 }
 .score-load-error {

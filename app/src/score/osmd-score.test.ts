@@ -657,15 +657,17 @@ describe('OSMDScore T3c setTimeline', () => {
 })
 
 describe('OSMDScore zoom（谱面缩窄，t_53aa8b7a）', () => {
-  it('构造时写入 OSMD 实例（渲染前设置安全）', () => {
+  it('load 时写入 OSMD 实例（load 后 render 前设置才真正生效——构造期设置被 OSMD 忽略）', async () => {
     const fake = makeFakeOsmd(new FakeCursor([0, 1]))
-    new OSMDScore(document.createElement('div'), '#3ddfae', fake, 1.15)
+    const score = new OSMDScore(document.createElement('div'), '#3ddfae', fake, 1.15)
+    await score.load('<score/>', MINI_TIMELINE)
     expect((fake as unknown as { Zoom: number }).Zoom).toBe(1.15)
   })
 
-  it('缺省 zoom=1：不改变现有几何口径（unitPx=10×Zoom）', () => {
+  it('缺省 zoom=1：不改变现有几何口径（unitPx=10×Zoom）', async () => {
     const fake = makeFakeOsmd(new FakeCursor([0, 1]))
-    new OSMDScore(document.createElement('div'), '#3ddfae', fake)
+    const score = new OSMDScore(document.createElement('div'), '#3ddfae', fake)
+    await score.load('<score/>', MINI_TIMELINE)
     expect((fake as unknown as { Zoom: number }).Zoom).toBe(1)
   })
 })

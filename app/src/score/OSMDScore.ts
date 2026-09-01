@@ -53,6 +53,8 @@ export class OSMDScore {
   private baseNoteColor: string
   /** dispose 后作废在途 load：StrictMode 双挂载下防僵尸渲染（容器里出现两份谱面） */
   private disposed = false
+  /** 谱面缩放（构造传入，load 时真正生效——见构造函数注释） */
+  private zoom: number
   /** 上一帧被染色的 GraphicalNote：一帧至多一个当前音，离开时恢复 */
   private highlighted: { setColor: (c: string, o?: unknown) => void } | null = null
   /** [sync-tune T3] 选中的 GraphicalNote（三向选中染色持有者，独立于光标高亮） */
@@ -129,9 +131,11 @@ export class OSMDScore {
     // 「行内多余谱号 + 4/4」；首小节拍号不受影响（isFirstSourceMeasure 仍绘制）。
     // EngravingRules 可选链保护：测试注入口的 fake 实例没有该成员
     if (this.osmd.EngravingRules) this.osmd.EngravingRules.ShowRhythmAgainAfterPartEndOrFinalBarline = false
-    // Zoom 在 load/render 前设置（setter 只存值+置脏标，可选链保护未初始化状态）；
-    // noteAtPoint/setMarkers 的 unitPx=10×Zoom 已随动，几何自洽
-    this.osmd.Zoom = zoom
+    // 记录目标 zoom；实际设置推迟到 load() 内（load 后、render 前）——
+    // OSMD 的 Zoom setter 只在内部已就绪时重算布局，构造期设置会被静默忽略
+    // （探针实测：load 前设置 zoom 0.7/0.8/1.0 输出完全相同），t_53aa8b7a 的
+    // 「zoom 缩谱」从未真正生效。渲染后 unitPx=10×Zoom 的几何口径不变。
+    this.zoom = zoom
   }
 
   /** 恢复一个高亮音符的颜色（T3b 起按释放方区分）：光标释放时若音符仍被选中
@@ -157,6 +161,9 @@ export class OSMDScore {
   async load(xml: string, timeline: Timeline): Promise<void> {
     await this.osmd.load(xml)
     if (this.disposed) return
+    // zoom 在 load 后、render 前设置才真正生效（构造期设置被 OSMD 忽略，见构造注释）；
+    // EngravingRules 可选链保护测试注入口（fake 无 Zoom setter 依赖的内部状态）
+    this.osmd.Zoom = this.zoom
     this.osmd.render()
     // 新谱面几何：标记层缓存全部作废（t_perf_sync_tune）
     this.markerGeom = null

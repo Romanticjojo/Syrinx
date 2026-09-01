@@ -159,14 +159,16 @@ video.perform-bg {
   flex: 1;
   min-height: 0;
 }
+/* 印刷谱比例（t_c10d648d → 印刷比例重校）：参照 luv-letter 纸质谱扫描件
+   （resources/luv-letter/score/2.jpg）实测——页宽≈118 个谱线间距、每行 4-7 小节。
+   旧口径 66vh+zoom1.05 宽度比仅 ≈68，音符相对版面过大 1.7 倍；改为
+   min(92vh, 1280px) + zoom 0.85（10px×0.85=8.5px 谱线间距），1080p 下宽度比 ≈117，
+   观感与纸谱一致：每行 5-8 小节，音符小而密。100% 兜底窄屏。换行由 OSMD 按容器
+   宽自适应（强制换行已在 loadSong 剥离）。 */
 .perform-stage .sheet-container {
   height: 100%;
   overflow-y: auto; /* 谱面滚动容器：OSMD 光标 scrollIntoView 只卷这里，不卷窗口 */
-  /* A4 纵版比例（t_c10d648d）：可用谱面高约占 90vh，A4 宽 ≈ 0.707×高，
-     取 66vh 留页头控制条余量；860px 兜底超大屏、100% 兜底窄屏。
-     换行由 OSMD 按容器宽自适应（强制换行已在 loadSong 剥离），zoom 1.05
-     音符更小，每行 4-6 小节，观感接近竖版打印乐谱 */
-  width: min(66vh, 860px, 100%);
+  width: min(92vh, 1280px, 100%);
   margin-inline: auto;
   /* 谱面半透面板：压谱可读，但背景动画必须透出来可见（t_a857b79e：0.66 压暗过重）；
      backdrop blur 把透出的动画柔化成光影，不再与谱线打架（t_3b9cfc25） */
