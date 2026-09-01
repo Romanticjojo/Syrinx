@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { audioEngine } from '../audio/AudioEngine'
 import { applyBeats, type BeatsFile } from '../score/anchors'
@@ -13,6 +13,7 @@ import {
   fmtTime,
   makeQ2T,
   midiName,
+  type CtrlPoint,
   type SyncNote,
 } from '../synctune/logic'
 import { selectedNoteView, tunedCount, useSyncTuneStore, visibleNotes } from '../synctune/store'
@@ -30,6 +31,8 @@ import './SyncTunePage.css'
  * .highlightNoteAt，单音符 setColor）；播放/选中变化自动滚动聚焦当前小节
  * （scrollToMeasure），谱面手动 wheel/pointerdown 后 5 秒内不抢滚动；
  * 谱面点击命中距离 >120px 时右栏提示「已选最近音符」。
+ * R2（T3d）：列表全量展示（去小节 ±2 窗口）+ 行元数据 memo 查表；帮助按钮
+ * 「? 操作说明」文字恢复（绿色 ？ 保留）。
  */
 
 type Phase = 'loading' | 'ready' | 'error'
@@ -43,7 +46,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   const [errorMsg, setErrorMsg] = useState('')
   const [xml, setXml] = useState<string | null>(null)
   const [markersReady, setMarkersReady] = useState(false)
-  const [curMeasure, setCurMeasure] = useState(1)
   // 命中距离提示（T3 决策 4）：点谱面 120px 内无音符仍选最近时在右栏提示（5s 自动消隐）
   const [nearHint, setNearHint] = useState<string | null>(null)
   const nearHintTimerRef = useRef(0)
@@ -251,7 +253,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     scoreRef.current = osmd
     // 小节号显示 + 播放中自动聚焦当前小节（T3 决策 6：rAF 回调路径，不 setState）
     osmd.onMeasureChange = (m) => {
-      setCurMeasure(m)
       if (audioEngine.playing) followMeasure(m)
     }
     let cancelled = false
@@ -785,8 +786,19 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   }
 
   // —— 渲染 ——
-  const anchorMeasure = selView.note?.measure ?? curMeasure
-  const listNotes = visibleNotes(st.getState(), anchorMeasure, 2)
+  // 列表全量展示（T3d）：去掉小节 ±2 窗口，滚轮可浏览全谱；chips 过滤作用于全量，
+  // 选中行自动 scrollIntoView 保留（下方 effect）
+  const listNotes = visibleNotes(st.getState())
+  // 行元数据（T3d 全量列表）：q→{控制点, 偏差ms} 随 working/baseline 一次构建 O(N+M)，
+  // 行渲染 O(1) 查表——601 行逐行 working.find + 重复 deltaMsAt 扫描是全量化后的卡顿源
+  const rowMeta = useMemo(() => {
+    const cpByQ = new Map(working.map((p) => [p.q, p]))
+    const meta = new Map<number, { cp?: CtrlPoint; delta: number }>()
+    for (const n of st.getState().notes) {
+      meta.set(n.q, { cp: cpByQ.get(n.q), delta: Math.round(deltaMsAt(working, baseline, n.q)) })
+    }
+    return meta
+  }, [working, baseline])
   useEffect(() => {
     listRef.current?.querySelector('[data-sel="1"]')?.scrollIntoView({ block: 'nearest' })
   }, [selectedIdx, filter])
@@ -895,7 +907,8 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           <aside className="st-list">
             <div className="st-list-head">
               <span>
-                m{Math.max(1, anchorMeasure - 2)}–{anchorMeasure + 2}
+                {filter === 'all' ? '全部' : filter === 'tuned' ? '已调' : '未调'} {listNotes.length}{' '}
+                音符
               </span>
               {(['all', 'tuned', 'untuned'] as const).map((f) => (
                 <button
@@ -910,17 +923,13 @@ export default function SyncTunePage({ songId }: { songId: string }) {
             <div className="st-list-body" ref={listRef}>
               {listNotes.map((n) => {
                 const isSel = n.idx === selectedIdx
-                const delta = Math.round(deltaMsAt(working, baseline, n.q))
-                const cp = working.find((p) => p.q === n.q)
+                const { cp, delta } = rowMeta.get(n.q) ?? { cp: undefined, delta: 0 }
                 return (
                   <button
                     key={n.idx}
                     className={`st-row${isSel ? ' sel' : ''}`}
                     data-sel={isSel ? '1' : undefined}
-                    onClick={() => {
-                      st.getState().select(n.idx)
-                      setCurMeasure(n.measure)
-                    }}
+                    onClick={() => st.getState().select(n.idx)}
                   >
                     <span className="m">m{n.measure}</span>
                     <span className="p">{midiName(n.midi)}</span>
@@ -935,7 +944,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
                   </button>
                 )
               })}
-              {listNotes.length === 0 && <div className="st-empty">该窗口内无此状态音符</div>}
+              {listNotes.length === 0 && <div className="st-empty">无此状态音符</div>}
             </div>
           </aside>
 

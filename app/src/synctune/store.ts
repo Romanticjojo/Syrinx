@@ -171,26 +171,12 @@ function tunedSetOf(state: SyncTuneState): Set<number> {
   return set
 }
 
-/** 过滤后的音符列表（当前小节 ±2 窗口由调用方的小节游标再裁一次）
- *  性能（t_perf_sync_tune）：小节窗口用二分裁剪 + 窗口线性收集，不再全表 filter；
- *  filter 模式的已调判定走 tunedSetOf 单次构建。 */
-export function visibleNotes(state: SyncTuneState, curMeasure: number, window = 2): SyncNote[] {
-  const notes = state.notes
-  // 音符按播放序 ≈ 小节序排列：二分找窗口起点，向右收集到出窗为止
-  let lo = 0
-  let hi = notes.length
-  const minM = curMeasure - window
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1
-    if (notes[mid].measure < minM) lo = mid + 1
-    else hi = mid
-  }
-  const maxM = curMeasure + window
-  const inWindow: SyncNote[] = []
-  for (let i = lo; i < notes.length && notes[i].measure <= maxM; i++) inWindow.push(notes[i])
-  if (state.filter === 'all') return inWindow
+/** 过滤后的音符列表（T3d 起作用于全量：列表全量展示，不再按小节窗口裁剪）
+ *  性能（t_perf_sync_tune）：filter 模式的已调判定走 tunedSetOf 单次构建 O(N log N)。 */
+export function visibleNotes(state: SyncTuneState): SyncNote[] {
+  if (state.filter === 'all') return state.notes
   const tunedSet = tunedSetOf(state)
-  return inWindow.filter((n) => tunedSet.has(n.idx) === (state.filter === 'tuned'))
+  return state.notes.filter((n) => tunedSet.has(n.idx) === (state.filter === 'tuned'))
 }
 
 /** 工作网格 q→t（波形期望线/试听 B 窗共用） */

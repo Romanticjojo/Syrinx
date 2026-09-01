@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import type { SyncNote } from './logic'
 import { useSyncTuneStore, selectedNoteView, tunedCount, visibleNotes, workingQ2T } from './store'
 
 /** 3 小节替身：notes 播放序 q 0/5/8（m2 变速段换算已在 logic.test.ts 钉死） */
@@ -112,17 +113,44 @@ describe('撤销栈回滚内存 diff', () => {
 })
 
 describe('已调/未调过滤 + 统计', () => {
-  it('visibleNotes：小节 ±2 窗口 + tuned/untuned 过滤', () => {
+  it('visibleNotes：全量返回 + tuned/untuned 过滤（T3d 去小节窗口）', () => {
     S().select(1)
     S().adjust(50) // q=5 已调
-    expect(visibleNotes(S(), 2, 2).map((n) => n.idx)).toEqual([0, 1, 2])
+    // 全量：不再按小节窗口裁剪，播放序原样返回
+    expect(visibleNotes(S()).map((n) => n.idx)).toEqual([0, 1, 2])
     S().setFilter('tuned')
-    expect(visibleNotes(S(), 2, 2).map((n) => n.idx)).toEqual([1])
+    expect(visibleNotes(S()).map((n) => n.idx)).toEqual([1])
     S().setFilter('untuned')
-    expect(visibleNotes(S(), 2, 2).map((n) => n.idx)).toEqual([0, 2])
+    expect(visibleNotes(S()).map((n) => n.idx)).toEqual([0, 2])
     S().setFilter('all')
-    // 窗口裁剪：m3 ±0 只留 m3 的音
-    expect(visibleNotes(S(), 3, 0).map((n) => n.idx)).toEqual([2])
+    expect(visibleNotes(S()).map((n) => n.idx)).toEqual([0, 1, 2])
+  })
+
+  it('visibleNotes：601 音符 + 601 控制点全量过滤性能护栏', () => {
+    const notes: SyncNote[] = []
+    for (let i = 0; i < 601; i++) {
+      notes.push({ idx: i, measure: 1 + Math.floor(i / 6), midi: 72, q: (i * 4) / 6 })
+    }
+    const baseline = notes.map((n) => ({ q: n.q, t: n.q * 0.5 }))
+    useSyncTuneStore.getState().load('big', notes, baseline)
+    // 前 300 个控制点平移 -> 已调；其余未调
+    useSyncTuneStore.setState({
+      working: baseline.map((p, i) => (i < 300 ? { q: p.q, t: p.t + 0.01 } : { ...p })),
+    })
+    const t0 = performance.now()
+    expect(visibleNotes(S()).length).toBe(601) // all：全量
+    S().setFilter('tuned')
+    const tunedList = visibleNotes(S())
+    expect(tunedList.length).toBe(300)
+    expect(tunedList[0].idx).toBe(0)
+    expect(tunedList[299].idx).toBe(299)
+    S().setFilter('untuned')
+    const untunedList = visibleNotes(S())
+    expect(untunedList.length).toBe(301)
+    expect(untunedList[0].idx).toBe(300)
+    // 护栏：三档全量过滤在 601 规模下毫秒级（tunedSetOf 单次构建）；
+    // 若退化成逐音符 O(N²) 判定（~36 万次比较×3）会显著超时
+    expect(performance.now() - t0).toBeLessThan(1000)
   })
 
   it('tunedCount：只统计偏离基线的音符', () => {
