@@ -122,15 +122,28 @@ export function expandRepeats(xml: string): string {
     if (order.length === measures.length) continue
 
     // 按演奏序重建小节：克隆 + 顺序重编号 + 摘除 repeat/ending 标记（volta 语义已物化，
-    // 展开 OSMD 渲染线性谱；ending 不摘会在展开谱上残留volta括号）
+    // 展开 OSMD 渲染线性谱；ending 不摘会在展开谱上残留volta括号）。
+    // 演奏序第 1 小节直接复用原始 m1 节点而非克隆：全曲唯一的 <attributes>（clef/key/
+    // time/divisions）随它保留——克隆体一律摘除 attributes，否则 OSMD 在展开谱中间行内
+    // 重画小谱号 + 拍号（用户可见的多余符号），且 divisions 丢失会破坏时间轴换算
     const frag = doc.createDocumentFragment()
     order.forEach((idx, seq) => {
+      if (seq === 0 && idx === 0) {
+        const head = measures[0]
+        head.setAttribute('number', '1')
+        head.querySelectorAll('repeat, ending').forEach((r) => r.remove())
+        frag.appendChild(head)
+        return
+      }
       const clone = measures[idx].cloneNode(true) as Element
       clone.setAttribute('number', String(seq + 1))
       clone.querySelectorAll('repeat, ending').forEach((r) => r.remove())
+      clone.querySelectorAll('attributes').forEach((a) => a.remove())
       frag.appendChild(clone)
     })
-    measures.forEach((m) => m.remove())
+    measures.forEach((m, i) => {
+      if (i > 0) m.remove() // m1 已移入 frag，再 remove 会把它从 frag 摘掉
+    })
     part.appendChild(frag)
     expandedAny = true
   }

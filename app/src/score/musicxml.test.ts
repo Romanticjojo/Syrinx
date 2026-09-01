@@ -136,6 +136,19 @@ describe('expandRepeats 反复展开', () => {
   </part>
 </score-partwise>`
 
+  /** m1 带 attributes（divisions）+ forward repeat，m3 backward repeat：
+      第二遍 m1 是克隆 → 不应带 attributes（否则 OSMD 在谱中间行内重画谱号/拍号） */
+  it('克隆小节摘除 attributes，原始 m1 保留（防行内重复谱号/拍号）', () => {
+    const expanded = expandRepeats(REPEAT_XML)
+    // REPEAT_XML 只有 m1 一处 <attributes>；展开后（C D C D E）仍应只剩 1 处
+    expect(expanded.match(/<attributes/g)).toHaveLength(1)
+    const doc = new DOMParser().parseFromString(expanded, 'application/xml')
+    const measures = Array.from(doc.querySelectorAll('measure'))
+    // 原始 m1（演奏序第 1 小节）保留 attributes；克隆 m1（演奏序第 4 小节）摘除
+    expect(measures[0].querySelector('attributes')).not.toBeNull()
+    expect(measures[3].querySelector('attributes')).toBeNull()
+  })
+
   it('forward→backward 段展开成实体小节并顺序重编号', () => {
     const expanded = expandRepeats(REPEAT_XML)
     const tl = parseMusicXml(expanded)
