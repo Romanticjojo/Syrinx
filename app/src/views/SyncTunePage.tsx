@@ -248,7 +248,8 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     const div = scoreDivRef.current
     const tl = displayTlRef.current
     if (!div || !tl) return
-    const osmd = new OSMDScore(div, song.accent)
+    // 橙色选中（T3b）：与播放光标 accent 分离，「我点的」一眼可辨
+    const osmd = new OSMDScore(div, song.accent, undefined, undefined, '#ff9f43')
     scoreRef.current = osmd
     // 小节号显示 + 播放中自动聚焦当前小节（T3 决策 6：rAF 回调路径，不 setState）
     osmd.onMeasureChange = (m) => {
@@ -843,21 +844,32 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     listRef.current?.querySelector('[data-sel="1"]')?.scrollIntoView({ block: 'nearest' })
   }, [selectedIdx, filter])
 
-  /** 谱面点音符（三向同步之一）：noteAtPoint → 小节+小节内拍位 → 最近音符。
-   *  命中半径内无音符时 fallback 最近音符（OSMDScore 现有逻辑），距离 >120px
-   *  仍选最近并在右栏提示（T3 决策 4）；提示 5s 自动消隐，离散点击路径不进帧渲染 */
+  /** 谱面点音符（三向同步之一）：noteAtPoint（T3b 强化：音符头绘制 x 对齐 +
+   *  行阈值收紧）→ 小节+小节内拍位 → 最近音符。nearHint 三档（T3b 决策 3）：
+   *  精确命中（音符头半宽内）无提示 / 附近音符（半宽外 120px 内）/ 超距最近
+   *  （>120px）；行外无效点击不选不误触、也给出提示。提示 5s 自动消隐，
+   *  离散点击路径不进帧渲染 */
   const onScoreClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const hit = scoreRef.current?.noteAtPoint(e.clientX, e.clientY)
-    if (!hit) return
+    window.clearTimeout(nearHintTimerRef.current)
+    if (!hit) {
+      // 无效点击（T3b 行判定收紧）：点击处离谱行过远（超行高一半），不选不误触
+      setNearHint('点击处离谱行过远，未选中（无效点击）')
+      nearHintTimerRef.current = window.setTimeout(() => setNearHint(null), 5000)
+      return
+    }
     const entry = measureTableRef.current.find((x) => x.m === hit.measure)
     if (!entry) return
     cancelAudition()
-    window.clearTimeout(nearHintTimerRef.current)
     if (hit.dist > 120) {
       setNearHint(`已选最近音符（点击处 ${Math.round(hit.dist)}px 内无音符）`)
       nearHintTimerRef.current = window.setTimeout(() => setNearHint(null), 5000)
+    } else if (!hit.precise) {
+      // 半个音符头宽度外但 120px 内：始终告知选中的是附近音符（T3b 决策 3）
+      setNearHint(`已选附近音符（距点击处 ${Math.round(hit.dist)}px）`)
+      nearHintTimerRef.current = window.setTimeout(() => setNearHint(null), 5000)
     } else {
-      setNearHint(null)
+      setNearHint(null) // 精确命中：无提示
     }
     st.getState().selectByQ(entry.quarters + hit.rvInMeasure * 4)
   }
@@ -989,12 +1001,13 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           </section>
 
           <aside className="st-props">
+            {/* 命中提示提到顶层（T3b）：无效点击/无选中时右栏也可见 */}
+            {nearHint && <p className="st-near-hint">{nearHint}</p>}
             {selView.note ? (
               <>
                 <h3>
                   m{selView.note.measure} · {midiName(selView.note.midi)}
                 </h3>
-                {nearHint && <p className="st-near-hint">{nearHint}</p>}
                 <dl>
                   <dt>q（四分音符位）</dt>
                   <dd>{selView.note.q.toFixed(3)}</dd>
