@@ -37,7 +37,6 @@ app/public/songs/
 # --- 日志与临时产物 ---
 *.log
 claude-replay-fix*.log
-electron-log.txt
 
 # --- 密钥 / 环境变量（防泄露） ---
 .env
@@ -53,7 +52,6 @@ electron-log.txt
 docs/github-release-brief.md
 docs/deployment/
 docs/需求与调研/
-app/electron_test/
 app/public/score-dump.html
 app/scripts/probe-*
 app/scripts/dump-*

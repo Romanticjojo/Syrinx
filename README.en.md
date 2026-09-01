@@ -10,7 +10,6 @@
 
 [中文](README.md) · [Quick Start](#-quick-start) · [Features](#-features) · [Roadmap](#-roadmap) · [FAQ](#-faq--known-issues)
 
-![Electron](https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -38,7 +37,6 @@ The screen above is the first thing you see when opening Syrinx: the goddess-flu
 | ✅ | Performance recording and playback, with the accompaniment playing alongside for comparison |
 | ✅ | three.js dynamic immersive background; low-frequency energy drives glow and particle breathing (audio-reactive) |
 | ✅ | 3D flute-model entrance animation + preview page, skippable |
-| ✅ | Electron desktop shell (Windows installer / portable packaging) |
 | ✅ | Light & dark themes + per-song accent color (defined in the Song Pack) |
 | ✅ | Vitest unit tests covering the score timeline / YIN / pitch statistics |
 | ❌ | Mobile / PWA (planned) |
@@ -63,18 +61,16 @@ Beneath the feature table lie a few design decisions that run through the whole 
 
 ## 🚀 Quick Start
 
-**Requirements**: Node.js **≥ 20.19** (or ≥ 22.12, required by Vite 8); npm ≥ 10; on Windows, Visual Studio Build Tools for desktop packaging (electron-builder).
+**Requirements**: Node.js **≥ 20.19** (or ≥ 22.12, required by Vite 8); npm ≥ 10.
 
 ```bash
 git clone https://github.com/Romanticjojo/Syrinx.git
 cd Syrinx/app
 npm install
 
-npm start          # Launch the Electron desktop app (dev mode, Vite + Electron together)
-npm run dev        # Browser-only mode → http://localhost:5173
+npm run dev        # Start the dev server → http://localhost:5173
 npm run build      # Production build
-npm run dist       # Windows installer (NSIS)
-npm run dist:portable  # Windows portable exe
+npm run preview    # Preview the production build
 ```
 
 After launching: entrance animation (skippable) → pick a song in the library → detail preview → **Start performing**:
@@ -89,8 +85,6 @@ After launching: entrance animation (skippable) → pick a song in the library �
 ```
 Syrinx/
 ├── app/                        # Frontend project (Vite + React + TS)
-│   ├── electron/               # Electron main process and packaging assets
-│   ├── electron-builder.yml    # Windows packaging config (NSIS / portable)
 │   ├── public/
 │   │   └── songs/              # Song assets (Song Pack, not committed)
 │   ├── src/
@@ -148,18 +142,14 @@ The core performance loop has landed; the focus now shifts to the song-library e
 | M1 | Preview + rendering: library → preview → OSMD score rendering | ✅ |
 | M2 | Synchronized performance: timeline TDD, score/audio/cursor sync, dynamic background, immersive controls | ✅ |
 | M3 | Recording + feedback: recording playback, YIN intonation detection, comparison charts, 3D entrance | ✅ |
-| M4 | Electron desktop: main process, Windows packaging, recording pipeline fix | ✅ |
 | P1 | More Song Packs, tempo adjustment, loop measures | 🚧 |
 | P2 | CREPE pitch detection enhancement, mixer playback | 📅 |
-| P3 | Multi-platform (PWA / mobile), macOS / Linux packaging | 📅 |
+| P3 | Multi-platform (PWA / mobile), desktop packaging | 📅 |
 
 ## ❓ FAQ / Known Issues
 
 **Q: The library is empty after cloning?**
 A: Expected — scores / accompaniments / covers are copyrighted media and are not distributed with the repo. Put songs under `app/public/songs/` following the [Song Pack](#-song-pack) spec.
-
-**Q: Why Electron instead of a pure web page?**
-A: Low-latency microphone capture and local file access are restricted in browsers; the desktop shell preserves both Web Audio's low latency and AudioWorklet direct capture.
 
 **Q: The exported WAV recording is silent?**
 A: Older versions had an issue where the analysis branch and the recording branch were not on the same audio source; it now captures directly via AudioWorklet (same source as the analysis branch). If it is still silent, check the system microphone permission and input device selection.
@@ -167,16 +157,13 @@ A: Older versions had an issue where the analysis branch and the recording branc
 **Q: The accompaniment and the cursor are out of sync?**
 A: Sync uses `AudioContext.currentTime` as the sole clock; if you use an external accompaniment audio file, make sure the beat anchors (beats) in the manifest align with it.
 
-**Q: No macOS / Linux support?**
-A: The packaging scripts currently target Windows only (NSIS / portable); the app itself is a standard web stack, and cross-platform packaging is on the roadmap at P3.
-
 **Known issues**: ① The 3D entrance animation runs at low frame rates on some integrated GPUs (skippable); ② the first screen looks sparse when the library is empty (add one song to restore it).
 
 ## 🤝 Acknowledgements
 
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) — browser MusicXML score engine
 - [three.js](https://threejs.org/) — 3D background and flute model
-- [Electron](https://www.electronjs.org/) / [Vite](https://vitejs.dev/) / [React](https://react.dev/) — engineering foundation
+- [Vite](https://vitejs.dev/) / [React](https://react.dev/) — engineering foundation
 
 ---
 

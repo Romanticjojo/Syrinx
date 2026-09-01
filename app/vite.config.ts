@@ -5,8 +5,7 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // Electron 打包用 file:// 协议加载，绝对路径 /assets/... 会指向盘符根；
-  // 相对 base './' 让构建产物在 http（服务器部署）与 file（桌面端）下都能加载。
+  // 相对 base './'：构建产物不依赖部署路径，放服务器子路径或本地直接打开均可。
   base: './',
   test: {
     environment: 'happy-dom',

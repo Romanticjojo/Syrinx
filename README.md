@@ -8,7 +8,6 @@
 
 [English](README.en.md) · [快速开始](#-快速开始) · [功能](#-功能总览) · [路线图](#-路线图) · [FAQ](#-faq--已知问题)
 
-![Electron](https://img.shields.io/badge/Electron-44-47848F?style=flat-square&logo=electron&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -38,7 +37,6 @@
 | ✅ | 演奏录音与回放，回放时可同时播放伴奏对照 |
 | ✅ | three.js 动态沉浸背景，低频能量驱动光晕与粒子呼吸（audio-reactive） |
 | ✅ | 3D 长笛模型入场动画 + 预览页展示，可跳过 |
-| ✅ | Electron 桌面壳（Windows 安装包 / 便携版打包） |
 | ✅ | 深浅双主题 + 每曲独立强调色（Song Pack 定义） |
 | ✅ | Vitest 单元测试覆盖曲谱时间轴 / YIN / 音高统计 |
 | ❌ | 移动端 / PWA（规划中） |
@@ -63,18 +61,16 @@
 
 ## 🚀 快速开始
 
-**环境要求**：Node.js **≥ 20.19**（或 ≥ 22.12，Vite 8 要求）；npm ≥ 10；Windows 下桌面打包需 Visual Studio Build Tools（electron-builder）。
+**环境要求**：Node.js **≥ 20.19**（或 ≥ 22.12，Vite 8 要求）；npm ≥ 10。
 
 ```bash
 git clone https://github.com/Romanticjojo/Syrinx.git
 cd Syrinx/app
 npm install
 
-npm start          # 启动 Electron 桌面应用（开发模式，Vite + Electron 并起）
-npm run dev        # 仅浏览器模式 → http://localhost:5173
+npm run dev        # 启动开发服务器 → http://localhost:5173
 npm run build      # 生产构建
-npm run dist       # Windows 安装包（NSIS）
-npm run dist:portable  # Windows 便携版 exe
+npm run preview    # 预览生产构建
 ```
 
 打开后：入场动画（可跳过）→ 曲库选曲 → 详情预览 → **开始演奏**：
@@ -89,8 +85,6 @@ npm run dist:portable  # Windows 便携版 exe
 ```
 Syrinx/
 ├── app/                        # 前端工程（Vite + React + TS）
-│   ├── electron/               # Electron 主进程与打包资源
-│   ├── electron-builder.yml    # Windows 打包配置（NSIS / portable）
 │   ├── public/
 │   │   └── songs/              # 曲目素材（Song Pack，不入库）
 │   ├── src/
@@ -148,7 +142,6 @@ app/public/songs/<song-id>/
 | M1 | 预览 + 渲染：曲库 → 预览 → OSMD 谱面渲染 | ✅ |
 | M2 | 同步演奏：时间轴 TDD、谱/音/光标同步、动态背景、沉浸控件 | ✅ |
 | M3 | 录音 + 反馈：录音回放、YIN 音准检测、对比图表、3D 入场 | ✅ |
-| M4 | Electron 桌面化：主进程、Windows 打包、录音链路修复 | ✅ |
 | P1 | 更多曲目 Song Pack、速度调节、循环小节 | 🚧 |
 | P2 | CREPE 音高检测增强、混音回放 | 📅 |
 | P3 | 多端（PWA / 移动端）、macOS / Linux 打包 | 📅 |
@@ -158,17 +151,11 @@ app/public/songs/<song-id>/
 **Q：克隆后曲库是空的？**
 A：正常——谱面 / 伴奏 / 封面属于版权媒体，不随仓库分发。按 [Song Pack](#-曲目接入song-pack) 规格放入 `app/public/songs/` 即可。
 
-**Q：为什么用 Electron 而不是纯网页？**
-A：麦克风低延迟采集与本地文件访问在浏览器里受限；桌面壳同时保住了 Web Audio 的低延迟与 AudioWorklet 直采。
-
 **Q：录音导出的 WAV 是静音？**
 A：旧版本存在分析支路与录音支路不同源的问题，已改为 AudioWorklet 直采（与分析支路同源）。若仍遇静音，请检查系统麦克风权限与输入设备选择。
 
 **Q：伴奏和光标对不齐？**
 A：同步以 `AudioContext.currentTime` 为唯一时钟；若使用外部伴奏音频，请确保 manifest 中的节拍锚点（beats）与该音频对齐。
-
-**Q：不支持 macOS / Linux？**
-A：打包脚本目前仅配置 Windows（NSIS / portable）；应用本体是标准 Web 技术栈，跨平台打包在路线图 P3。
 
 **已知问题**：① 入场 3D 动画在部分集显设备帧率偏低（可跳过）；② 曲库为空时首屏视觉较单薄（放一首歌即恢复）。
 
@@ -176,7 +163,7 @@ A：打包脚本目前仅配置 Windows（NSIS / portable）；应用本体是�
 
 - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) — 浏览器 MusicXML 曲谱引擎
 - [three.js](https://threejs.org/) — 3D 背景与长笛模型
-- [Electron](https://www.electronjs.org/) / [Vite](https://vitejs.dev/) / [React](https://react.dev/) — 工程基座
+- [Vite](https://vitejs.dev/) / [React](https://react.dev/) — 工程基座
 
 ---
 
