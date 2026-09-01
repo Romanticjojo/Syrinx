@@ -319,6 +319,84 @@ describe('OSMDScore T3 选中染色与小节聚焦', () => {
   })
 })
 
+// -- T3b：选中色分离（播放光标 accent vs 鼠标选中橙，fake 几何不真渲染 OSMD）--
+describe('OSMDScore T3b 选中色分离（selectionColor）', () => {
+  const ORANGE = '#ff9f43'
+  const BASE = '#e8e8e2'
+  const A2 = mkGNote()
+  const mlSel = [[fakeMeasure(1, [{ rv: 0, note: A2 }])]]
+
+  function makeSelScore(selectionColor?: string) {
+    const cursor = new FakeCursor([0, 1, 2])
+    const container = document.createElement('div')
+    container.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
+    const score = new OSMDScore(
+      container,
+      '#3ddfae',
+      {
+        load: async () => {},
+        render: () => {},
+        cursor,
+        GraphicSheet: { MeasureList: mlSel },
+      } as unknown as OpenSheetMusicDisplay,
+      1,
+      selectionColor,
+    )
+    return { score, cursor }
+  }
+
+  it('传 selectionColor：选中染橙，清除恢复白', () => {
+    const { score } = makeSelScore(ORANGE)
+    score.highlightNoteAt(1, 0)
+    expect(A2.colors.at(-1)).toBe(ORANGE)
+    score.highlightNoteAt(null)
+    expect(A2.colors.at(-1)).toBe(BASE)
+  })
+
+  it('缺省不传 selectionColor：选中仍染 accent（演奏页兼容红线）', () => {
+    const { score } = makeSelScore()
+    score.highlightNoteAt(1, 0)
+    expect(A2.colors.at(-1)).toBe('#3ddfae')
+    score.highlightNoteAt(null)
+    expect(A2.colors.at(-1)).toBe(BASE)
+  })
+
+  it('双方持有同一音符显示橙：光标移走保持橙（意图优先），光标新音染 accent', () => {
+    const { score, cursor } = makeSelScore(ORANGE)
+    cursor.notesUnder = [A2]
+    score.syncToTime(4 * SPQ) // 光标推进 -> A2 染 accent
+    expect(A2.colors.at(-1)).toBe('#3ddfae')
+    score.highlightNoteAt(1, 0) // 选中同一音符 -> 橙（鼠标意图优先）
+    expect(A2.colors.at(-1)).toBe(ORANGE)
+    const C2 = mkGNote()
+    cursor.notesUnder = [C2]
+    score.syncToTime(8 * SPQ) // 光标移走：A2 仍被选中持有 -> 保持橙；C2 染 accent
+    expect(A2.colors.at(-1)).toBe(ORANGE)
+    expect(C2.colors.at(-1)).toBe('#3ddfae')
+    score.highlightNoteAt(null) // 清除选中：A2 已无持有 -> 白；光标音 C2 不动
+    expect(A2.colors.at(-1)).toBe(BASE)
+    expect(C2.colors.at(-1)).toBe('#3ddfae')
+  })
+
+  it('清除选中时音符仍被光标持有：恢复 accent 而非白', () => {
+    const { score, cursor } = makeSelScore(ORANGE)
+    cursor.notesUnder = [A2]
+    score.syncToTime(4 * SPQ) // A2 染 accent
+    score.highlightNoteAt(1, 0) // A2 选中 -> 橙
+    expect(A2.colors.at(-1)).toBe(ORANGE)
+    score.highlightNoteAt(null) // 清除选中：A2 仍被光标持有 -> accent
+    expect(A2.colors.at(-1)).toBe('#3ddfae')
+  })
+
+  it('光标推进到选中音符上：不把橙色覆盖成 accent', () => {
+    const { score, cursor } = makeSelScore(ORANGE)
+    score.highlightNoteAt(1, 0) // 先选中 -> 橙
+    cursor.notesUnder = [A2]
+    score.syncToTime(4 * SPQ) // 光标推进到该音符：updateHighlight 跳过 selNote 染色
+    expect(A2.colors.at(-1)).toBe(ORANGE)
+  })
+})
+
 describe('OSMDScore zoom（谱面缩窄，t_53aa8b7a）', () => {
   it('构造时写入 OSMD 实例（渲染前设置安全）', () => {
     const fake = makeFakeOsmd(new FakeCursor([0, 1]))

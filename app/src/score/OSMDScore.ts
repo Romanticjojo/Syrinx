@@ -34,6 +34,9 @@ export class OSMDScore {
   private highlighted: { setColor: (c: string, o?: unknown) => void } | null = null
   /** [sync-tune T3] 选中的 GraphicalNote（三向选中染色持有者，独立于光标高亮） */
   private selNote: { setColor: (c: string, o?: unknown) => void } | null = null
+  /** [T3b] 选中音染色：与播放光标 accent 视觉分离（sync-tune 传 #ff9f43）；
+   *  缺省跟随 accent——演奏页不传第 5 参，行为与 T3b 前完全一致 */
+  private selColor: string
   /**
    * 预扫缓存的光标停靠点（voiceEntry 级，全音符 RealValue 单位）。
    * syncToTime 用「下一停靠点的开始时刻已到才前进」实现音值感知推进：
@@ -61,9 +64,13 @@ export class OSMDScore {
     osmdInstance?: OpenSheetMusicDisplay,
     /** 谱面缩放（t_53aa8b7a）：配合容器 max-width 减少每行小节数，缺省 1 不改变现状 */
     zoom = 1,
+    /** [T3b] 选中音颜色（可选）：与播放光标 accent 分离（sync-tune 传 #ff9f43）；
+     *  缺省跟随 accent，演奏页不传即保持旧观感 */
+    selectionColor?: string,
   ) {
     this.containerEl = container
     this.accent = accent
+    this.selColor = selectionColor ?? accent
     this.baseNoteColor = '#e8e8e2' // 暗底下降一档对比：纯白刺眼（t_3b9cfc25）
     // osmdInstance：测试注入口（happy-dom 下不真正渲染 OSMD），缺省构造真实实例
     this.osmd = osmdInstance ?? new OpenSheetMusicDisplay(container, {
@@ -97,11 +104,21 @@ export class OSMDScore {
     this.osmd.Zoom = zoom
   }
 
-  /** 恢复一个高亮音符的底色；若同时被另一持有者（选中/光标）持有则保持 accent（T3） */
-  private restore(g: { setColor: (c: string, o?: unknown) => void }): void {
-    if (g === this.highlighted || g === this.selNote) return
+  /** 恢复一个高亮音符的颜色（T3b 起按释放方区分）：光标释放时若音符仍被选中
+   *  持有 → 保持选中色（鼠标意图优先，与光标 accent 同屏可分辨）；选中释放时
+   *  若仍被光标持有 → accent；两方都不持有 → 恢复底色 */
+  private restore(
+    g: { setColor: (c: string, o?: unknown) => void },
+    released: 'cursor' | 'sel',
+  ): void {
+    const color =
+      released === 'cursor' && g === this.selNote
+        ? this.selColor
+        : released === 'sel' && g === this.highlighted
+          ? this.accent
+          : this.baseNoteColor
     try {
-      g.setColor(this.baseNoteColor)
+      g.setColor(color)
     } catch {
       /* 渲染层可能已重排，忽略单帧恢复失败 */
     }
@@ -171,10 +188,11 @@ export class OSMDScore {
     if (next === this.highlighted) return
     const prev = this.highlighted
     this.highlighted = null
-    if (prev) this.restore(prev)
+    if (prev) this.restore(prev, 'cursor')
     if (next) {
       try {
-        next.setColor(this.accent)
+        // 选中持有的音符保持选中色（鼠标意图优先）；演奏页 selNote 恒为 null，行为不变
+        if (next !== this.selNote) next.setColor(this.accent)
         this.highlighted = next
       } catch {
         /* 同上 */
@@ -321,9 +339,10 @@ export class OSMDScore {
   }
 
   /** [sync-tune 调试页扩展（T3）] 选中音染色：把 (measure, rvInMeasure) 处最近的
-   *  notehead 染成 accent 色，旧选中恢复白色；measure 传 null 仅清除选中。
+   *  notehead 染成选中色（缺省 accent，sync-tune 传橙色与光标分离，T3b），旧选中
+   *  恢复白色；measure 传 null 仅清除选中。
    *  复用 updateHighlight 的 setColor 机制做单音符操作（不重建标记层、不动图形树），
-   *  与光标高亮互不干扰：同一音符被光标/选中双方持有时保持 accent。
+   *  与光标高亮互不干扰：同一音符被光标/选中双方持有时显示选中色（鼠标意图优先）。
    *  独立可选方法：演奏页不调用，缺省行为不变。 */
   highlightNoteAt(measure: number | null, rvInMeasure = 0): void {
     const prev = this.selNote
@@ -332,14 +351,14 @@ export class OSMDScore {
       const gn = this.findGNote(measure, rvInMeasure)
       if (gn) {
         try {
-          gn.setColor(this.accent)
+          gn.setColor(this.selColor)
           this.selNote = gn
         } catch {
           /* 渲染层可能已重排，忽略本次染色失败 */
         }
       }
     }
-    if (prev) this.restore(prev)
+    if (prev) this.restore(prev, 'sel')
   }
 
   /** [sync-tune 调试页扩展（T3）] 小节自动聚焦：把第 m 小节所在行滚动到最近滚动
