@@ -162,9 +162,10 @@ video.perform-bg {
 .perform-stage .sheet-container {
   height: 100%;
   overflow-y: auto; /* 谱面滚动容器：OSMD 光标 scrollIntoView 只卷这里，不卷窗口 */
-  /* 谱面缩窄（t_53aa8b7a）：容器限宽 + 居中，OSMD 按容器宽自适应换行，
-     每行小节数下降、整体接近打印版乐谱的疏密 */
-  max-width: min(880px, 100%);
+  /* A4 纵版比例（t_c10d648d）：可用谱面高约占 90vh，A4 宽 ≈ 高/1.414 ≈ 0.63×vh，
+     取 62vh 留边；720px 兜底超大屏、100% 兜底窄屏。换行由 OSMD 按容器宽自适应
+     （强制换行已在 loadSong 剥离），观感接近竖版打印乐谱 */
+  width: min(62vh, 720px, 100%);
   margin-inline: auto;
   /* 谱面半透面板：压谱可读，但背景动画必须透出来可见（t_a857b79e：0.66 压暗过重）；
      backdrop blur 把透出的动画柔化成光影，不再与谱线打架（t_3b9cfc25） */
@@ -405,6 +406,10 @@ video.perform-bg {
   }
   .perform-stage {
     padding: 4px 10px 0;
+  }
+  /* 移动端谱面全宽（62vh 在窄屏反而过窄），小边距防贴边（t_c10d648d） */
+  .perform-stage .sheet-container {
+    width: 100%;
   }
   .ov-card {
     padding: 30px 26px;

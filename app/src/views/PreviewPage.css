@@ -305,9 +305,9 @@
   align-items: center;
   justify-content: space-between;
 }
-/* 谱面缩窄（t_53aa8b7a）：与演奏页同口径（预览容器外距已收窄一档） */
+/* A4 纵版比例（t_c10d648d）：与演奏页同口径（预览容器外距已收窄一档） */
 .score-section .sheet-container {
-  max-width: min(820px, 100%);
+  width: min(62vh, 720px, 100%);
   margin-inline: auto;
 }
 .score-load-error {

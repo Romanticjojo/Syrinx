@@ -539,7 +539,7 @@ export default function PerformPage() {
             accent={song.accent}
             scoreRef={scoreRef}
             onMeasureChange={handleMeasure}
-            zoom={1.15}
+            zoom={1.3}
           />
         )}
       </div>
