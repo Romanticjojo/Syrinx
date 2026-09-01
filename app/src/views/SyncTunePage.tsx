@@ -9,7 +9,6 @@ import { getSong, SONGS } from '../songs'
 import {
   buildBeatsExport,
   buildSyncNotes,
-  deltaMsAt,
   fmtTime,
   makeQ2T,
   midiName,
@@ -33,6 +32,9 @@ import './SyncTunePage.css'
  * 谱面点击命中距离 >120px 时右栏提示「已选最近音符」。
  * R2（T3d）：列表全量展示（去小节 ±2 窗口）+ 行元数据 memo 查表；帮助按钮
  * 「? 操作说明」文字恢复（绿色 ？ 保留）。
+ * R2（T4）：标记层局部化——微调/选中只 patchMarker 改受影响标记的色/title
+ * （元素池差异更新），全量重建仅在 q 键集/基线变化时走；rowMeta 单 q2t 闭包
+ * （去逐音符 makeQ2T 重排序）、波形刻度 q→t 查表（去 baseline.some 嵌套）。
  */
 
 type Phase = 'loading' | 'ready' | 'error'
@@ -293,7 +295,19 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     }
   }, [phase])
 
-  // —— 控制点标记层：working/选中变化即重画（q 是谱面空间位置，微调 t 不动标记） ——
+  // —— 控制点标记层（T4 局部化）：三条链分离 ——
+  //  a) 布局（低频）：q 键集/基线变化（load、插入/移除控制点、saveBaseline）才
+  //     全量 setMarkers（元素增删 + 定位 + 全量色/title），并重置微调 diff 基准；
+  //  b) 选中 patch（高频）：只 patch 旧/新选中两个 marker 的色；
+  //  c) 微调 patch（高频）：working 与上次快照逐 q diff（O(N) Map 比较，微秒级），
+  //     通常仅选中 1 点——patch 其色/title；基准变化（saveBaseline）时全量重刷。
+  //  微调 t 不改 q → 标记位置永不变，高频路径零定位写（决策 8：不重建标记层）。
+  const structureKey = useMemo(() => working.map((p) => p.q).join(','), [working])
+  /** 微调 diff 基准：上次全量/patch 后的 {q→t} 快照与基线引用 */
+  const tByQRef = useRef<Map<number, number> | null>(null)
+  const baseRef = useRef<CtrlPoint[] | null>(null)
+  const lastSelQRef = useRef<number | null>(null)
+
   useEffect(() => {
     const score = scoreRef.current
     if (!score || !markersReady) return
@@ -311,6 +325,66 @@ export default function SyncTunePage({ songId }: { songId: string }) {
       }
     })
     score.setMarkers(markers)
+    // 重置 diff 基准：c) 首次进入时 prevT 就位 → 零 patch
+    tByQRef.current = new Map(working.map((p) => [p.q, p.t]))
+    baseRef.current = baseline
+    // 依赖 structureKey（working 派生）而非 working：微调只改 t，q 键集不变 →
+    // 不重定位；选中变化走 b) patch。selView.note 同理不订阅（eslint 抑制见下）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [structureKey, baseline, markersReady, measureForQ, song.accent])
+
+  // b) 选中 patch：旧选中恢复 tuned 色、新选中染 accent——两个 marker
+  useEffect(() => {
+    const score = scoreRef.current
+    if (!score || !markersReady) return
+    const next = selView.note?.q ?? null
+    const prev = lastSelQRef.current
+    lastSelQRef.current = next
+    if (prev === next) return
+    const q2tBase = makeQ2T(baseline)
+    for (const q of [prev, next]) {
+      if (q === null) continue
+      const cp = working.find((p) => p.q === q)
+      const tunedHere = cp ? Math.abs(cp.t - q2tBase(q).t) > 1e-6 : false
+      const m = measureForQ(q)
+      score.patchMarker(m.m, (q - m.quarters) / 4, {
+        color: q === next ? song.accent : tunedHere ? '#ff9f43' : 'rgba(255,255,255,0.28)',
+      })
+    }
+  }, [selView.note, working, baseline, markersReady, measureForQ, song.accent])
+
+  // c) 微调 patch：t 变化的 q（通常仅选中 1 点）patch 色+title；基准变则全量重刷
+  useEffect(() => {
+    const score = scoreRef.current
+    if (!score || !markersReady) return
+    const prevT = tByQRef.current
+    const baseChanged = baseRef.current !== baseline
+    let targets: number[]
+    if (baseChanged || !prevT) {
+      targets = working.map((p) => p.q)
+    } else {
+      targets = []
+      for (const p of working) {
+        const old = prevT.get(p.q)
+        if (old === undefined || old !== p.t) targets.push(p.q)
+      }
+    }
+    if (targets.length) {
+      const selQ = selView.note?.q ?? null
+      const q2tBase = makeQ2T(baseline)
+      for (const q of targets) {
+        const cp = working.find((p) => p.q === q)
+        if (!cp) continue
+        const tunedHere = Math.abs(cp.t - q2tBase(q).t) > 1e-6
+        const m = measureForQ(q)
+        score.patchMarker(m.m, (q - m.quarters) / 4, {
+          color: q === selQ ? song.accent : tunedHere ? '#ff9f43' : 'rgba(255,255,255,0.28)',
+          title: `q=${q} t=${cp.t.toFixed(3)}${tunedHere ? '（已调）' : ''}`,
+        })
+      }
+    }
+    tByQRef.current = new Map(working.map((p) => [p.q, p.t]))
+    baseRef.current = baseline
   }, [working, baseline, selView.note, markersReady, measureForQ, song.accent])
 
   // —— 三向选中染色 + 小节聚焦（T3 决策 3/6）：谱面点击/列表/波形三入口都走
@@ -340,11 +414,14 @@ export default function SyncTunePage({ songId }: { songId: string }) {
         m: e.m,
         t: q2tB(e.quarters).t,
       }))
-      ticksRef.current = s0.working.map((p) => ({
-        t: p.t,
-        q: p.q,
-        tuned: s0.baseline.some((b) => b.q === p.q && Math.abs(b.t - p.t) > 1e-6),
-      }))
+      // T4：q→t 查表替代 baseline.some 嵌套（601×601 → O(N+M)）；
+      // 语义保持：baseline 存在同 q 点且 t 偏离 >1µs 才算已调（新插入点在
+      // baseline 无同 q 项 → 未调），与标记层 tunedHere 的插值口径各自独立
+      const baseByQ = new Map(s0.baseline.map((b) => [b.q, b.t]))
+      ticksRef.current = s0.working.map((p) => {
+        const bt = baseByQ.get(p.q)
+        return { t: p.t, q: p.q, tuned: bt !== undefined && Math.abs(bt - p.t) > 1e-6 }
+      })
       notesRef.current = s0.notes
       selQRef.current =
         s0.selectedIdx === null
@@ -789,13 +866,20 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   // 列表全量展示（T3d）：去掉小节 ±2 窗口，滚轮可浏览全谱；chips 过滤作用于全量，
   // 选中行自动 scrollIntoView 保留（下方 effect）
   const listNotes = visibleNotes(st.getState())
-  // 行元数据（T3d 全量列表）：q→{控制点, 偏差ms} 随 working/baseline 一次构建 O(N+M)，
-  // 行渲染 O(1) 查表——601 行逐行 working.find + 重复 deltaMsAt 扫描是全量化后的卡顿源
+  // 行元数据（T3d 全量列表 + T4 算法修正）：q→{控制点, 偏差ms} 随 working/baseline
+  // 一次构建——单个 makeQ2T 闭包复用（顺序 fast path），替代逐音符 deltaMsAt 内部
+  // 每次 makeQ2T(baseline) 重排序（601×O(N log N) 是微调链路卡顿源，T4 修正）
   const rowMeta = useMemo(() => {
     const cpByQ = new Map(working.map((p) => [p.q, p]))
+    const baseQ2T = makeQ2T(baseline)
     const meta = new Map<number, { cp?: CtrlPoint; delta: number }>()
     for (const n of st.getState().notes) {
-      meta.set(n.q, { cp: cpByQ.get(n.q), delta: Math.round(deltaMsAt(working, baseline, n.q)) })
+      const cp = cpByQ.get(n.q)
+      // deltaMsAt 语义保持：无控制点 0，有则 (t-基线插值)×1000 四舍五入
+      meta.set(n.q, {
+        cp,
+        delta: cp ? Math.round((cp.t - baseQ2T(n.q).t) * 1000) : 0,
+      })
     }
     return meta
   }, [working, baseline])
