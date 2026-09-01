@@ -24,12 +24,19 @@ import './SyncTunePage.css'
  * 微调 beats.json 的 beatAnchors 控制点使光标节奏与伴奏逐音对齐；
  * diff 只在本页内存中，导出 JSON 由用户覆盖 beats.json 后才影响演奏页。
  * 时间唯一来源 audioEngine（不新起时钟）；q↔t 换算走局部段速率（logic.ts）。
+ * R2（T1）：AudioEngine.play() 改 async——AudioContext suspended 时先 resume 再建源
+ * （修 fire-and-forget 静音根因，resume 失败返回 false 不置 playing）；顶栏音频状态
+ * 徽标（suspended/running）事件驱动显示。
  * R2（T2）：顶栏播放控制条（⏮⏯⏭ + 进度条 + 时间/小节）、波形图例/可折叠、
  * 右栏「? 操作说明」面板；进度/时间走 rAF 帧直写 DOM，不进每帧 React 渲染。
- * R2（T3）：三向选中（谱面/列表/波形）谱面 notehead 染 accent（OSMDScore
+ * R2（T3）：三向选中（谱面/列表/波形）谱面 notehead 染色（OSMDScore
  * .highlightNoteAt，单音符 setColor）；播放/选中变化自动滚动聚焦当前小节
  * （scrollToMeasure），谱面手动 wheel/pointerdown 后 5 秒内不抢滚动；
  * 谱面点击命中距离 >120px 时右栏提示「已选最近音符」。
+ * R2（T3b）：选中音染橙 #ff9f43（与播放光标 accent 视觉分离），谱面点击命中
+ * 走「行内音符头绘制 x 最近邻 + y tie-break」精确档（点 A 选 A）。
+ * R2（T3c）：微调工作流重排——删试听 A/B 与重置，右栏「撤销上一步/保存修改」；
+ * 保存即热切换显示时间轴（setTimeline 不重渲谱面），光标跨时值高亮启用。
  * R2（T3d）：列表全量展示（去小节 ±2 窗口）+ 行元数据 memo 查表；帮助按钮
  * 「? 操作说明」文字恢复（绿色 ？ 保留）。
  * R2（T4）：标记层局部化——微调/选中只 patchMarker 改受影响标记的色/title
