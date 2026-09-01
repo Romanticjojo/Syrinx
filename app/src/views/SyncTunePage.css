@@ -365,10 +365,11 @@
   display: none;
 }
 .st-help summary::before {
-  /* T3c：只留绿色 ？，「操作说明」白字移除（文字保留在 summary 的 aria-label） */
+  /* T3d：绿色 ？ 与「操作说明」白字并排（T3c 曾只留 ？） */
   content: '?';
   color: var(--song-accent, #5fb8a8);
   font-weight: 700;
+  margin-right: 6px;
 }
 .st-help[open] summary {
   border-bottom: 1px solid #1d262c;

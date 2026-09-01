@@ -1000,10 +1000,10 @@ export default function SyncTunePage({ songId }: { songId: string }) {
             ) : (
               <p className="st-empty">在左侧列表、谱面或波形上选中一个音符开始微调</p>
             )}
-            {/* 操作说明（T2）：默认收起、展开不持久化；T3c 起只留绿色 ？，
-                「操作说明」文字进 aria-label（无障碍不丢） */}
+            {/* 操作说明（T2）：默认收起、展开不持久化；T3d 起「?」与「操作说明」并排显示
+                （T3c 曾只留绿色 ？，用户要求文字留着），aria-label 保持不变 */}
             <details className="st-help">
-              <summary aria-label="操作说明" />
+              <summary aria-label="操作说明">操作说明</summary>
               <div className="st-help-body">
                 <p className="st-help-sec">快捷键</p>
                 <ul>
