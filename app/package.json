@@ -16,6 +16,7 @@
     "dist:portable": "npm run build && electron-builder --win portable"
   },
   "dependencies": {
+    "fast-xml-parser": "^5.11.1",
     "opensheetmusicdisplay": "^2.1.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
