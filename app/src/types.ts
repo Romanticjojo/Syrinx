@@ -1,3 +1,7 @@
+/** 光标时间轴数据源（PlanB T2）：anchors = beats.json 伴奏锚点（缺省，现有行为）；
+ * score = 谱面确定性时值换算（deterministic-adapter，不依赖音频对齐） */
+export type CursorMode = 'anchors' | 'score'
+
 /** 曲目音符事件：时间轴的最小单元（单位均为秒） */
 export interface NoteEvent {
   /** 相对曲目开始的起始时间 */
@@ -94,4 +98,9 @@ export interface SongManifest {
   accent: string
   backgroundTheme: 'lumiere' | 'aurora' | 'ember'
   bpm: number
+  /**
+   * 光标数据源（可选，PlanB T2）：缺省 'anchors'（现有行为零变化）。
+   * 'score' = 谱面确定性时值换算；运行时可用 loadSong 第二参数覆盖（T3 A/B 对比）。
+   */
+  cursorMode?: CursorMode
 }

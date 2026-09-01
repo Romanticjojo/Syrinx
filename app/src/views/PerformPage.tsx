@@ -13,7 +13,7 @@ import type { OSMDScore } from '../score/OSMDScore'
 import { getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import { useAppStore } from '../store'
-import type { Timeline } from '../types'
+import type { CursorMode, Timeline } from '../types'
 import './PerformPage.css'
 
 /**
@@ -49,6 +49,8 @@ export default function PerformPage() {
   const [xml, setXml] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  // 光标数据源（PlanB T2）：默认锚点（现有行为）；切「谱面」用运行时覆盖重新 loadSong
+  const [cursorMode, setCursorMode] = useState<CursorMode>('anchors')
 
   // rAF 循环用的 ref 镜像（避开闭包过期）
   const timelineRef = useRef<Timeline | null>(null)
@@ -225,6 +227,36 @@ export default function PerformPage() {
     // song 由 currentSongId 派生，进入本页才加载一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 光标数据源切换（PlanB T2）：运行时覆盖重新 loadSong，换时间轴不换伴奏/谱面。
+  // xml 内容不变，ScoreSheet 随新 timeline 重走 osmd.load（重扫停靠点表）；
+  // 光标只前进，reset 后下一帧 syncToTime 快进到当前伴奏位置。
+  const cursorModeRef = useRef(cursorMode)
+  useEffect(() => {
+    if (cursorModeRef.current === cursorMode) return // 首挂载/同值不重载
+    cursorModeRef.current = cursorMode
+    let alive = true
+    ;(async () => {
+      try {
+        const { xml: x, timeline: t } = await loadSong(song, { cursorMode })
+        if (!alive) return
+        setXml(x)
+        setTimeline(t)
+        timelineRef.current = t
+        scoreRef.current?.resetCursor()
+        liveTrackerRef.current.reset()
+        pitchMeterRef.current?.reset()
+        showToast(cursorMode === 'score' ? '光标已切换：谱面确定性时值' : '光标已切换：伴奏锚点')
+      } catch (e: unknown) {
+        if (alive) showToast(`光标数据源切换失败：${e instanceof Error ? e.message : e}`)
+      }
+    })()
+    return () => {
+      alive = false
+    }
+    // song 由 currentSongId 派生，切数据源不换曲
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursorMode, showToast])
 
   // 每曲动态背景：有视频素材走 <video> 支路（静音循环），否则 three.js 主题背景
   useEffect(() => {
@@ -501,6 +533,11 @@ export default function PerformPage() {
     audioEngine.setVolume(v)
   }
 
+  /** 光标数据源切换（PlanB T2）：anchors ↔ score，由重载 effect 完成实际换源 */
+  const toggleCursorMode = useCallback(() => {
+    setCursorMode((m) => (m === 'anchors' ? 'score' : 'anchors'))
+  }, [])
+
   return (
     <div
       className="perform"
@@ -568,6 +605,8 @@ export default function PerformPage() {
           ended={phase === 'ended'}
           recOn={recOn}
           volume={volume}
+          cursorMode={cursorMode}
+          onCursorModeToggle={phase === 'loading' ? undefined : toggleCursorMode}
           onToggle={toggle}
           onRecToggle={toggleRec}
           onRestart={restart}

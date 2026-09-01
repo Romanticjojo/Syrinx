@@ -83,6 +83,17 @@
 .ctl.exit:hover {
   color: var(--rec);
 }
+/* 光标数据源切换（PlanB T2）：文字小按钮；谱面模式亮 accent 提示已离开伴奏锚点 */
+.ctl.cursor-mode {
+  width: auto;
+  min-width: 40px;
+  padding: 0 12px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.ctl.cursor-mode.on {
+  color: var(--song-accent, var(--accent));
+}
 /* 运输组与音量/✕ 的视觉分隔：细竖线把「停止」和「退出」隔开不同分组，
    降低 ✕ 被误认成停止键的概率（t_c10d648d） */
 .ctl-sep {
