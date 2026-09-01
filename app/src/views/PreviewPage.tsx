@@ -183,7 +183,7 @@ export default function PreviewPage() {
         {loadError && <div className="score-load-error">曲谱加载失败：{loadError}</div>}
         {!xml && !loadError && <div className="score-load-error">曲谱加载中…</div>}
         {xml && timeline && (
-          <ScoreSheet xml={xml} timeline={timeline} accent={song.accent} zoom={1.1} />
+          <ScoreSheet xml={xml} timeline={timeline} accent={song.accent} zoom={1.05} />
         )}
       </section>
 

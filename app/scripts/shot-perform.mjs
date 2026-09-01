@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 
 const BASE_URL = process.env.SHOT_URL ?? 'http://localhost:5173/'
-const OUT_DIR = 'D:/LLM_work/syrinx-perform-polish/shots'
+const OUT_DIR = process.env.SHOT_OUT_DIR ?? 'D:/LLM_work/syrinx-perform-polish/shots'
 const CHROME_PORT = 9231
 const VIEWPORTS = [
   { name: '1920x1080', w: 1920, h: 1080 },
