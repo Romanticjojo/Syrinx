@@ -57,6 +57,12 @@ await evalJs(`(() => {
     return false
   }
   window.__twoRaf = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+  // 右栏文本变化事件驱动信号（MutationObserver，无轮询粒度；2s 兜底）
+  window.__onPropsChange = () => new Promise(resolve => {
+    const mo = new MutationObserver(() => { mo.disconnect(); resolve(performance.now()) })
+    mo.observe(document.querySelector('.st-props'), { subtree: true, childList: true, characterData: true })
+    setTimeout(() => { mo.disconnect(); resolve(performance.now()) }, 2000)
+  })
   window.__clickScore = (x, y) => {
     const el = document.querySelector('.st-score')
     el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: x, clientY: y }))
@@ -86,10 +92,12 @@ for (const t of targetsXY) {
     const dt = await evalJs(`(async () => {
       const h3 = () => document.querySelector('.st-props h3')?.textContent ?? ''
       const before = h3()
+      const p = window.__onPropsChange()
       const t0 = performance.now()
       window.__clickScore(${t.x}, ${t.y})
-      const okCommit = await window.__waitFor(() => h3() !== '' && h3() !== before)
-      const commitMs = performance.now() - t0
+      const doneAt = await p
+      const okCommit = h3() !== '' && h3() !== before
+      const commitMs = doneAt - t0
       await window.__twoRaf()
       return JSON.stringify({ okCommit, commitMs, paintMs: performance.now() - t0 })
     })()`)
@@ -110,11 +118,13 @@ for (let rep = 0; rep < 5; rep++) {
   const dt = await evalJs(`(async () => {
     const dd = () => [...document.querySelectorAll('.st-props dd')].map(d => d.textContent).join('|')
     const before = dd()
+    const p = window.__onPropsChange()
     const t0 = performance.now()
     const b = [...document.querySelectorAll('.st-btn-grid .st-btn')].find(x => x.textContent.trim() === '+50ms')
     b.click()
-    const okCommit = await window.__waitFor(() => dd() !== before)
-    const commitMs = performance.now() - t0
+    const doneAt = await p
+    const okCommit = dd() !== before
+    const commitMs = doneAt - t0
     await window.__twoRaf()
     return JSON.stringify({ okCommit, commitMs, paintMs: performance.now() - t0 })
   })()`)
