@@ -7,7 +7,6 @@ import { expandRepeats, parseMusicXml } from '../score/musicxml'
 import { assetUrl } from '../lib/assetUrl'
 import { getSong, SONGS } from '../songs'
 import {
-  auditionWindow,
   buildBeatsExport,
   buildSyncNotes,
   deltaMsAt,
@@ -45,7 +44,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   const [xml, setXml] = useState<string | null>(null)
   const [markersReady, setMarkersReady] = useState(false)
   const [curMeasure, setCurMeasure] = useState(1)
-  const [auditioning, setAuditioning] = useState(false)
   // 命中距离提示（T3 决策 4）：点谱面 120px 内无音符仍选最近时在右栏提示（5s 自动消隐）
   const [nearHint, setNearHint] = useState<string | null>(null)
   const nearHintTimerRef = useRef(0)
@@ -107,15 +105,13 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   const stepSecRef = useRef(0)
   const durationRef = useRef(0)
   const displayTlRef = useRef<ReturnType<typeof parseMusicXml> | null>(null)
+  /** [T3c] 恒速解析谱（parseMusicXml 结果，q 换算基准）：保存修改时以原 beats
+   *  的 anchors/bpm + 新 working 重建显示时间轴（applyBeats），供 setTimeline 热切换 */
+  const baseTlRef = useRef<ReturnType<typeof parseMusicXml> | null>(null)
   const measureTableRef = useRef<{ m: number; quarters: number }[]>([])
   const viewRef = useRef({ t0: 0, t1: 1 })
-  const auditionSeqRef = useRef(0)
 
   const st = useSyncTuneStore
-  const cancelAudition = useCallback(() => {
-    auditionSeqRef.current++
-    setAuditioning(false)
-  }, [])
 
   /** 徽标闪动（播放被自动播放策略挡下时）：直接操作 DOM 重启动画，避免定时 setState */
   const flashAudioBadge = useCallback(() => {
@@ -188,6 +184,8 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           t: q2tB0(e.quarters).t,
         }))
         setXml(xmlExp)
+        // 恒速解析谱存 ref（保存修改时重建显示时间轴用，T3c）
+        baseTlRef.current = pre
         // 演奏显示时间轴：基线锚点应用后的时间轴（光标语义同演奏页）
         displayTlRef.current = applyBeats(pre, beats)
         // 伴奏解码 → 峰值包络
@@ -234,7 +232,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     })()
     return () => {
       alive = false
-      auditionSeqRef.current++
       window.clearTimeout(nearHintTimerRef.current)
       audioEngine.pause()
     }
@@ -248,8 +245,9 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     const div = scoreDivRef.current
     const tl = displayTlRef.current
     if (!div || !tl) return
-    // 橙色选中（T3b）：与播放光标 accent 分离，「我点的」一眼可辨
-    const osmd = new OSMDScore(div, song.accent, undefined, undefined, '#ff9f43')
+    // 橙色选中（T3b）：与播放光标 accent 分离，「我点的」一眼可辨；
+    // 光标跨时值高亮（T3c）：光标宽度覆盖正在响的音的完整时值
+    const osmd = new OSMDScore(div, song.accent, undefined, undefined, '#ff9f43', true)
     scoreRef.current = osmd
     // 小节号显示 + 播放中自动聚焦当前小节（T3 决策 6：rAF 回调路径，不 setState）
     osmd.onMeasureChange = (m) => {
@@ -560,13 +558,11 @@ export default function SyncTunePage({ songId }: { songId: string }) {
       if (dpx <= 6 && (!hit || dpx < hit.d)) hit = { q: p.q, d: dpx }
     }
     if (hit) {
-      cancelAudition()
       st0.selectByQ(hit.q)
       return
     }
     const t = t0 + (x / rect.width) * span
     if (t < 0 || t > durationRef.current) return
-    cancelAudition()
     audioEngine.seek(t)
     scoreRef.current?.resetCursor()
     waveDirtyRef.current = true
@@ -613,7 +609,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   /** seek 到 t（进度条/⏮/⏭ 共用）：暂停态同步推进光标；波形与控制条即刻刷新 */
   const doSeek = useCallback(
     (t: number) => {
-      cancelAudition()
       audioEngine.seek(t)
       scoreRef.current?.resetCursor()
       if (!audioEngine.playing) scoreRef.current?.syncToTime(t)
@@ -621,7 +616,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
       waveDirtyRef.current = true
       waveKickRef.current()
     },
-    [cancelAudition, updateTransport],
+    [updateTransport],
   )
 
   /** 当前 t 所在小节序（measureStarts 单调递增，线性足够） */
@@ -692,9 +687,8 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     waveKickRef.current()
   }, [waveCollapsed])
 
-  // —— 播放/暂停 与 试听 A/B ——
+  // —— 播放/暂停 与 保存修改（T3c 工作流）——
   const togglePlay = useCallback(async () => {
-    cancelAudition()
     if (audioEngine.playing) {
       audioEngine.pause()
     } else {
@@ -712,72 +706,29 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     }
     waveDirtyRef.current = true
     waveKickRef.current()
-  }, [cancelAudition, flashAudioBadge])
+  }, [flashAudioBadge])
 
-  const runAudition = useCallback(async () => {
+  /** 保存修改（T3c）：working 应用为新基线（store.saveBaseline），显示时间轴
+   *  按新锚点热切换（setTimeline，谱面不重渲）——播放光标/波形期望线即刻切到
+   *  新节奏；波形置脏重绘（store 订阅亦会重建 q2t/刻度缓存） */
+  const saveChanges = useCallback(() => {
     const st0 = st.getState()
-    const view = selectedNoteView(st0)
-    if (!view.note) return
-    cancelAudition()
-    const A = auditionWindow(view.baselineT)
-    const tB = makeQ2T(st0.working)(view.note.q).t
-    const B = auditionWindow(tB)
-    const seq = ++auditionSeqRef.current
-    setAuditioning(true)
-    audioEngine.pause()
-    // A 窗播放：失败（仍 suspended）直接终止试听并闪动徽标
-    const okA = await audioEngine.play(A.start)
-    setAudioState(audioEngine.state)
-    if (!okA) {
-      flashAudioBadge()
-      setAuditioning(false)
-      return
+    if (!st0.dirty) return
+    st0.saveBaseline()
+    const beats = beatsRef.current
+    const baseTl = baseTlRef.current
+    if (beats && baseTl) {
+      displayTlRef.current = applyBeats(baseTl, {
+        ...beats,
+        beatAnchors: st0.working.map((p) => ({ ...p })),
+      })
+      scoreRef.current?.setTimeline(displayTlRef.current)
     }
-    scoreRef.current?.resetCursor()
     waveDirtyRef.current = true
     waveKickRef.current()
-    const watch = (endT: number, next: () => void) => {
-      const step = () => {
-        if (auditionSeqRef.current !== seq) return
-        if (!audioEngine.playing) {
-          setAuditioning(false)
-          return
-        }
-        if (audioEngine.time >= endT) {
-          next()
-          return
-        }
-        requestAnimationFrame(step)
-      }
-      requestAnimationFrame(step)
-    }
-    watch(A.end, () => {
-      if (Math.abs(tB - view.baselineT) < 1e-6) {
-        // 修正未生效：B 窗与 A 相同，不重复播
-        audioEngine.pause()
-        setAuditioning(false)
-        return
-      }
-      // B 窗在 rAF 回调里启动：play 为 async，成功后再起 watch
-      void audioEngine.play(B.start).then((okB) => {
-        setAudioState(audioEngine.state)
-        if (!okB) {
-          flashAudioBadge()
-          setAuditioning(false)
-          return
-        }
-        scoreRef.current?.resetCursor()
-        waveDirtyRef.current = true
-        waveKickRef.current()
-        watch(B.end, () => {
-          audioEngine.pause()
-          setAuditioning(false)
-        })
-      })
-    })
-  }, [cancelAudition, flashAudioBadge])
+  }, [])
 
-  // —— 快捷键：[/]=±50ms、{/}=±200ms、空格、Enter、Ctrl+Z ——
+  // —— 快捷键：[/]=±50ms、{/}=±200ms、空格、Ctrl+Z ——
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName
@@ -809,15 +760,11 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           e.preventDefault()
           void togglePlay()
           break
-        case 'Enter':
-          e.preventDefault()
-          void runAudition()
-          break
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [togglePlay, runAudition])
+  }, [togglePlay])
 
   // —— 导出：beats.json（version+1）+ manual_offsets.json ——
   const download = (data: unknown, filename: string) => {
@@ -860,13 +807,13 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     }
     const entry = measureTableRef.current.find((x) => x.m === hit.measure)
     if (!entry) return
-    cancelAudition()
     if (hit.dist > 120) {
-      setNearHint(`已选最近音符（点击处 ${Math.round(hit.dist)}px 内无音符）`)
+      setNearHint('已选最近音符（点击处附近无音符）')
       nearHintTimerRef.current = window.setTimeout(() => setNearHint(null), 5000)
     } else if (!hit.precise) {
-      // 半个音符头宽度外但 120px 内：始终告知选中的是附近音符（T3b 决策 3）
-      setNearHint(`已选附近音符（距点击处 ${Math.round(hit.dist)}px）`)
+      // 半个音符头宽度外但 120px 内：始终告知选中的是附近音符（T3b 决策 3；
+      // T3c 文案不带 px 数字，仅语义提示）
+      setNearHint('已选附近音符（距点击处稍远）')
       nearHintTimerRef.current = window.setTimeout(() => setNearHint(null), 5000)
     } else {
       setNearHint(null) // 精确命中：无提示
@@ -902,9 +849,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           {dirty && <i className="st-dirty">未导出</i>}
         </span>
         <span className="st-flex" />
-        <button className="st-btn" onClick={() => st.getState().undo()} disabled={undoStack.length === 0}>
-          撤销 (Ctrl+Z)
-        </button>
         <button className="st-btn primary" onClick={saveAll} disabled={!dirty}>
           导出 beats.json
         </button>
@@ -974,7 +918,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
                     className={`st-row${isSel ? ' sel' : ''}`}
                     data-sel={isSel ? '1' : undefined}
                     onClick={() => {
-                      cancelAudition()
                       st.getState().select(n.idx)
                       setCurMeasure(n.measure)
                     }}
@@ -1033,23 +976,25 @@ export default function SyncTunePage({ songId }: { songId: string }) {
                   ))}
                 </div>
                 <div className="st-btn-row">
-                  <button className="st-btn" onClick={() => st.getState().resetSelected()}>
-                    重置
-                  </button>
                   <button
-                    className={`st-btn primary${auditioning ? ' live' : ''}`}
-                    onClick={runAudition}
+                    className="st-btn"
+                    onClick={() => st.getState().undo()}
+                    disabled={undoStack.length === 0}
                   >
-                    {auditioning ? '试听中…' : '试听 A/B (Enter)'}
+                    撤销上一步
+                  </button>
+                  <button className="st-btn primary" onClick={saveChanges} disabled={!dirty}>
+                    保存修改
                   </button>
                 </div>
               </>
             ) : (
               <p className="st-empty">在左侧列表、谱面或波形上选中一个音符开始微调</p>
             )}
-            {/* 操作说明（T2）：默认收起、展开不持久化；替代原先挤一行的 st-hint */}
+            {/* 操作说明（T2）：默认收起、展开不持久化；T3c 起只留绿色 ？，
+                「操作说明」文字进 aria-label（无障碍不丢） */}
             <details className="st-help">
-              <summary>? 操作说明</summary>
+              <summary aria-label="操作说明" />
               <div className="st-help-body">
                 <p className="st-help-sec">快捷键</p>
                 <ul>
@@ -1061,9 +1006,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
                   </li>
                   <li>
                     <kbd>空格</kbd>：播放 / 暂停
-                  </li>
-                  <li>
-                    <kbd>Enter</kbd>：试听 A/B（基线 → 修正，各 −1s → +2s 窗口）
                   </li>
                   <li>
                     <kbd>Ctrl</kbd>+<kbd>Z</kbd>：撤销

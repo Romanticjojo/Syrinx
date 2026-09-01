@@ -206,14 +206,6 @@ export function deltaMsAt(working: CtrlPoint[], baseline: CtrlPoint[], q: number
   return (working[i].t - baselineTAt(baseline, q)) * 1000
 }
 
-/**
- * 试听 A/B 窗口（计划第 4 条）：修正前/后各播 −1s → +2s；起点钳 0。
- * 修正未生效（偏差 < 1µs）时 B 窗与 A 窗相同——调用方可据此跳过 B 段。
- */
-export function auditionWindow(t: number): { start: number; end: number } {
-  return { start: Math.max(0, t - 1), end: t + 2 }
-}
-
 /** 导出 beats.json：version+1，note 追加人工记录；anchors/其余字段原样保留 */
 export function buildBeatsExport(
   baseline: BeatsFile,

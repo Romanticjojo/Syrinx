@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   adjustPoint,
   appendManualOffset,
-  auditionWindow,
   baselineTAt,
   buildBeatsExport,
   buildIndexByMeasure,
@@ -124,14 +123,6 @@ describe('偏差与已调判定', () => {
     expect(isTuned(note, baseline, baseline)).toBe(false)
     expect(isTuned(note, adjustPoint(baseline, 4, baseline, 10), baseline)).toBe(true)
     expect(isTuned({ ...note, q: 2 }, baseline, baseline)).toBe(false)
-  })
-})
-
-describe('auditionWindow 试听窗口（−1s → +2s，起点钳 0）', () => {
-  it('常规与贴零场景', () => {
-    expect(auditionWindow(10)).toEqual({ start: 9, end: 12 })
-    expect(auditionWindow(0.4)).toEqual({ start: 0, end: 2.4 })
-    expect(auditionWindow(0)).toEqual({ start: 0, end: 2 })
   })
 })
 

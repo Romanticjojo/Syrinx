@@ -159,10 +159,6 @@
   border-color: var(--song-accent, #5fb8a8);
   color: var(--song-accent, #5fb8a8);
 }
-.st-btn.live {
-  background: var(--song-accent, #5fb8a8);
-  color: #081013;
-}
 
 .st-status {
   padding: 24px;
@@ -369,7 +365,8 @@
   display: none;
 }
 .st-help summary::before {
-  content: '? ';
+  /* T3c：只留绿色 ？，「操作说明」白字移除（文字保留在 summary 的 aria-label） */
+  content: '?';
   color: var(--song-accent, #5fb8a8);
   font-weight: 700;
 }
