@@ -242,42 +242,122 @@
   letter-spacing: 0.06em;
 }
 
-/* 元数据行（Spotify 曲目列表式） */
+/* 曲目规格条（节目单式四格）：细分隔线分格，格顶 accent 短刻度为签名元素，
+   值用衬线字体放大；替代旧编号行式 info-row */
 .info-list {
-  margin: 26px 32px 0;
+  margin: 30px 32px 0;
+  padding: 24px 4px 4px;
   border-top: 1px solid var(--line);
 }
-.info-row {
+.spec-grid {
   display: grid;
-  grid-template-columns: 36px 1fr auto;
-  gap: 14px;
-  align-items: center;
-  padding: 13px 10px;
-  border-bottom: 1px solid var(--line);
-  font-size: 14px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
-.info-row:hover {
-  background: var(--surface);
+.spec {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  padding: 2px 18px 6px;
+  position: relative;
 }
-.info-row .idx {
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-  font-size: 13px;
+/* 格间细分隔线：首格无线 */
+.spec + .spec {
+  border-left: 1px solid var(--line);
 }
-.info-row .k {
+/* 签名元素：格顶 accent 短刻度 */
+.spec::before {
+  content: '';
+  display: block;
+  width: 26px;
+  height: 2px;
+  margin-bottom: 12px;
+  background: var(--song-accent, var(--accent));
+  border-radius: 1px;
+}
+.spec-eyebrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.spec-cn {
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ink);
 }
-.info-row .v {
+.spec-en {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.spec-value {
+  margin-top: 7px;
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.35;
+  color: var(--ink);
+  text-wrap: balance;
+}
+/* BPM 数字强调：数字大、单位小（速度格专属层级） */
+.spec-value.spec-value-tempo {
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+.spec-value-tempo .bpm-unit {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   color: var(--ink-dim);
-  font-weight: 400;
-  margin-left: 6px;
+  margin-left: 5px;
 }
-.info-row .tag {
+/* 难度徽章：●●● 复用曲库标记，accent 色由 TSX 内联注入 */
+.spec-badge {
+  margin-top: 9px;
   font-size: 11px;
   border: 1px solid;
   padding: 2px 10px;
   border-radius: 2px;
-  opacity: 0.85;
+  white-space: nowrap;
+}
+@media (max-width: 1020px) {
+  .spec-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 18px;
+  }
+  /* 2×2：第 3 格在新行行首去掉左线，右列第 2/4 格保留 */
+  .spec:nth-child(3) {
+    border-left: none;
+  }
+}
+@media (max-width: 720px) {
+  .info-list {
+    margin: 22px 16px 0;
+    padding: 18px 0 0;
+  }
+  .spec-grid {
+    grid-template-columns: 1fr;
+    row-gap: 16px;
+  }
+  .spec + .spec {
+    border-left: none;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+  }
+  .spec-value {
+    font-size: 17px;
+  }
+  .spec-value.spec-value-tempo {
+    font-size: 23px;
+  }
 }
 .preview-footer {
   padding: 26px 32px 56px;
@@ -384,13 +464,9 @@
     width: min(220px, 70vw);
   }
   .album-hero,
-  .info-list,
   .preview-topbar {
     padding-left: 16px;
     padding-right: 16px;
-  }
-  .info-list {
-    margin: 20px 16px 0;
   }
   .more-songs {
     margin: 24px 16px 0;

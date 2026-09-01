@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import ScoreSheet from '../components/ScoreSheet'
 import { DIFFICULTY_LABEL, getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
@@ -68,15 +68,27 @@ export default function PreviewPage() {
     v.play().catch(() => {})
     return () => v.pause()
   }, [song.backgroundVideoUrl])
-  const rows: [string, string, string][] = [
-    ['调性', song.keyLabel, 'Key'],
-    ['拍号', `${song.bpm} BPM`, 'Tempo'],
-    [
-      '伴奏',
-      song.accompanimentUrl ? '正式伴奏音频（Song Pack 提供）' : '程序化合成（正式伴奏由外部提供）',
-      'Audio',
-    ],
-    ['技巧要求', song.difficulty === 1 ? '基础气息与指法' : '连奏气息 · 中音区 · 弱起处理', `Level ${song.difficulty}`],
+  // 规格条数据：签名的结构化形态（调性/速度/伴奏/技巧），难度徽章复用曲库 ●●● 标记
+  const specs: { label: string; en: string; value: ReactNode; valueClass?: string; badge?: string }[] = [
+    { label: '调性', en: 'KEY', value: song.keyLabel },
+    {
+      label: '速度',
+      en: 'TEMPO',
+      value: (
+        <>
+          {song.bpm}
+          <span className="bpm-unit">BPM</span>
+        </>
+      ),
+      valueClass: 'spec-value-tempo',
+    },
+    { label: '伴奏', en: 'AUDIO', value: song.accompanimentUrl ? '钢琴伴奏' : '程序化合成伴奏' },
+    {
+      label: '技巧要求',
+      en: 'TECHNIQUE',
+      value: song.difficulty === 1 ? '基础气息与指法' : '连奏气息 · 中音区 · 弱起处理',
+      badge: `难度 ${DIFFICULTY_LABEL[song.difficulty]}`,
+    },
   ]
 
   return (
@@ -163,18 +175,22 @@ export default function PreviewPage() {
       </section>
 
       <section className="info-list" aria-label="曲目信息">
-        {rows.map(([k, v, tag], i) => (
-          <div className="info-row" key={k}>
-            <span className="idx">{i + 1}</span>
-            <span>
-              <span className="k">{k}</span>
-              <span className="v">{v}</span>
-            </span>
-            <span className="tag" style={{ color: song.accent, borderColor: `${song.accent}66` }}>
-              {tag}
-            </span>
-          </div>
-        ))}
+        <div className="spec-grid">
+          {specs.map(({ label, en, value, valueClass, badge }) => (
+            <div className="spec" key={label}>
+              <span className="spec-eyebrow">
+                <span className="spec-cn">{label}</span>
+                <span className="spec-en">{en}</span>
+              </span>
+              <span className={`spec-value${valueClass ? ` ${valueClass}` : ''}`}>{value}</span>
+              {badge && (
+                <span className="spec-badge" style={{ color: song.accent, borderColor: `${song.accent}66` }}>
+                  {badge}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* 曲谱预览：静态渲染 + 缩放（M2 起接入伴奏时钟跟随） */}
