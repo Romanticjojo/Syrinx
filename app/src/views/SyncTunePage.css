@@ -469,6 +469,26 @@
   width: 3px;
   height: 10px;
 }
+/* 缩放按钮组（T6b）：滚轮缩放移除后由图例行三按钮承接（＋/－/⤢复位） */
+.st-zoom {
+  display: inline-flex;
+  gap: 4px;
+}
+.st-zbtn {
+  background: #18222a;
+  color: #cfd8d4;
+  border: 1px solid #2a3942;
+  border-radius: 5px;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  font: 12px/1 'Segoe UI', sans-serif;
+}
+.st-zbtn:hover {
+  border-color: var(--song-accent, #5fb8a8);
+}
 .st-wave canvas {
   flex: 1;
   min-height: 0;

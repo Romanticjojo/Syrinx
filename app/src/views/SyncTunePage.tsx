@@ -16,12 +16,7 @@ import {
   type SyncNote,
 } from '../synctune/logic'
 import { selectedNoteView, tunedCount, useSyncTuneStore, visibleNotes } from '../synctune/store'
-import {
-  computeRmsEnvelope,
-  normalizeGain,
-  sampleEnvelopeView,
-  smoothEnvelope,
-} from '../synctune/waveform'
+import { computeRmsEnvelope, sampleBlockMeans } from '../synctune/waveform'
 import './SyncTunePage.css'
 
 /**
@@ -52,16 +47,17 @@ import './SyncTunePage.css'
  * TDD 单测）：滑动平均抹平相邻桶跳变、峰值归一化把低电平伴奏拉到 85% 高度
  * （不再趴 mid 线像毛刺）、视口按像素列聚合桶 RMS 最大值（宽视图能量视角）；
  * 交互与 dirty+rAF 按需重绘预算不变。
+ * R2（T6b）：波形降级为能量块进度条——连续包络（RMS/平滑/归一/最大值采样）
+ * 退役，预计算改 ~0.5s 块宽桶 RMS，drawWave 画底部锚定圆角竖条（0..38px 单
+ * 色）；滚轮缩放整体移除（卡顿源），图例行加「＋/－/⤢复位」三按钮（×1.5/
+ * ÷1.5 以视口中心、复位全曲）；拖拽平移/点刻度选中/点空白 seek 保留。
  */
 
 type Phase = 'loading' | 'ready' | 'error'
 
-/** 波形包络预计算步长（样本数）：~11.6ms/桶（44.1k），总览分辨率足够 */
-const PEAK_STEP = 512
-/** [T6] 包络平滑窗口（桶数，居中滑动平均）：11.6ms×5 ≈ 58ms，抹平相邻桶跳变 */
-const RMS_SMOOTH_WIN = 5
-/** [T6] 峰值归一化目标：全局最大 RMS 桶拉到 85% 振幅（低电平伴奏不再趴底） */
-const WAVE_PEAK_TARGET = 0.85
+/** [T6b] 能量块进度条：预计算块宽 ~0.5s（桶 RMS）+ 视口均分块数 */
+const ENERGY_BLOCK_SEC = 0.5
+const ENERGY_VIEW_BLOCKS = 200
 
 export default function SyncTunePage({ songId }: { songId: string }) {
   const song = getSong(songId) ?? SONGS[0]
@@ -126,10 +122,9 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const beatsRef = useRef<BeatsFile | null>(null)
-  /** [T6] RMS 能量包络（waveform.ts 预计算，语义不再是 min/max 峰值）+ 归一化增益 */
-  const envRef = useRef<Float32Array | null>(null)
-  const envGainRef = useRef(1)
-  const stepSecRef = useRef(0)
+  /** [T6b] 能量块缓存：~0.5s 块宽桶 RMS（粗粒度进度条，不再平滑/归一） */
+  const blockRmsRef = useRef<Float32Array | null>(null)
+  const blockSecRef = useRef(0)
   const durationRef = useRef(0)
   const displayTlRef = useRef<ReturnType<typeof parseMusicXml> | null>(null)
   /** [T3c] 恒速解析谱（parseMusicXml 结果，q 换算基准）：保存修改时以原 beats
@@ -224,12 +219,10 @@ export default function SyncTunePage({ songId }: { songId: string }) {
             // 装载为 play() 数据源：decode 只解码不装载，缺这行冷启动 play() 恒 false
             await audioEngine.load(buf)
             const ch = buf.getChannelData(0)
-            // [T6] 包络链：每桶 RMS（能量，抑制高频毛刺）→ 滑动平均（去相邻桶
-            // 跳变）→ 峰值归一化增益（低电平伴奏拉到 85% 振幅）
-            const env = smoothEnvelope(computeRmsEnvelope(ch, PEAK_STEP), RMS_SMOOTH_WIN)
-            envRef.current = env
-            envGainRef.current = normalizeGain(env, WAVE_PEAK_TARGET)
-            stepSecRef.current = PEAK_STEP / buf.sampleRate
+            // [T6b] 能量块缓存：~0.5s 块宽桶 RMS（连续包络与平滑/归一链退役）
+            const blockSamples = Math.max(1, Math.round(buf.sampleRate * ENERGY_BLOCK_SEC))
+            blockRmsRef.current = computeRmsEnvelope(ch, blockSamples)
+            blockSecRef.current = blockSamples / buf.sampleRate
             durationRef.current = buf.duration
             viewRef.current = { t0: 0, t1: buf.duration }
           } catch (e: unknown) {
@@ -489,16 +482,16 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
 
-  /** 波形绘制：包络（[T6] RMS 能量包络×归一化增益，上下对称）+ 基线/工作
-   *  期望线 + 控制点刻度 + 播放头
+  /** 波形绘制：[T6b] 能量块进度条（视口均分块、每块桶 RMS 均值、底部锚定
+   *  圆角竖条）+ 基线/工作期望线 + 控制点刻度 + 播放头
    *  性能（t_perf_sync_tune）：q2t 闭包/刻度表/选中 q 全部来自缓存 refs
    *  （store 订阅预构建，绘制帧零 getState/零 Map 构建），期望线两遍循环
    *  各合并单 path；页脚刻度文本直写 DOM，拖拽/缩放不再触发 React 重渲染；
-   *  [T6] 包络采样（sampleEnvelopeView O(w+视口桶数)）仍在 dirty+rAF 按需
-   *  重绘路径内，播放头每帧零波形重算 */
+   *  [T6b] 块聚合（sampleBlockMeans O(blocks+视口桶数)）仍在 dirty+rAF 按
+   *  需重绘路径内，播放头每帧零波形重算 */
   const drawWave = (playT: number) => {
     const canvas = canvasRef.current
-    const env = envRef.current
+    const env = blockRmsRef.current
     if (!canvas) return
     const dpr = window.devicePixelRatio || 1
     const w = canvas.clientWidth
@@ -523,23 +516,29 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     const { t0, t1 } = viewRef.current
     const span = Math.max(t1 - t0, 1e-6)
     const xOf = (t: number) => ((t - t0) / span) * w
-    const mid = h * 0.42
-    const amp = h * 0.36
-    // 包络（T6）：视口按像素列聚合桶能量最大值（宽视图能量视角、深缩放收敛
-    // 覆盖桶），乘归一化增益画上下对称能量包络（低电平伴奏拉到 85% 振幅；
-    // 全静音包络为零，a<=0 跳过只留网格/刻度）
-    const stepSec = stepSecRef.current || PEAK_STEP / 44100
-    const col = sampleEnvelopeView(env, stepSec, t0, t0 + span, w)
-    const gain = envGainRef.current
-    ctx.strokeStyle = '#3d5a63'
+    // 能量块进度条（T6b）：视口均分 ENERGY_VIEW_BLOCKS 块、每块桶 RMS 均值，
+    // 底部锚定圆角竖条 0..38px 单色（静音块 ≤0.5px 跳过；roundRect 无实现时
+    // 降级直角矩形）；期望线/刻度/播放头在其上层照旧
+    const bars = sampleBlockMeans(
+      env,
+      blockSecRef.current || ENERGY_BLOCK_SEC,
+      t0,
+      t0 + span,
+      ENERGY_VIEW_BLOCKS,
+    )
+    const bw = w / bars.length
+    ctx.fillStyle = 'rgba(61,90,99,0.55)'
     ctx.beginPath()
-    for (let x = 0; x < col.length; x++) {
-      const a = Math.min(col[x] * gain, 1) * amp
-      if (a <= 0) continue
-      ctx.moveTo(x + 0.5, mid - a)
-      ctx.lineTo(x + 0.5, mid + a)
+    for (let i = 0; i < bars.length; i++) {
+      const bh = Math.min(bars[i], 1) * 38
+      if (bh <= 0.5) continue
+      const x = i * bw
+      const bwid = Math.max(1, bw - 1) // 块间 1px 间隙（窄视口退化到 1px）
+      const r = Math.min(2, bwid / 2, bh / 2)
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(x, h - bh, bwid, bh, r)
+      else ctx.rect(x, h - bh, bwid, bh)
     }
-    ctx.stroke()
+    ctx.fill()
     // 期望线：基线（暗）与工作网格（亮）——微调时亮线实时移动
     const q2tW = q2tWorkRef.current
     const q2tB = q2tBaseRef.current
@@ -655,22 +654,26 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     waveDirtyRef.current = true
     waveKickRef.current()
   }
-  const onWaveWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault()
-    const rect = e.currentTarget.getBoundingClientRect()
+
+  // —— 缩放（T6b）：滚轮缩放移除（卡顿源），图例「＋/－/⤢」按钮承接 ——
+  const zoomWave = (k: number) => {
+    const dur = durationRef.current
     const { t0, t1 } = viewRef.current
     const span = t1 - t0
-    const tc = t0 + ((e.clientX - rect.left) / rect.width) * span
-    const k = e.deltaY > 0 ? 1.25 : 0.8
-    const dur = durationRef.current
-    let ns = Math.max(0.5, Math.min(span * k, dur || span * k))
+    const tc = (t0 + t1) / 2 // 以视口中心
+    let ns = Math.max(0.5, span * k)
+    if (dur > 0) ns = Math.min(ns, dur)
     let nt0 = tc - (tc - t0) * (ns / span)
-    if (dur > 0) {
-      nt0 = Math.max(0, Math.min(nt0, dur - ns))
-      ns = Math.min(ns, dur)
-    }
+    nt0 = dur > 0 ? Math.max(0, Math.min(nt0, dur - ns)) : Math.max(0, nt0)
     viewRef.current = { t0: nt0, t1: nt0 + ns }
     waveDirtyRef.current = true // 同拖拽：按需重绘
+    waveKickRef.current()
+  }
+  const resetWaveView = () => {
+    const dur = durationRef.current
+    if (dur <= 0) return
+    viewRef.current = { t0: 0, t1: dur }
+    waveDirtyRef.current = true
     waveKickRef.current()
   }
 
@@ -1116,7 +1119,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
                 <p className="st-help-sec">鼠标操作</p>
                 <ul>
                   <li>列表点行 / 谱面点音符 / 波形点刻度：选中音符</li>
-                  <li>波形拖拽：平移；滚轮：缩放</li>
+                  <li>波形拖拽：平移；＋/－/⤢ 按钮：缩放 / 复位全曲</li>
                   <li>波形点空白处：seek 到该时刻</li>
                   <li>⏯ 按钮：播放 / 暂停</li>
                   <li>进度条点 / 拖：seek（松手生效）</li>
@@ -1157,6 +1160,39 @@ export default function SyncTunePage({ songId }: { songId: string }) {
               <i className="sw h" style={{ background: '#e8e8e2' }} />
               白竖线=播放头
             </span>
+            {/* 缩放按钮组（T6b）：替代滚轮缩放；stopPropagation——头行点击是折叠开关 */}
+            <span className="st-zoom">
+              <button
+                className="st-zbtn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  zoomWave(1 / 1.5)
+                }}
+                title="放大 ×1.5（以视口中心）"
+              >
+                ＋
+              </button>
+              <button
+                className="st-zbtn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  zoomWave(1.5)
+                }}
+                title="缩小 ÷1.5（以视口中心）"
+              >
+                －
+              </button>
+              <button
+                className="st-zbtn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  resetWaveView()
+                }}
+                title="复位（显示全曲）"
+              >
+                ⤢
+              </button>
+            </span>
           </div>
           <span className="st-flex" />
           <span className="st-wave-hint" ref={waveHintRef}>
@@ -1168,7 +1204,6 @@ export default function SyncTunePage({ songId }: { songId: string }) {
           onPointerDown={onWavePointerDown}
           onPointerMove={onWavePointerMove}
           onPointerUp={onWavePointerUp}
-          onWheel={onWaveWheel}
         />
       </footer>
     </div>

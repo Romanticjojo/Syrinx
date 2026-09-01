@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { computeRmsEnvelope, normalizeGain, sampleEnvelopeView, smoothEnvelope } from './waveform'
+import { computeRmsEnvelope, sampleBlockMeans } from './waveform'
 
-/** T6 波形可读性纯函数单测：RMS 桶能量/居中滑动平均/峰值增益归一/视口像素列
- *  能量聚合。口径用例对应看板根因——低电平伴奏（0.1-0.3）+ 单采样尖峰（高频
- *  毛刺替身）+ 宽视图多桶聚合 */
+/** [T6b] 能量块进度条纯函数单测：RMS 桶引擎保留（块宽改 ~0.5s 由调用方传入），
+ *  新增视口均分块取桶 RMS 均值聚合；仅服务连续包络的平滑/归一/最大值采样
+ *  （smoothEnvelope/normalizeGain/sampleEnvelopeView）随包络退役同步删除 */
 
 describe('computeRmsEnvelope 桶能量（RMS）', () => {
   it('恒定电平信号：每桶 RMS = 电平值；总桶数 = ceil(len/step)', () => {
@@ -35,62 +35,32 @@ describe('computeRmsEnvelope 桶能量（RMS）', () => {
   })
 })
 
-describe('smoothEnvelope 居中滑动平均（边界收缩窗）', () => {
-  it('恒定包络不变；win<2 原样返回拷贝（不改输入）', () => {
-    for (const v of smoothEnvelope(new Float32Array([0.2, 0.2, 0.2, 0.2, 0.2]), 5))
-      expect(v).toBeCloseTo(0.2, 6)
-    const src = new Float32Array([0.1, 0.5, 0.9])
-    const same = smoothEnvelope(src, 1)
-    expect([...same]).toEqual([...src])
-    expect(same).not.toBe(src)
-  })
-
-  it('孤立尖峰被摊平：峰值降、邻桶抬（边界用收缩窗）', () => {
-    const sm = smoothEnvelope(new Float32Array([0.1, 0.1, 1, 0.1, 0.1]), 5)
-    expect(sm[2]).toBeCloseTo(1.4 / 5, 6) // j∈[0,4] 全窗：0.1×4+1
-    expect(sm[1]).toBeCloseTo(1.3 / 4, 6) // j∈[0,3] 边界收缩窗四值
-    expect(Math.max(...sm)).toBeLessThan(1)
-  })
-})
-
-describe('normalizeGain 峰值归一化增益', () => {
-  it('全局 max × gain = target（伴奏低电平 0.1-0.3 拉到 85%）', () => {
-    const g = normalizeGain(new Float32Array([0.05, 0.18, 0.3, 0.12, 0.02]), 0.85)
-    expect(0.3 * g).toBeCloseTo(0.85, 6)
-  })
-
-  it('全静音/极小包络返回 1（除零保护，不产 Infinity/NaN）', () => {
-    expect(normalizeGain(new Float32Array(8), 0.85)).toBe(1)
-    expect(normalizeGain(new Float32Array([1e-9]), 0.85)).toBe(1)
-  })
-})
-
-describe('sampleEnvelopeView 视口按像素列聚合（能量最大值）', () => {
+describe('sampleBlockMeans 视口均分块聚合（桶 RMS 均值）', () => {
   const env = new Float32Array([0.1, 0.4, 0.2, 0.9, 0.3])
 
-  it('每列恰一桶：列值 = 桶 RMS；半开区间不渗邻桶（列尾 1.0 不含桶 1）', () => {
-    expect([...sampleEnvelopeView(env, 1, 0, 5, 5)]).toEqual([...env])
-    // 10 列 × 0.5s：第 0/1 列 [0,0.5)/[0.5,1.0) 都只覆盖桶 0；第 2 列 [1.0,1.5) 起才是桶 1
-    const v = sampleEnvelopeView(env, 1, 0, 5, 10)
+  it('每块恰一桶：块值 = 桶 RMS；半开区间不渗邻桶（块尾 1.0 不含桶 1）', () => {
+    expect([...sampleBlockMeans(env, 1, 0, 5, 5)]).toEqual([...env])
+    // 10 块 × 0.5s：第 0/1 块 [0,0.5)/[0.5,1.0) 都只覆盖桶 0；第 2 块 [1.0,1.5) 起才是桶 1
+    const v = sampleBlockMeans(env, 1, 0, 5, 10)
     expect(v[0]).toBeCloseTo(0.1, 6)
     expect(v[1]).toBeCloseTo(0.1, 6)
     expect(v[2]).toBeCloseTo(0.4, 6)
   })
 
-  it('宽视图多桶聚合取能量最大值（R3：能量视角而非 min/max）', () => {
-    expect(sampleEnvelopeView(env, 1, 0, 5, 1)[0]).toBeCloseTo(0.9, 6)
-    expect(sampleEnvelopeView(env, 1, 0, 4, 2)[1]).toBeCloseTo(0.9, 6) // [2,4) 覆盖桶 2、3
+  it('宽视图多桶聚合取均值（能量块进度条口径，而非旧包络的最大值）', () => {
+    expect(sampleBlockMeans(env, 1, 0, 5, 1)[0]).toBeCloseTo(1.9 / 5, 6)
+    expect(sampleBlockMeans(env, 1, 0, 4, 2)[1]).toBeCloseTo(0.55, 6) // [2,4) 覆盖桶 2、3
   })
 
-  it('深缩放（视口窄于单桶）收敛到覆盖桶，不丢包络', () => {
-    expect(sampleEnvelopeView(env, 1, 0.55, 0.6, 1)[0]).toBeCloseTo(0.1, 6)
-    expect(sampleEnvelopeView(env, 1, 3.7, 3.9, 1)[0]).toBeCloseTo(0.9, 6)
+  it('深缩放（视口窄于单桶）收敛到覆盖桶，不丢能量', () => {
+    expect(sampleBlockMeans(env, 1, 0.55, 0.6, 1)[0]).toBeCloseTo(0.1, 6)
+    expect(sampleBlockMeans(env, 1, 3.7, 3.9, 1)[0]).toBeCloseTo(0.9, 6)
   })
 
-  it('空包络/非法参数返回全零列', () => {
-    expect([...sampleEnvelopeView(new Float32Array(0), 1, 0, 5, 3)]).toEqual([0, 0, 0])
-    expect([...sampleEnvelopeView(env, 0, 0, 5, 3)]).toEqual([0, 0, 0])
-    expect([...sampleEnvelopeView(env, 1, 5, 5, 3)]).toEqual([0, 0, 0])
-    expect(sampleEnvelopeView(env, 1, 0, 5, 0).length).toBe(0)
+  it('空包络/非法参数返回全零块', () => {
+    expect([...sampleBlockMeans(new Float32Array(0), 1, 0, 5, 3)]).toEqual([0, 0, 0])
+    expect([...sampleBlockMeans(env, 0, 0, 5, 3)]).toEqual([0, 0, 0])
+    expect([...sampleBlockMeans(env, 1, 5, 5, 3)]).toEqual([0, 0, 0])
+    expect(sampleBlockMeans(env, 1, 0, 5, 0).length).toBe(0)
   })
 })

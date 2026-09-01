@@ -1,13 +1,9 @@
 /**
- * 波形可读性纯函数集（T6 降噪/增益自适应）：
- * 旧绘制直接用 min/max 包络，三重根因——伴奏录音电平低（包络趴 mid 线像噪声
- * 毛刺）、min/max 把高频毛刺全画出来、每桶独立取值相邻跳变观感「碎」。
- * 三轮解法对应四个纯函数（不触 DOM/AudioBuffer，vitest 直测）：
- *  1) computeRmsEnvelope：min/max → 每桶 RMS 能量（感知加权，毛刺天然抑制）
- *  2) smoothEnvelope：3~5 桶滑动平均（相邻桶跳变抹平，能量轮廓连续）
- *  3) normalizeGain：全局峰值归一化（增益自适应，峰值拉到目标高度）
- *  4) sampleEnvelopeView：视口按像素列聚合，列内取桶 RMS 最大值（宽视图
- *     总览的能量视角；窄视口退化为最近桶，深缩放不丢包络）
+ * [T6b] 能量块进度条纯函数：T6 连续包络链（平滑/归一/最大值采样）随包络退役，
+ * 只保留 RMS 桶引擎（预计算块宽改 ~0.5s，由调用方按采样率换算传入）并新增
+ * 视口均分块均值聚合（进度条口径：能量轮廓而非逐像素包络）：
+ *  1) computeRmsEnvelope：单声道样本 → 每桶 RMS 能量（能量口径天然抑毛刺）
+ *  2) sampleBlockMeans：[t0,t1] 均分 blocks 块，每块取覆盖桶 RMS 的均值
  */
 
 /** 单声道样本 → 每桶 RMS 能量包络：bucket i 覆盖 [i·step, (i+1)·step) 样本，
@@ -25,46 +21,19 @@ export function computeRmsEnvelope(samples: Float32Array, step: number): Float32
   return env
 }
 
-/** 居中滑动平均平滑：窗口 win（<2 视为不平滑，原样拷贝），两端收缩窗口按
- *  实际样本数归一；返回新数组，不改输入 */
-export function smoothEnvelope(env: Float32Array, win: number): Float32Array {
-  const n = env.length
-  const out = new Float32Array(n)
-  if (win < 2) {
-    out.set(env)
-    return out
-  }
-  const half = Math.floor(win / 2)
-  for (let i = 0; i < n; i++) {
-    const lo = Math.max(0, i - half)
-    const hi = Math.min(n - 1, i + half)
-    let sum = 0
-    for (let j = lo; j <= hi; j++) sum += env[j]
-    out[i] = sum / (hi - lo + 1)
-  }
-  return out
-}
-
-/** 峰值归一化增益：target / 全局最大桶值（增益自适应——低电平伴奏拉到目标
- *  高度）；全零/极小包络返回 1（除零保护，不产 Infinity/NaN） */
-export function normalizeGain(env: Float32Array, target = 0.85): number {
-  let mx = 0
-  for (let i = 0; i < env.length; i++) if (env[i] > mx) mx = env[i]
-  return mx > 1e-6 ? target / mx : 1
-}
-
-/** 视口采样：[t0,t1] 均分 columns 列，列覆盖的桶取 RMS 最大值（能量视角聚
- *  合）；列为半开区间 [ta,tb)——桶范围 floor(ta/step)..ceil(tb/step)-1，相邻
- *  列不互相渗桶；视口窄于单桶时收敛到最近桶（深缩放不丢包络）；空包络/
- *  非法参数返回全零列 */
-export function sampleEnvelopeView(
+/** 能量块聚合：[t0,t1] 均分 blocks 块，每块取覆盖桶 RMS 的均值（进度条口径
+ *  ——能量轮廓，区别于 T6 包络的列内最大值）；块为半开区间 [ta,tb)——桶范围
+ *  floor(ta/step)..ceil(tb/step)-1，相邻块不互相渗桶，均值只计 [0,n) 内有效
+ *  桶；视口窄于单桶时收敛到最近桶（深缩放不丢能量）；空包络/非法参数返回
+ *  全零块 */
+export function sampleBlockMeans(
   env: Float32Array,
   stepSec: number,
   t0: number,
   t1: number,
-  columns: number,
+  blocks: number,
 ): Float32Array {
-  const out = new Float32Array(Math.max(0, Math.floor(columns)))
+  const out = new Float32Array(Math.max(0, Math.floor(blocks)))
   const n = env.length
   if (n === 0 || stepSec <= 0 || t1 <= t0) return out
   const span = t1 - t0
@@ -74,12 +43,14 @@ export function sampleEnvelopeView(
     let b0 = Math.floor(ta / stepSec)
     const b1 = Math.min(Math.ceil(tb / stepSec) - 1, n - 1)
     if (b1 < b0) b0 = Math.max(0, b1)
-    let mx = 0
+    let sum = 0
+    let cnt = 0
     for (let b = b0; b <= b1; b++) {
       if (b < 0 || b >= n) continue
-      if (env[b] > mx) mx = env[b]
+      sum += env[b]
+      cnt++
     }
-    out[x] = mx
+    out[x] = cnt > 0 ? sum / cnt : 0
   }
   return out
 }
