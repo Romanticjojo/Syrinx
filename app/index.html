@@ -8,34 +8,17 @@
     <meta name="theme-color" content="#0e0f0f" />
     <title>Syrinx</title>
     <style>
-      /* 启动画面：JS 就绪前由品牌位占位（React 挂载后整体替换） */
+      /* 启动占位：JS 就绪前纯深色底防白屏（React 挂载后整体替换，不再放品牌位，
+         避免 Intro 登场前闪现一张缩放 logo） */
       .boot {
         height: 100%;
-        display: grid;
-        place-content: center;
-        justify-items: center;
-        gap: 18px;
         background: #0e0f0f;
-      }
-      .boot img {
-        width: min(300px, 56vw);
-        aspect-ratio: 1;
-        border-radius: 50%;
-      }
-      .boot span {
-        font-family: Georgia, 'Songti SC', serif;
-        font-size: 22px;
-        letter-spacing: 0.04em;
-        color: #f5f4f0;
       }
     </style>
   </head>
   <body>
     <div id="root">
-      <div class="boot">
-        <img src="/brand/syrinx-logo-dark.jpg" alt="" aria-hidden="true" />
-        <span>Syrinx</span>
-      </div>
+      <div class="boot"></div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
