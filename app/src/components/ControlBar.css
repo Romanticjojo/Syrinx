@@ -83,6 +83,15 @@
 .ctl.exit:hover {
   color: var(--rec);
 }
+/* 运输组与音量/✕ 的视觉分隔：细竖线把「停止」和「退出」隔开不同分组，
+   降低 ✕ 被误认成停止键的概率（t_c10d648d） */
+.ctl-sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
 .ctl-volume {
   display: flex;
   align-items: center;

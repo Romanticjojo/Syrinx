@@ -467,7 +467,13 @@ export default function PerformPage() {
     }
   }, [startCapture, showToast])
 
-  const exit = useCallback(() => go('home'), [go])
+  /** ✕/顶栏返回/Esc 共用出口（t_c10d648d）：演奏中（含倒数）用户以为 ✕ 是
+   *  「停止」，直接回曲库会丢掉整段演奏——改与 ■ 同语义走 finish() 封存进回放；
+   *  非演奏状态（loading/ready/ended/error）没有可封存的 Take，保持回曲库 */
+  const exit = useCallback(() => {
+    if (phaseRef.current === 'performing' || phaseRef.current === 'countdown') finish()
+    else go('home')
+  }, [finish, go])
 
   // 键盘：空格 播放/暂停，Esc 退出
   useEffect(() => {
@@ -607,7 +613,7 @@ export default function PerformPage() {
             <button className="ov-start" onClick={() => void start()}>
               ▶ 开始演奏
             </button>
-            <div className="ov-tips">4 拍倒数起奏 · 空格 暂停/继续 · ⏺ 录音开关 · Esc 退出</div>
+            <div className="ov-tips">4 拍倒数起奏 · 空格 暂停/继续 · ⏺ 录音开关 · Esc 停止并进回放</div>
           </div>
         </div>
       )}

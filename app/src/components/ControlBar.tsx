@@ -78,6 +78,9 @@ export default function ControlBar({
         ■
       </button>
 
+      {/* 运输组（▶/rec/↺/■）与音量+✕ 分组：分隔线防 ✕ 被误认成停止（t_c10d648d） */}
+      <span className="ctl-sep" aria-hidden="true" />
+
       <label className="ctl-volume" aria-label="伴奏音量">
         <span className="vol-icon">♪</span>
         <input
@@ -90,7 +93,13 @@ export default function ControlBar({
         />
       </label>
 
-      <button className="ctl exit" onClick={onExit} aria-label="退出演奏" title="退出演奏">
+      {/* 语义随演奏状态走（t_c10d648d）：演奏中点 ✕ = 停止并保存进回放（PerformPage 侧实现） */}
+      <button
+        className="ctl exit"
+        onClick={onExit}
+        aria-label={playing ? '停止并保存，进入回放' : '退出演奏'}
+        title={playing ? '停止并保存，进入回放' : '退出演奏'}
+      >
         ✕
       </button>
     </div>
