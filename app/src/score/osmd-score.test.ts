@@ -195,7 +195,8 @@ function mkGNote(): FakeGNote {
   const colors: string[] = []
   return { colors, setColor: (c) => colors.push(c), sourceNote: { isRest: () => false } }
 }
-/** 单小节假几何：staffEntry 相对 x = rv*4（OSMD 单位），y/w/h 与真实谱面同量级 */
+/** 单小节假几何：staffEntry x 为行内绝对坐标（真实 OSMD 语义，T3c 诊断实测
+ *  se.PositionAndShape.AbsolutePosition.x 与小节同空间），y/w/h 与真实谱面同量级 */
 function fakeMeasure(num: number, entries: { rv: number; note: FakeGNote }[]) {
   return {
     MeasureNumber: num,
@@ -204,7 +205,7 @@ function fakeMeasure(num: number, entries: { rv: number; note: FakeGNote }[]) {
       Size: { width: 8, height: 6 },
     },
     staffEntries: entries.map((e) => ({
-      PositionAndShape: { AbsolutePosition: { x: e.rv * 4 } },
+      PositionAndShape: { AbsolutePosition: { x: num * 10 + e.rv * 4 } },
       sourceStaffEntry: { Timestamp: { RealValue: e.rv } },
       graphicalVoiceEntries: [{ notes: [e.note] }],
     })),
@@ -233,7 +234,8 @@ function makeGeomScore(ml: unknown[][]): {
 }
 
 describe('OSMDScore T3 选中染色与小节聚焦', () => {
-  // m1 两个 staffEntry（rv 0 / 0.25 -> 音符 A / B），m2 一个（rv 0 -> C）
+  // m1 两个 staffEntry（rv 0 / 0.25 -> 音符 A / B），m2 一个（rv 0 -> C）；
+  // MeasureList 外层=小节（T3c 诊断实测 [小节][staff]），m1/m2 同系统行
   const A = mkGNote()
   const B = mkGNote()
   const C = mkGNote()
@@ -241,7 +243,8 @@ describe('OSMDScore T3 选中染色与小节聚焦', () => {
     [fakeMeasure(1, [
       { rv: 0, note: A },
       { rv: 0.25, note: B },
-    ]), fakeMeasure(2, [{ rv: 0, note: C }])],
+    ])],
+    [fakeMeasure(2, [{ rv: 0, note: C }])],
   ]
   const BASE = '#e8e8e2'
 
@@ -503,6 +506,57 @@ describe('OSMDScore T3b 命中精度强化（音符头绘制 x 对齐）', () =>
     ]
     expect(makeHitScore(ml2).score.noteAtPoint(106, 252)?.rvInMeasure).toBe(0.5) // 点下声部
     expect(makeHitScore(ml2).score.noteAtPoint(106, 212)?.rvInMeasure).toBe(0) // 点上声部
+  })
+})
+
+// -- T3c：hitRows 行归并（MeasureList 实为 [小节][staff]）+ 坐标系修正 --
+describe('OSMDScore T3c 行归并与坐标系修正', () => {
+  // 同一系统行的两个小节：m1（rv0 A / rv0.25 B，行内绝对 x 100/110px）、
+  // m2（rv0 C，x 200px），同 y 带 200..260px
+  const A3 = mkGNote()
+  const B3 = mkGNote()
+  const C3 = mkGNote()
+  const mlRow = [
+    [fakeMeasure(1, [
+      { rv: 0, note: A3 },
+      { rv: 0.25, note: B3 },
+    ])],
+    [fakeMeasure(2, [{ rv: 0, note: C3 }])],
+  ]
+
+  it('行内第二小节的音符可选中（不再恒选行首小节，bug 复现用例）', () => {
+    const { score } = makeGeomScore(mlRow)
+    expect(score.noteAtPoint(205, 230)?.measure).toBe(2)
+    expect(score.noteAtPoint(205, 230)?.rvInMeasure).toBe(0)
+    // 行首小节仍可选
+    expect(score.noteAtPoint(105, 230)?.measure).toBe(1)
+    expect(score.noteAtPoint(105, 230)?.rvInMeasure).toBe(0)
+  })
+
+  it('跨行：不同 y 带的小节归入各自行，不串行', () => {
+    const D3 = mkGNote()
+    const m3 = fakeMeasure(3, [{ rv: 0, note: D3 }])
+    m3.PositionAndShape = {
+      AbsolutePosition: { x: 30, y: 50 },
+      Size: { width: 8, height: 6 },
+    }
+    const { score } = makeGeomScore([...mlRow, [m3]])
+    expect(score.noteAtPoint(305, 500)?.measure).toBe(3)
+    expect(score.noteAtPoint(305, 500)?.rvInMeasure).toBe(0)
+  })
+
+  it('setMarkers：标记按行内绝对锚点定位（不叠加小节 x，修复双重计数错位）', () => {
+    const { score, container } = makeGeomScore(mlRow)
+    score.setMarkers([{ measure: 2, rvInMeasure: 0, color: '#fff' }])
+    const el = container.querySelector<HTMLElement>('.sync-marker')
+    expect(el).not.toBeNull()
+    // happy-dom 下 svgRect/容器 rect 全零 -> offX=0；m2 rv0 锚点行内绝对 x=20 单位
+    // -> 200px（旧代码叠加小节 x 会给 400px）
+    expect(el!.style.left).toBe('200px')
+    expect(el!.style.top).toBe('200px') // g.y = 20 单位
+    expect(el!.style.height).toBe('60px')
+    score.setMarkers([])
+    expect(container.querySelector('.sync-marker')).toBeNull()
   })
 })
 

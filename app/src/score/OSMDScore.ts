@@ -407,7 +407,11 @@ export class OSMDScore {
    *  容器可能带内边距：svg 相对容器的偏移叠进标记坐标。
    *  T3b 起同帧构建 hitRows（noteAtPoint 命中测试行表）：行几何 + 每个
    *  staffEntry 的音符头「绘制 x」（DOM SVG 元素 rect 主路径、GraphicalNote
-   *  PositionAndShape 几何回退、staffEntry 锚点兜底），谱面不变一并复用。 */
+   *  PositionAndShape 几何回退、staffEntry 锚点兜底），谱面不变一并复用。
+   *  T3c 修正：MeasureList 实为 [小节][staff]（非 [系统行][小节]）——外层逐小节，
+   *  系统行按纵向包络归并（相邻小节重叠 > 较小者半高即同行）；此前每小节各成
+   *  一行且同系统行小节包络重合，noteAtPoint 行判定平局时行首小节恒胜，
+   *  即「每行只有第一小节音符能选中」bug。 */
   private ensureMarkerGeom(): MarkerGeom | null {
     if (this.markerGeom) return this.markerGeom
     const svg = this.containerEl.querySelector('svg')
@@ -421,15 +425,17 @@ export class OSMDScore {
       { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }
     >()
     const hitRows: HitRow[] = []
-    for (const systemMeasures of ml) {
-      if (!systemMeasures?.length) continue
-      let top = Infinity
-      let bottom = -Infinity
+    let row: HitRow | null = null
+    for (const measureStaves of ml) {
+      if (!measureStaves?.length) continue
+      let mTop = Infinity
+      let mBottom = -Infinity
       const entries: HitEntry[] = []
-      for (const m of systemMeasures) {
+      let hasEntry = false
+      for (const m of measureStaves) {
         const ps = m.PositionAndShape
-        top = Math.min(top, ps.AbsolutePosition.y * unitPx)
-        bottom = Math.max(bottom, (ps.AbsolutePosition.y + ps.Size.height) * unitPx)
+        mTop = Math.min(mTop, ps.AbsolutePosition.y * unitPx)
+        mBottom = Math.max(mBottom, (ps.AbsolutePosition.y + ps.Size.height) * unitPx)
         if (!map.has(m.MeasureNumber)) {
           map.set(m.MeasureNumber, {
             x: ps.AbsolutePosition.x * unitPx,
@@ -443,13 +449,26 @@ export class OSMDScore {
           })
         }
         // 命中表不去重：多 staff（钢琴上下谱表）的 staffEntries 各自入表
-        const mx = ps.AbsolutePosition.x * unitPx
         for (const se of m.staffEntries) {
-          const entry = this.hitEntryFor(se, m.MeasureNumber, mx, unitPx, svgRect)
-          if (entry) entries.push(entry)
+          const entry = this.hitEntryFor(se, m.MeasureNumber, unitPx, svgRect)
+          if (entry) {
+            entries.push(entry)
+            hasEntry = true
+          }
         }
       }
-      if (entries.length) hitRows.push({ top, bottom, entries })
+      if (!hasEntry) continue
+      // 行归并：与当前行的纵向包络重叠超过较小者半高 -> 同一系统行并入
+      const inter = row ? Math.min(mBottom, row.bottom) - Math.max(mTop, row.top) : -1
+      const minH = Math.min(mBottom - mTop, row ? row.bottom - row.top : Infinity)
+      if (row && inter > minH / 2) {
+        row.top = Math.min(row.top, mTop)
+        row.bottom = Math.max(row.bottom, mBottom)
+        row.entries.push(...entries)
+      } else {
+        row = { top: mTop, bottom: mBottom, entries }
+        hitRows.push(row)
+      }
     }
     this.markerGeom = {
       map,
@@ -466,7 +485,8 @@ export class OSMDScore {
    *  会选错邻）。DOM 主路径用 notehead/修饰符 SVG 元素 getBoundingClientRect——
    *  与 svg 同帧两次测量相减，滚动/页面缩放自然抵消，得到的即真实绘制包络
    *  （有 accidental 时取 accidental+notehead 包络中心）；SVG 元素不可用时回退
-   *  GraphicalNote 的 PositionAndShape 包络（乘 unitPx）；再不行退锚点旧口径。
+   *  GraphicalNote 的 PositionAndShape 包络（乘 unitPx）；再不行退锚点旧口径
+   *  （T3c 修正：锚点 x 是行内绝对坐标，与小节同空间，不再叠加小节 x）。
    *  纯休止 entry 不入命中表（不可选中）。 */
   private hitEntryFor(
     se: {
@@ -475,7 +495,6 @@ export class OSMDScore {
       PositionAndShape?: { AbsolutePosition?: { x: number } }
     },
     measure: number,
-    mx: number,
     unitPx: number,
     svgRect: { left: number; top: number },
   ): HitEntry | null {
@@ -513,9 +532,10 @@ export class OSMDScore {
     })
     const ok = boxes.filter((b): b is NonNullable<typeof b> => b !== null)
     if (!ok.length) {
-      // 兜底：DOM 与几何都不可用 -> staffEntry 锚点（T3b 前旧口径）
+      // 兜底：DOM 与几何都不可用 -> staffEntry 锚点（行内绝对坐标，T3c 修正：
+      // 与小节 AbsolutePosition 同空间，不叠加小节 x——旧口径双重计数会选错邻）
       const ax = se.PositionAndShape?.AbsolutePosition?.x
-      return { m: measure, rv, x: mx + (ax ?? 0) * unitPx, ys: [], hw: 0 }
+      return { m: measure, rv, x: (ax ?? 0) * unitPx, ys: [], hw: 0 }
     }
     return {
       m: measure,
@@ -580,7 +600,8 @@ export class OSMDScore {
         layer.appendChild(el)
       }
       const fx = rvToX(g, mk.rvInMeasure)
-      el.style.left = `${geom.offX + g.x + fx * geom.unitPx}px`
+      // fx 已是行内绝对坐标（se x 与小节同空间，T3c 诊断实测），不再叠加小节 x
+      el.style.left = `${geom.offX + fx * geom.unitPx}px`
       el.style.top = `${geom.offY + g.y}px`
       el.style.height = `${g.h}px`
       el.style.borderColor = mk.color
