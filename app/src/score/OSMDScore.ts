@@ -87,6 +87,11 @@ export class OSMDScore {
       ],
     })
     this.osmd.FollowCursor = true
+    // 关闭「final-barline 风格小节线后的系统行首重绘拍号」：反复展开谱每段末尾残留
+    // light-heavy 小节线，OSMD 默认在其后的行首补画小谱号 + 拍号，观感即用户反馈的
+    // 「行内多余谱号 + 4/4」；首小节拍号不受影响（isFirstSourceMeasure 仍绘制）。
+    // EngravingRules 可选链保护：测试注入口的 fake 实例没有该成员
+    if (this.osmd.EngravingRules) this.osmd.EngravingRules.ShowRhythmAgainAfterPartEndOrFinalBarline = false
     // Zoom 在 load/render 前设置（setter 只存值+置脏标，可选链保护未初始化状态）；
     // noteAtPoint/setMarkers 的 unitPx=10×Zoom 已随动，几何自洽
     this.osmd.Zoom = zoom
