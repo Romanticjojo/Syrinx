@@ -125,10 +125,18 @@
   padding: 14px 0;
 }
 /* 自绘回放控件（PlaybackDeck）：与 stats-card 同 token */
+.pdeck {
+  /* pdeck-area 也是 flex：deck 不 flex:1 会收缩到内容宽，进度条（flex-basis:0）塌成 0 宽 */
+  flex: 1;
+  min-width: 0;
+}
 .pdeck-row {
   display: flex;
   align-items: center;
   gap: 12px;
+  /* 撑满 pdeck-area：否则 shrink-to-fit 下 track 的 flex-basis:0 让进度条塌成 0 宽 */
+  flex: 1;
+  min-width: 0;
 }
 .pdeck-btn {
   flex: none;
@@ -147,20 +155,35 @@
 }
 .pdeck-track {
   flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 10px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.14);
   cursor: pointer;
   position: relative;
-  overflow: hidden;
+  /* 滑块溢出可见：进度末端圆形指示钮 */
+  overflow: visible;
+  touch-action: none;
 }
 .pdeck-track:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.22);
 }
 .pdeck-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  border-radius: 3px;
+  border-radius: 5px;
+}
+/* 进度滑块：始终挂在填充末端，一眼可见进度位置 */
+.pdeck-fill::after {
+  content: '';
+  position: absolute;
+  right: -7px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: inherit;
+  transform: translateY(-50%);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
 }
 .pdeck-time {
   flex: none;
@@ -169,6 +192,36 @@
   font-variant-numeric: tabular-nums;
   min-width: 84px;
   text-align: right;
+}
+/* 录音音量：静音钮 + 滑杆 */
+.pdeck-vol {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pdeck-mute {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink-dim);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pdeck-mute:hover {
+  border-color: var(--ink-dim);
+  color: var(--ink);
+}
+.pdeck-vol input[type='range'] {
+  width: 76px;
+  height: 4px;
+  accent-color: var(--song-accent, var(--accent));
+  cursor: pointer;
 }
 .playback-actions {
   display: flex;
@@ -223,13 +276,6 @@
   color: var(--ink-faint);
   letter-spacing: 0.04em;
 }
-.stats-note {
-  margin-top: 12px;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--ink-faint);
-}
-
 .chart-section {
   margin-top: 18px;
 }

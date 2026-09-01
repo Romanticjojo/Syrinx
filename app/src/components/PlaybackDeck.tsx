@@ -15,13 +15,15 @@ const fmt = (sec: number): string => {
   return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 }
 
-/** 自绘回放卡：播放/暂停 + 可点击进度条 + 时间显示。
+/** 自绘回放卡：播放/暂停 + 可点击/拖拽进度条（带滑块指示）+ 时间显示 + 音量调节。
  * MediaRecorder webm 在 <audio> 里 duration 常为 Infinity，
  * loadedmetadata 后用「先 seek 大时间再归零」逼出真实时长。 */
 export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSec = 0 }: Props) {
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(fallbackDurationSec)
+  const [volume, setVolume] = useState(1)
+  const [muted, setMuted] = useState(false)
   const trackRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -66,6 +68,14 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
     }
   }, [audioRef, src, fallbackDurationSec])
 
+  // 音量/静音应用到录音元素（只影响录音回放；伴奏对照走 audioEngine 自己的音量）
+  useEffect(() => {
+    const el = audioRef.current
+    if (!el) return
+    el.volume = volume
+    el.muted = muted
+  }, [audioRef, volume, muted])
+
   const toggle = () => {
     const el = audioRef.current
     if (!el) return
@@ -73,14 +83,38 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
     else el.pause()
   }
 
-  const seek = (e: React.MouseEvent) => {
+  const toggleMute = () => setMuted((m) => !m)
+
+  const changeVolume = (v: number) => {
+    setVolume(v)
+    if (v > 0) setMuted(false)
+  }
+
+  const seekFromClientX = (clientX: number) => {
     const el = audioRef.current
     const track = trackRef.current
     if (!el || !track || duration <= 0) return
     const rect = track.getBoundingClientRect()
-    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width))
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
     el.currentTime = ratio * duration
     setTime(el.currentTime)
+  }
+
+  // 进度轨点击/拖拽：pointer capture 全程跟手
+  const onTrackPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (duration <= 0) return
+    const track = e.currentTarget
+    track.setPointerCapture(e.pointerId)
+    seekFromClientX(e.clientX)
+    const move = (ev: PointerEvent) => seekFromClientX(ev.clientX)
+    const up = () => {
+      track.removeEventListener('pointermove', move)
+      track.removeEventListener('pointerup', up)
+      track.removeEventListener('pointercancel', up)
+    }
+    track.addEventListener('pointermove', move)
+    track.addEventListener('pointerup', up)
+    track.addEventListener('pointercancel', up)
   }
 
   const pct = duration > 0 ? Math.min(100, (time / duration) * 100) : 0
@@ -105,13 +139,33 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
           aria-valuemin={0}
           aria-valuemax={Math.round(duration)}
           aria-valuenow={Math.round(time)}
-          onClick={seek}
+          onPointerDown={onTrackPointerDown}
         >
           <div className="pdeck-fill" style={{ width: `${pct}%`, background: accent }} />
         </div>
         <span className="pdeck-time">
           {fmt(time)} / {fmt(duration)}
         </span>
+        <div className="pdeck-vol">
+          <button
+            className="pdeck-mute"
+            onClick={toggleMute}
+            aria-label={muted ? '取消静音' : '静音'}
+            title={muted ? '取消静音' : '静音'}
+          >
+            {muted || volume === 0 ? '🔇' : '♪'}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={muted ? 0 : volume}
+            onChange={(e) => changeVolume(Number(e.target.value))}
+            aria-label="录音音量"
+            title="录音音量"
+          />
+        </div>
       </div>
     </div>
   )

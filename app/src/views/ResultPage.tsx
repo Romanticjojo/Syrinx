@@ -287,9 +287,6 @@ export default function ResultPage() {
                 <span>演奏时长</span>
               </div>
             </div>
-            <p className="stats-note">
-              口径：录音逐帧 YIN 测音 vs 谱面目标音，±50 音分内计准；每个音符掐头 15%、去尾 10% 后取中位频率；无实测帧的音符记漏、不计入分母。
-            </p>
             </>
           )}
         </div>
