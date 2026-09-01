@@ -153,6 +153,34 @@ describe('属性面板视图数据（selectedNoteView）', () => {
   })
 })
 
+describe('saveBaseline 保存修改（working 应用为新基线）', () => {
+  it('dirty 时保存：baseline=working 拷贝、dirty 清零、undoStack 保留', () => {
+    S().select(1)
+    S().adjust(50)
+    expect(S().dirty).toBe(true)
+    const before = S().working
+    S().saveBaseline()
+    expect(S().baseline).toEqual(before)
+    expect(S().baseline).not.toBe(before) // 拷贝，非同引用
+    expect(S().dirty).toBe(false)
+    expect(S().undoStack).toHaveLength(1) // 撤销栈不清：撤销仍是「撤销最近一次微调」
+  })
+
+  it('保存后再微调：偏差相对新基线计算；未 dirty 时保存 no-op', () => {
+    S().select(1)
+    S().adjust(50) // q=5 t: 2.5 -> 2.55
+    S().saveBaseline()
+    expect(S().log).toHaveLength(1) // 日志保留
+    const b0 = S().baseline
+    S().saveBaseline() // 无 diff：no-op
+    expect(S().baseline).toBe(b0)
+    S().adjust(-50) // 相对新基线 -50ms
+    expect(S().dirty).toBe(true)
+    expect(selectedNoteView(S()).deltaMs).toBeCloseTo(-50, 3)
+    expect(S().working.find((p) => p.q === 5)!.t).toBeCloseTo(2.5, 6)
+  })
+})
+
 it('workingQ2T：工作网格可插值（波形期望线共用）', () => {
   const q2t = workingQ2T(S())
   expect(q2t(4.5).t).toBeCloseTo(2.25, 6)

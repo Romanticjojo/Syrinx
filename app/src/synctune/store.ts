@@ -44,6 +44,8 @@ interface SyncTuneState {
   adjust(deltaMs: number): void
   resetSelected(): void
   undo(): void
+  /** 保存修改（T3c）：working 应用为新基线、dirty 清零；undoStack 不清 */
+  saveBaseline(): void
 }
 
 export const useSyncTuneStore = create<SyncTuneState>((set, get) => ({
@@ -117,6 +119,15 @@ export const useSyncTuneStore = create<SyncTuneState>((set, get) => ({
     const { undoStack } = get()
     if (undoStack.length === 0) return
     set({ working: undoStack[undoStack.length - 1], undoStack: undoStack.slice(0, -1), dirty: true })
+  },
+
+  /** 保存修改：working 应用为新基线（播放/波形即新节奏），dirty 清零。
+   *  undoStack 不清——「撤销上一步」仍是撤销最近一次微调（相对新基线呈现为
+   *  反向偏差）；无 diff（未 dirty）时 no-op，避免无谓的引用替换。 */
+  saveBaseline: () => {
+    const { working, dirty } = get()
+    if (!dirty) return
+    set({ baseline: working.map((p) => ({ ...p })), dirty: false })
   },
 }))
 
