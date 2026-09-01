@@ -12,6 +12,31 @@ const STEP_SEMITONE: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A:
  * luv-letter Soundslice 精校谱（t_76c0cbff）带 7 对反复记号 + volta，由本函数物化成
  * 播放序线性谱；beats.json v3 锚点按展开后小节序标定（离线 DTW，omr-work/t_76c0cbff/）。
  */
+/**
+ * 强制换行剥离（t_c10d648d）：删掉 <print> 上的 new-system/new-page 属性。
+ * 曲谱源文件（如 luv-letter OMR 转换谱）按 A4 打印版式硬编码换行，OSMD 会照办，
+ * 导致容器限宽/A4 缩窄完全失效；剥掉后换行交还 OSMD 按容器宽度自适应重排。
+ * 只动属性不动谱面内容；无 <print> 时原样返回引用（零开销）。
+ */
+export function stripForcedBreaks(xml: string): string {
+  if (!xml.includes('<print')) return xml
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  if (doc.querySelector('parsererror')) return xml
+  const prints = doc.querySelectorAll('print')
+  if (prints.length === 0) return xml
+  let removed = false
+  for (const print of Array.from(prints)) {
+    for (const attr of ['new-system', 'new-page']) {
+      if (print.hasAttribute(attr)) {
+        print.removeAttribute(attr)
+        removed = true
+      }
+    }
+  }
+  if (!removed) return xml
+  return new XMLSerializer().serializeToString(doc)
+}
+
 export function expandRepeats(xml: string): string {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
   if (doc.querySelector('parsererror')) return xml

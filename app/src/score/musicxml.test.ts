@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { expandRepeats, parseMusicXml } from './musicxml'
+import { expandRepeats, parseMusicXml, stripForcedBreaks } from './musicxml'
 
 /** 构造最小 MusicXML：divisions=2（八分音符=1）、3/4 拍、tempo=60 */
 const XML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -200,5 +200,52 @@ describe('expandRepeats 反复展开', () => {
       '<direction><direction-type><words>D.C. al Fine</words></direction-type></direction><note><pitch><step>E</step>',
     )
     expect(expandRepeats(dcXml)).toBe(dcXml)
+  })
+})
+
+describe('stripForcedBreaks 强制换行剥离（t_c10d648d）', () => {
+  /** 带 new-system / new-page / 其余属性的 print 样例 */
+  const PRINT_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <print new-system="yes"/>
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <print new-page="yes" new-system="yes"/>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`
+
+  it('删掉 print 上的 new-system/new-page 属性，换行交还容器自适应', () => {
+    const stripped = stripForcedBreaks(PRINT_XML)
+    expect(stripped).not.toContain('new-system')
+    expect(stripped).not.toContain('new-page')
+    // 谱面内容不受影响：音符仍在
+    expect(stripped).toContain('<step>C</step>')
+  })
+
+  it('print 上的无关属性保留（不误伤 staff-spacing 等）', () => {
+    const withOther = PRINT_XML.replace('<print new-system="yes"/>', '<print new-system="yes" staff-spacing="2.4"/>')
+    const stripped = stripForcedBreaks(withOther)
+    expect(stripped).toContain('staff-spacing')
+    expect(stripped).not.toContain('new-system')
+  })
+
+  it('无 print 的谱原样返回引用（零开销快路径）', () => {
+    expect(stripForcedBreaks(XML)).toBe(XML)
+  })
+
+  it('luv-letter 精校谱：剥离后不再含 new-system（源文件 23 处）', () => {
+    // happy-dom 不支持单引号属性（浏览器/Electron 原生 DOMParser 无此问题），读取时归一化
+    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8').replace(
+      /^<\?xml[^>]*\?>/,
+      (m) => m.replace(/'/g, '"'),
+    )
+    expect(stripForcedBreaks(xml)).not.toContain('new-system')
   })
 })

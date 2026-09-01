@@ -1,7 +1,7 @@
 import type { SongManifest, Timeline } from '../types'
 import { applyAnchorOffset, applyBeats, type BeatsFile } from '../score/anchors'
 import { assetUrl } from '../lib/assetUrl'
-import { expandRepeats, parseMusicXml } from '../score/musicxml'
+import { expandRepeats, parseMusicXml, stripForcedBreaks } from '../score/musicxml'
 import luvLetterManifest from '../../public/songs/luv-letter/manifest.json'
 
 /**
@@ -56,7 +56,9 @@ export async function loadSong(manifest: SongManifest): Promise<{ xml: string; t
   const res = await fetch(assetUrl(manifest.scoreUrl))
   if (!res.ok) throw new Error(`曲谱加载失败：${manifest.scoreUrl}（HTTP ${res.status}）`)
   const raw = await res.text()
-  const xml = expandRepeats(raw)
+  // 先剥强制换行（源谱按 A4 打印版式硬编码换行，会让容器限宽失效，t_c10d648d），
+  // 再展开反复段：两步都产出合法 MusicXML，谱面内容不受影响
+  const xml = expandRepeats(stripForcedBreaks(raw))
   let timeline = parseMusicXml(xml)
   // 伴奏锚点（可选）：谱面缺段/假 tempo 时把逐拍时间对齐到伴奏（t_3b9cfc25）
   if (manifest.beatsUrl) {
