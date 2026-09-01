@@ -15,9 +15,9 @@
 ![Node](https://img.shields.io/badge/node-%3E%3D20.19-339933?style=flat-square&logo=node.js&logoColor=white)
 ![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)
 
-**智能乐谱播放器** × **音乐节奏游戏**
+**智能乐谱** × **音乐游戏**
 
-*一款为真实长笛演奏而生的辅助应用*
+*为真实长笛演奏而生的辅助应用*
 
 </div>
 
