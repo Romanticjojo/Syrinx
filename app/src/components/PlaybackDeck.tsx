@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
+import { audioEngine } from '../audio/AudioEngine'
+import { ensureRecGain } from '../audio/recGraph'
+import { volToGain } from '../audio/volCurve'
 
 interface Props {
   src: string
@@ -15,15 +18,19 @@ const fmt = (sec: number): string => {
   return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 }
 
-/** 自绘回放卡：播放/暂停 + 可点击/拖拽进度条（带滑块指示）+ 时间显示 + 音量调节。
+/** 自绘回放卡：播放/暂停 + 可点击/拖拽进度条（带滑块指示）+ 时间显示
+ * + 录音/伴奏双音量（t_2264e5ba）。录音经 WebAudio 增益补偿直采电平偏低，
+ * 伴奏直接走 audioEngine 音量（对照播放页间共享，演奏页调过则无缝衔接）。
  * MediaRecorder webm 在 <audio> 里 duration 常为 Infinity，
  * loadedmetadata 后用「先 seek 大时间再归零」逼出真实时长。 */
 export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSec = 0 }: Props) {
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(fallbackDurationSec)
-  const [volume, setVolume] = useState(1)
-  const [muted, setMuted] = useState(false)
+  // 录音音量滑杆 0-1（经感知曲线映射到 0..x3 增益，满格即最大声）
+  const [recVol, setRecVol] = useState(1)
+  // 伴奏音量：初始接住演奏页/上次设置（audioEngine 是全局单例）
+  const [accVol, setAccVol] = useState(() => audioEngine.getVolume())
   const trackRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -68,26 +75,35 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
     }
   }, [audioRef, src, fallbackDurationSec])
 
-  // 音量/静音应用到录音元素（只影响录音回放；伴奏对照走 audioEngine 自己的音量）
+  // 录音音量：优先 WebAudio 增益（element.volume 上限 1 不够补偿直采电平），
+  // 接线失败回退 element.volume 直控；元素音量固定 1，响度全由滑杆曲线决定
   useEffect(() => {
     const el = audioRef.current
     if (!el) return
-    el.volume = volume
-    el.muted = muted
-  }, [audioRef, volume, muted])
+    const gain = ensureRecGain(el, audioEngine.audioCtx)
+    if (gain) {
+      el.volume = 1
+      el.muted = false
+      gain.gain.value = volToGain(recVol)
+    } else {
+      el.volume = recVol
+      el.muted = false
+    }
+  }, [audioRef, recVol])
+
+  // 伴奏音量：未开对照播放也可预先调（audioEngine 增益常驻）
+  useEffect(() => {
+    audioEngine.setVolume(accVol)
+  }, [accVol])
 
   const toggle = () => {
     const el = audioRef.current
     if (!el) return
+    // 录音已接进 audioEngine 的 AudioContext：suspended 下元素出声走不到输出，
+    // 播放手势里顺手恢复（对照播放路径在 ResultPage 已各自 resume）
+    void audioEngine.resume()
     if (el.paused) void el.play()
     else el.pause()
-  }
-
-  const toggleMute = () => setMuted((m) => !m)
-
-  const changeVolume = (v: number) => {
-    setVolume(v)
-    if (v > 0) setMuted(false)
   }
 
   const seekFromClientX = (clientX: number) => {
@@ -146,26 +162,48 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
         <span className="pdeck-time">
           {fmt(time)} / {fmt(duration)}
         </span>
-        <div className="pdeck-vol">
-          <button
-            className="pdeck-mute"
-            onClick={toggleMute}
-            aria-label={muted ? '取消静音' : '静音'}
-            title={muted ? '取消静音' : '静音'}
-          >
-            {muted || volume === 0 ? '🔇' : '♪'}
-          </button>
+      </div>
+      <div className="pdeck-vols">
+        <label className="pdeck-vol">
+          <span className="pdeck-vol-label">
+            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+              <rect x="6" y="1.5" width="4" height="8" rx="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M4 7v1a4 4 0 0 0 8 0V7" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              <path d="M8 12v2.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+            录音
+          </span>
           <input
             type="range"
             min={0}
             max={1}
-            step={0.05}
-            value={muted ? 0 : volume}
-            onChange={(e) => changeVolume(Number(e.target.value))}
+            step={0.01}
+            value={recVol}
+            onChange={(e) => setRecVol(Number(e.target.value))}
             aria-label="录音音量"
-            title="录音音量"
+            title="录音音量（含增益补偿）"
           />
-        </div>
+        </label>
+        <label className="pdeck-vol">
+          <span className="pdeck-vol-label">
+            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+              <path d="M6 12.5V3.5l7-1.5v9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+              <circle cx="4" cy="12.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+              <circle cx="11" cy="11" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+            </svg>
+            伴奏
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={accVol}
+            onChange={(e) => setAccVol(Number(e.target.value))}
+            aria-label="伴奏音量"
+            title="伴奏音量（对照播放时生效）"
+          />
+        </label>
       </div>
     </div>
   )

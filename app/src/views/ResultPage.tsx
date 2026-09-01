@@ -303,13 +303,10 @@ export default function ResultPage() {
             />
             <div className="chart-legend">
               <span>
-                <i className="sw in" /> 实测音高 · 准（±50 音分内）
+                <i className="sw hit" /> 命中（±50 音分内）
               </span>
               <span>
                 <i className="sw off" /> 偏音（超 ±50 音分）
-              </span>
-              <span>
-                <i className="sw note" /> 目标音符
               </span>
               <span>
                 <i className="sw miss" /> 漏音（无实测）
