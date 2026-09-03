@@ -85,6 +85,10 @@ export class OSMDScore {
   /** 标记 DOM 元素池：key → 已定位元素，setMarkers 复用不再重建 */
   private markerEls = new Map<string, HTMLDivElement>()
   private markerLayer: HTMLElement | null = null
+  /** 光标已由调用方显示（showCursor）：OSMD render() 会重建光标并隐藏
+   *  （enableOrDisableCursors → 新 Cursor + init→hide），重渲后须自动恢复，
+   *  否则光标永久 hidden → update() 早退 → 不滚动不高亮（切光标模式丢跟随的根因） */
+  private cursorShown = false
 
   constructor(
     container: HTMLElement,
@@ -177,6 +181,10 @@ export class OSMDScore {
     this.highlighted = null
     this.selNote = null
     this.prescanCursorStops()
+    // 重渲后光标被 OSMD 重建并隐藏（根因见 cursorShown 注释）：之前显示过就恢复。
+    // show() 内部 reset + update：光标回起点后由下一帧 syncToTime 快进到当前伴奏
+    // 位置（只前进语义），切换瞬间即重定位且谱面跟随滚动。
+    if (this.cursorShown) this.showCursor()
   }
 
   /** [sync-tune T3c] 就地更换时间轴（保存修改后播放即新节奏）：谱面不重渲，
@@ -212,6 +220,7 @@ export class OSMDScore {
 
   /** 显示光标并置于起点 */
   showCursor(): void {
+    this.cursorShown = true
     this.osmd.cursor.reset()
     this.osmd.cursor.show()
     this.lastMeasure = 0

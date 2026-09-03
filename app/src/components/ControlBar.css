@@ -91,6 +91,10 @@
   font-size: 12px;
   white-space: nowrap;
 }
+/* 鼠标点击后 UA 焦点圈（椭圆边框）驻留按钮上：去掉，键盘焦点圈保留（a11y） */
+.ctl.cursor-mode:focus:not(:focus-visible) {
+  outline: none;
+}
 .ctl.cursor-mode.on {
   color: var(--song-accent, var(--accent));
 }
