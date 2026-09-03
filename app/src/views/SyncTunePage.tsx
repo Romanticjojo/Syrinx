@@ -225,6 +225,27 @@ export default function SyncTunePage({ songId }: { songId: string }) {
             const blockSamples = Math.max(1, Math.round(buf.sampleRate * ENERGY_BLOCK_SEC))
             blockRmsRef.current = computeRmsEnvelope(ch, blockSamples)
             blockSecRef.current = blockSamples / buf.sampleRate
+            // 波形只保留主旋律频段（9/3 钦定）：OfflineAudioContext 带通
+            // 200–2000Hz（滤掉低音伴奏与高频打击嘶声）后重算包络；失败退全频段
+            try {
+              const off = new OfflineAudioContext(1, buf.length, buf.sampleRate)
+              const src = off.createBufferSource()
+              src.buffer = buf
+              const hp = off.createBiquadFilter()
+              hp.type = 'highpass'
+              hp.frequency.value = 200
+              const lp = off.createBiquadFilter()
+              lp.type = 'lowpass'
+              lp.frequency.value = 2000
+              src.connect(hp)
+              hp.connect(lp)
+              lp.connect(off.destination)
+              src.start()
+              const filtered = await off.startRendering()
+              blockRmsRef.current = computeRmsEnvelope(filtered.getChannelData(0), blockSamples)
+            } catch {
+              /* 滤波不可用：保留全频段包络 */
+            }
             // 峰值归一基准：包络最大值（全 0 时保持 1 防除零）
             let pk = 0
             for (const v of blockRmsRef.current) if (v > pk) pk = v
@@ -535,14 +556,18 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     const bw = w / bars.length
     ctx.fillStyle = 'rgba(61,90,99,0.55)'
     ctx.beginPath()
+    // 语音条样式（9/3 钦定）：条形从画布垂直中心向上下对称伸展，
+    // 上限 = h/2 - 4（上下各留 4px 呼吸边）
+    const maxH = Math.max(2, h / 2 - 4)
+    const mid = h / 2
     for (let i = 0; i < bars.length; i++) {
-      const bh = Math.min(bars[i] / peakRmsRef.current, 1) * 38
+      const bh = Math.min(bars[i] / peakRmsRef.current, 1) * maxH
       if (bh <= 0.5) continue
       const x = i * bw
       const bwid = Math.max(1, bw - 1) // 块间 1px 间隙（窄视口退化到 1px）
       const r = Math.min(2, bwid / 2, bh / 2)
-      if (typeof ctx.roundRect === 'function') ctx.roundRect(x, h - bh, bwid, bh, r)
-      else ctx.rect(x, h - bh, bwid, bh)
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(x, mid - bh, bwid, bh * 2, r)
+      else ctx.rect(x, mid - bh, bwid, bh * 2)
     }
     ctx.fill()
     // 期望线：基线（暗）与工作网格（亮）——微调时亮线实时移动
