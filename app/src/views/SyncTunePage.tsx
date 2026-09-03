@@ -125,6 +125,8 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   /** [T6b] 能量块缓存：~0.5s 块宽桶 RMS（粗粒度进度条，不再平滑/归一） */
   const blockRmsRef = useRef<Float32Array | null>(null)
   const blockSecRef = useRef(0)
+  /** 包络峰值（9/3 波形可读性）：钢琴伴奏 RMS 绝对值远低于 1，直方条按峰值归一 */
+  const peakRmsRef = useRef(1)
   const durationRef = useRef(0)
   const displayTlRef = useRef<ReturnType<typeof parseMusicXml> | null>(null)
   /** [T3c] 恒速解析谱（parseMusicXml 结果，q 换算基准）：保存修改时以原 beats
@@ -223,6 +225,10 @@ export default function SyncTunePage({ songId }: { songId: string }) {
             const blockSamples = Math.max(1, Math.round(buf.sampleRate * ENERGY_BLOCK_SEC))
             blockRmsRef.current = computeRmsEnvelope(ch, blockSamples)
             blockSecRef.current = blockSamples / buf.sampleRate
+            // 峰值归一基准：包络最大值（全 0 时保持 1 防除零）
+            let pk = 0
+            for (const v of blockRmsRef.current) if (v > pk) pk = v
+            peakRmsRef.current = pk > 1e-4 ? pk : 1
             durationRef.current = buf.duration
             viewRef.current = { t0: 0, t1: buf.duration }
           } catch (e: unknown) {
@@ -530,7 +536,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     ctx.fillStyle = 'rgba(61,90,99,0.55)'
     ctx.beginPath()
     for (let i = 0; i < bars.length; i++) {
-      const bh = Math.min(bars[i], 1) * 38
+      const bh = Math.min(bars[i] / peakRmsRef.current, 1) * 38
       if (bh <= 0.5) continue
       const x = i * bw
       const bwid = Math.max(1, bw - 1) // 块间 1px 间隙（窄视口退化到 1px）
@@ -541,29 +547,48 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     ctx.fill()
     // 期望线：基线（暗）与工作网格（亮）——微调时亮线实时移动
     const q2tW = q2tWorkRef.current
-    const q2tB = q2tBaseRef.current
-    if (q2tW && q2tB) {
+    const q2tBase = q2tBaseRef.current
+    if (q2tW && q2tBase) {
       ctx.lineWidth = 1
-      ctx.strokeStyle = 'rgba(255,255,255,0.13)'
-      ctx.beginPath()
-      for (const n of notesRef.current) {
-        const t = q2tB(n.q).t
-        if (t < t0 || t > t1) continue
-        const x = xOf(t)
-        ctx.moveTo(x + 0.5, 0)
-        ctx.lineTo(x + 0.5, h)
-      }
-      ctx.stroke()
-      ctx.strokeStyle = 'rgba(95,184,168,0.45)'
-      ctx.beginPath()
-      for (const n of notesRef.current) {
+      // 密度降级（9/3 波形可读性）：控制点平均间距 < 3px 时逐点满高线糊成
+      // 「线毯」，退化为小节级网格线（measureStarts 表），放大后自动恢复逐点
+      const visible = notesRef.current.filter((n) => {
         const t = q2tW(n.q).t
-        if (t < t0 || t > t1) continue
-        const x = xOf(t)
-        ctx.moveTo(x + 0.5, 0)
-        ctx.lineTo(x + 0.5, h)
+        return t >= t0 && t <= t1
+      }).length
+      const minGap = w / Math.max(visible, 1) // 视口内相邻控制点平均像素间距
+      if (minGap < 3) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.13)'
+        ctx.beginPath()
+        for (const m of measureStartsRef.current) {
+          if (m.t < t0 || m.t > t1) continue
+          const x = xOf(m.t)
+          ctx.moveTo(x + 0.5, 0)
+          ctx.lineTo(x + 0.5, h)
+        }
+        ctx.stroke()
+      } else {
+        ctx.strokeStyle = 'rgba(255,255,255,0.13)'
+        ctx.beginPath()
+        for (const n of notesRef.current) {
+          const t = q2tBase(n.q).t
+          if (t < t0 || t > t1) continue
+          const x = xOf(t)
+          ctx.moveTo(x + 0.5, 0)
+          ctx.lineTo(x + 0.5, h)
+        }
+        ctx.stroke()
+        ctx.strokeStyle = 'rgba(95,184,168,0.45)'
+        ctx.beginPath()
+        for (const n of notesRef.current) {
+          const t = q2tW(n.q).t
+          if (t < t0 || t > t1) continue
+          const x = xOf(t)
+          ctx.moveTo(x + 0.5, 0)
+          ctx.lineTo(x + 0.5, h)
+        }
+        ctx.stroke()
       }
-      ctx.stroke()
     }
     // 选中音期望线（工作网格，高亮）
     const selQ = selQRef.current
