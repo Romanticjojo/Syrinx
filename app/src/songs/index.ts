@@ -4,9 +4,13 @@ import { buildScoreTimeline } from '../score/deterministic-adapter'
 import { assetUrl } from '../lib/assetUrl'
 import { expandRepeats, parseMusicXml, stripForcedBreaks } from '../score/musicxml'
 import luvLetterManifest from '../../public/songs/luv-letter/manifest.json'
+import flowerDanceManifest from '../../public/songs/flower-dance/manifest.json'
+import riverFlowsInYouManifest from '../../public/songs/river-flows-in-you/manifest.json'
+import expedition33Manifest from '../../public/songs/expedition-33/manifest.json'
+import birdsPoemManifest from '../../public/songs/birds-poem/manifest.json'
 
 /**
- * 内置曲库。占位曲目 2/3 复用 lumiere 曲谱（不同主题色/难度元数据），
+ * 内置曲库。占位曲目复用 lumiere 曲谱（不同主题色/难度元数据），
  * 用户按 Song Pack 格式放入 public/songs/<id>/ 并在此登记即可扩展。
  */
 export const SONGS: SongManifest[] = [
@@ -15,6 +19,27 @@ export const SONGS: SongManifest[] = [
     ...luvLetterManifest,
     difficulty: luvLetterManifest.difficulty as 1 | 2 | 3,
     backgroundTheme: luvLetterManifest.backgroundTheme as SongManifest['backgroundTheme'],
+  },
+  // 产线二期四首（t_0ad1f095）：谱面 OMR 清洗 + 伴奏锚点离线生成，媒体不入库
+  {
+    ...flowerDanceManifest,
+    difficulty: flowerDanceManifest.difficulty as 1 | 2 | 3,
+    backgroundTheme: flowerDanceManifest.backgroundTheme as SongManifest['backgroundTheme'],
+  },
+  {
+    ...riverFlowsInYouManifest,
+    difficulty: riverFlowsInYouManifest.difficulty as 1 | 2 | 3,
+    backgroundTheme: riverFlowsInYouManifest.backgroundTheme as SongManifest['backgroundTheme'],
+  },
+  {
+    ...expedition33Manifest,
+    difficulty: expedition33Manifest.difficulty as 1 | 2 | 3,
+    backgroundTheme: expedition33Manifest.backgroundTheme as SongManifest['backgroundTheme'],
+  },
+  {
+    ...birdsPoemManifest,
+    difficulty: birdsPoemManifest.difficulty as 1 | 2 | 3,
+    backgroundTheme: birdsPoemManifest.backgroundTheme as SongManifest['backgroundTheme'],
   },
   {
     id: 'lumiere',
