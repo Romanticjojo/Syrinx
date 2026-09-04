@@ -547,7 +547,19 @@ export default function PerformPage() {
       style={{ '--song-accent': song.accent } as React.CSSProperties}
     >
       <canvas className="perform-bg" ref={bgCanvasRef} aria-hidden="true" />
-      <video className="perform-bg" ref={bgVideoRef} muted loop playsInline autoPlay aria-hidden="true" style={{ display: song.backgroundVideoUrl ? 'block' : 'none', background: song.backgroundPadColor }} />
+      {/* playOnce 曲目：模糊垫底层（cover 铺满 + blur），contain 主视频的留边透出模糊画面而非纯色 */}
+      {song.backgroundVideoUrl && song.playOnce && (
+        <video
+          className="perform-bg perform-bg-blur"
+          src={assetUrl(song.backgroundVideoUrl)}
+          muted
+          loop={false}
+          playsInline
+          autoPlay
+          aria-hidden="true"
+        />
+      )}
+      <video className="perform-bg" ref={bgVideoRef} muted loop={!song.playOnce} playsInline autoPlay aria-hidden="true" style={{ display: song.backgroundVideoUrl ? 'block' : 'none', background: song.playOnce ? undefined : song.backgroundPadColor }} />
       <header className="perform-hud hud-top">
         <div className="hud-song">
           <button className="back-ghost" onClick={exit} aria-label="返回曲库">

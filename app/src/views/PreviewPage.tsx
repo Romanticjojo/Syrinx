@@ -108,7 +108,7 @@ export default function PreviewPage() {
             ref={bgVideoRef}
             src={assetUrl(song.backgroundVideoUrl)}
             muted
-            loop
+            loop={!song.playOnce}
             playsInline
             autoPlay
           />

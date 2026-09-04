@@ -35,6 +35,12 @@
 video.perform-bg {
   object-fit: contain;
 }
+/* playOnce 曲目的模糊垫底层：cover 铺满放大 + 高斯模糊 + 轻压暗，透在 contain 主视频后面 */
+video.perform-bg-blur {
+  object-fit: cover;
+  filter: blur(46px) saturate(1.05) brightness(0.72);
+  transform: scale(1.12); /* 吃掉 blur 边缘发虚 */
+}
 
 /* ---------- HUD（顶栏 + 底部控制区，idle 时淡出） ---------- */
 .perform-hud {

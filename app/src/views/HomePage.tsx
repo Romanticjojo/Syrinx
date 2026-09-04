@@ -104,7 +104,7 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
             style={{ visibility: previewing ? 'visible' : 'hidden' }}
             src={assetUrl(song.hoverVideoUrl ?? song.backgroundVideoUrl ?? '')}
             muted
-            loop
+            loop={!song.playOnce}
             playsInline
             autoPlay
             onCanPlay={handleCanPlay}
