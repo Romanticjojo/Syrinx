@@ -87,6 +87,8 @@ export interface SongManifest {
   hoverVideoUrl?: string
   /** 视频（背景+悬停）播放一次后定格最后一帧，不循环（缺省循环播放） */
   playOnce?: boolean
+  /** 仅曲库卡片 hover 预览播放一次后定格末帧（详情/演奏页背景不受影响）；优先级低于 playOnce */
+  hoverPlayOnce?: boolean
   /** 每曲封面图（可选；缺省用 accent 渐变） */
   coverUrl?: string
   /** 伴奏锚点文件（可选；离线分析伴奏生成，供伴奏驱动光标，见 score/anchors.ts） */
