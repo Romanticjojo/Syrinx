@@ -80,6 +80,25 @@ export default function PerformPage() {
   const timeEl = useRef<HTMLSpanElement>(null)
   const playedEl = useRef<HTMLSpanElement>(null)
   const countEl = useRef<HTMLDivElement>(null)
+  /** 谱面行跟随：小节变化时把当前行滚到视口中部（OSMD 原生只在光标行掉出
+   *  视口时最小滚动——首行起步的谱面前几行全在首屏内，光标走几行都纹丝不动，
+   *  fd 前奏 ~45s 不滚动即此根因）。用户手动滚谱/摸谱时让位 5s。 */
+  const lastFollowedMeasureRef = useRef(0)
+  const manualUntilRef = useRef(0)
+
+  // 手动滚谱让位：wheel/pointerdown 直接说明「用户在看别处」，程序性 scrollTop
+  // 写入不派发这些事件，不会自我触发（scroll 事件则会——所以不能监听 scroll）
+  useEffect(() => {
+    const bump = () => {
+      manualUntilRef.current = performance.now() + 5000
+    }
+    window.addEventListener("wheel", bump, { passive: true })
+    window.addEventListener("pointerdown", bump, { passive: true })
+    return () => {
+      window.removeEventListener("wheel", bump)
+      window.removeEventListener("pointerdown", bump)
+    }
+  }, [])
 
   useEffect(() => {
     phaseRef.current = phase
@@ -294,12 +313,19 @@ export default function PerformPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [song.accent])
 
-  // 光标小节回调 → 直写 HUD。回调必须随 ScoreSheet 实例一起挂/摘（传 prop 由
-  // ScoreSheet 挂接）：演奏页侧自己往 scoreRef 挂会错过 StrictMode remount 换出的
-  // 新实例，HUD 永远停在 -- / --（t_b22f5467 项 3 根因）
+  // 光标小节回调 → 直写 HUD + 行跟随滚动。回调必须随 ScoreSheet 实例一起挂/摘
+  // （传 prop 由 ScoreSheet 挂接）：演奏页侧自己往 scoreRef 挂会错过 StrictMode
+  // remount 换出的新实例，HUD 永远停在 -- / --（t_b22f5467 项 3 根因）
   const handleMeasure = useCallback((m: number, total: number) => {
     if (measureEl.current)
       measureEl.current.textContent = `${String(m).padStart(2, '0')} / ${total}`
+    // 行跟随：小节变化时把当前行保持视口中部。手动滚谱让位期内不抢滚动；
+    // scrollToMeasure 内部会判断行几何，行已在舒适区时滚动量趋近 0
+    const now = performance.now()
+    if (now < manualUntilRef.current) return
+    if (m === lastFollowedMeasureRef.current) return
+    lastFollowedMeasureRef.current = m
+    scoreRef.current?.scrollToMeasure(m)
   }, [])
 
   /** 就绪 → 用户手势起奏：恢复音频上下文 + 预开麦克风 + 调度 4 拍节拍音 */
@@ -597,6 +623,7 @@ export default function PerformPage() {
             scoreRef={scoreRef}
             onMeasureChange={handleMeasure}
             zoom={0.85}
+            autoScroll={false}
           />
         )}
       </div>

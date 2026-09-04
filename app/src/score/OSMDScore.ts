@@ -102,6 +102,11 @@ export class OSMDScore {
     /** [T3c] 光标高亮覆盖当前音完整时值跨度（宽度=当前停靠点→下一停靠点）；
      *  缺省 false：OSMD ThinLeft 窄条行为，演奏页不传即不变 */
     cursorSpan = false,
+    /** OSMD 原生跟随滚动开关（缺省 true=原行为）。false 时滚动权移交调用方：
+     *  演奏页在 onMeasureChange 里 scrollToMeasure 行居中+手动让位——若 OSMD
+     *  原生 follow 同时开着，两个滚动驱动会打架（原生 follow 在让位期内仍会
+     *  挪 scrollTop，与「手动滚谱 5s 让位」语义冲突，2026-09-04 fd 跟随修复实证） */
+    autoScroll = true,
   ) {
     this.containerEl = container
     this.accent = accent
@@ -112,7 +117,7 @@ export class OSMDScore {
     this.osmd = osmdInstance ?? new OpenSheetMusicDisplay(container, {
       autoResize: true,
       backend: 'svg',
-      followCursor: true,
+      followCursor: autoScroll,
       drawTitle: false,
       drawSubtitle: false,
       drawComposer: false,
@@ -126,10 +131,10 @@ export class OSMDScore {
       defaultColorRest: '#9a9a90',
       defaultColorLabel: '#b3b3b3',
       cursorsOptions: [
-        { type: 1, color: accent, follow: true, alpha: 0.35 }, // ThinLeft 细竖线（辅助）
+        { type: 1, color: accent, follow: autoScroll, alpha: 0.35 }, // ThinLeft 细竖线（辅助）
       ],
     })
-    this.osmd.FollowCursor = true
+    this.osmd.FollowCursor = autoScroll
     // 关闭「final-barline 风格小节线后的系统行首重绘拍号」：反复展开谱每段末尾残留
     // light-heavy 小节线，OSMD 默认在其后的行首补画小谱号 + 拍号，观感即用户反馈的
     // 「行内多余谱号 + 4/4」；首小节拍号不受影响（isFirstSourceMeasure 仍绘制）。
@@ -456,27 +461,55 @@ export class OSMDScore {
     if (prev) this.restore(prev, 'sel')
   }
 
-  /** [sync-tune 调试页扩展（T3）] 小节自动聚焦：把第 m 小节所在行滚动到最近滚动
+  /** [sync-tune T3] 小节自动聚焦：把第 m 小节所在行滚动到最近滚动
    *  祖先视口中部（markerGeom 同源的 MeasureList 几何）。只写 scrollTop--程序性
    *  滚动不派发 wheel/pointerdown，与页面侧「手动滚动 5 秒让位」逻辑不冲突。
-   *  独立可选方法：演奏页不调用，缺省行为不变。 */
+   *  独立可选方法：演奏页不调用，缺省行为不变。
+   *  [2026-09-04 fd 跟随修复] y 推导弃用 map 里的小节 y（OSMD 音乐单位坐标，
+   *  随行深与 SVG 真实 y 偏差 ~21px/行线性发散，长谱深行会滚过头——几何对账实证），
+   *  改用 hitRows 行包络（top/bottom 为 svg 坐标，与视口无关）+ offY 换算：
+   *  行真实 y = 行包络 + offY（svg 在容器内的偏移），滚到行中心 = 视口中部。 */
   scrollToMeasure(m: number): void {
     const geom = this.ensureMarkerGeom()
-    const g = geom?.map.get(m)
-    if (!geom || !g) return
-    // 向上找 overflowY auto/scroll 的滚动祖先（sync-tune 页为 .st-score）
-    let sc = this.containerEl.parentElement
+    if (!geom) return
+    // 由小节号找行：map 小节 y 与 hitRows top/bottom 同在 OSMD 坐标系（同源
+    // MeasureList，实测小节 y 恰等于所在行 top），纵向包含判定在本坐标系内
+    // 自洽（行间不重叠，±24 容差防边界），换算真实 y 时才 +offY
+    const g = geom.map.get(m)
+    if (!g) return
+    const rowHits = geom.hitRows.filter((r) => g.y >= r.top - 24 && g.y <= r.bottom + 24)
+    const hr = rowHits[0] ?? geom.hitRows.find((r) => r.bottom >= g.y) ?? geom.hitRows.at(-1)
+    if (!hr) return
+    // 行真实中心：该行音符头 DOM 实测 y 的均值（hitEntryFor 采自
+    // getBoundingClientRect−svgRect，svg 坐标真值）。map/hitRows 的 OSMD 单位
+    // 坐标随行深与真实 y 偏差 ~21px/行（几何对账实证），只能用于行归属判定，
+    // 绝对滚动位置必须用 DOM 实测值——均值≈旋律行中心（单谱表乐器即 staff 中线）
+    const ysAll: number[] = []
+    for (const e of hr.entries) ysAll.push(...e.ys)
+    const rowRealCenter =
+      (ysAll.length ? ysAll.reduce((a, b) => a + b, 0) / ysAll.length : (hr.top + hr.bottom) / 2) +
+      geom.offY
+    // 向上找 overflowY auto/scroll 的滚动祖先（sync-tune 页为 .st-score）。
+    // 从容器自身找起：演奏页的滚动容器就是 .sheet-container 本身（容器即 scroller），
+    // 从 parentElement 起步会漏掉它导致 scrollToMeasure 空转
+    let sc: HTMLElement | null = this.containerEl
     while (sc && sc !== document.body) {
       const oy = getComputedStyle(sc).overflowY
       if (oy === 'auto' || oy === 'scroll') break
       sc = sc.parentElement
     }
     if (!sc) return
-    // 行中心换算到滚动祖先坐标：容器在视口中偏移 + 已滚距离 + svg 相对容器偏移 + 行几何
+    // 行中心换算到滚动祖先坐标。两种拓扑（2026-09-04 fd 跟随修复实证）：
+    // - 容器即 scroller（演奏页 .sheet-container）：cRect/sRect 同元素恒等，
+    //   行的内容 y = offY + rowCenter（offY 为构建时 svg 相对容器的内容偏移，
+    //   与滚动无关）——旧式 cRect.top−sRect.top+sc.scrollTop 在此退化成
+    //   「现值+增量」的累加制，每次小节变化叠加滚过头；
+    // - 容器在 scroller 内（sync-tune .st-score>div）：容器视口位置随滚动
+    //   下移，cRect.top−sRect.top+sc.scrollTop 恰好抵消滚动得内容偏移。
     const cRect = this.containerEl.getBoundingClientRect()
     const sRect = sc.getBoundingClientRect()
-    const yInSc = cRect.top - sRect.top + sc.scrollTop + geom.offY + g.y + g.h / 2
-    sc.scrollTop = Math.max(0, yInSc - sc.clientHeight / 2)
+    const base = sc === this.containerEl ? 0 : cRect.top - sRect.top + sc.scrollTop
+    sc.scrollTop = Math.max(0, base + rowRealCenter - sc.clientHeight / 2)
   }
 
   /** 小节几何缓存（t_perf_sync_tune，T3 起与 scrollToMeasure 共用）：

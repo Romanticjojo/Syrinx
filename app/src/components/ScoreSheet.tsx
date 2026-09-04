@@ -13,10 +13,13 @@ interface Props {
   onMeasureChange?: (measure: number, total: number) => void
   /** 谱面缩放（配合容器限宽调整每行小节数，默认 1） */
   zoom?: number
+  /** OSMD 原生跟随滚动开关（默认 true 原行为）。false = 滚动权移交调用方
+      （演奏页行居中跟随+手动滚谱让位，见 OSMDScore.autoScroll 注释） */
+  autoScroll?: boolean
 }
 
 /** 谱面容器：挂载 OSMDScore，负责加载/重渲染生命周期 */
-export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef, onMeasureChange, zoom = 1 }: Props) {
+export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef, onMeasureChange, zoom = 1, autoScroll = true }: Props) {
   const divRef = useRef<HTMLDivElement>(null)
   const osmdRef = useRef<OSMDScore | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -24,7 +27,7 @@ export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef
   // 创建实例（每曲一次）
   useEffect(() => {
     if (!divRef.current) return
-    const osmd = new OSMDScore(divRef.current, accent, undefined, zoom)
+    const osmd = new OSMDScore(divRef.current, accent, undefined, zoom, undefined, undefined, autoScroll)
     osmdRef.current = osmd
     if (scoreRef) scoreRef.current = osmd
     if (onMeasureChange) osmd.onMeasureChange = onMeasureChange
@@ -35,7 +38,7 @@ export default function ScoreSheet({ xml, timeline, accent = '#3ddfae', scoreRef
       if (scoreRef) scoreRef.current = null
     }
     // accent 变化意味着换曲，需要重建
-  }, [accent, scoreRef, onMeasureChange, zoom])
+  }, [accent, scoreRef, onMeasureChange, zoom, autoScroll])
 
   // 加载曲谱
   useEffect(() => {
