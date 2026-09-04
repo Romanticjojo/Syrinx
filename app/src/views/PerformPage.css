@@ -30,10 +30,10 @@
   display: block;
   z-index: 0;
 }
-/* 背景视频：contain 不裁人物；留边由视频主背景色（青绿）垫底，与画面融合无接缝 */
+/* 背景视频：contain 不裁主体；留边由视频主背景色垫底（manifest.backgroundPadColor，
+   luv-letter 缺省回落青绿），与画面融合无接缝 */
 video.perform-bg {
   object-fit: contain;
-  background: rgb(40, 186, 207);
 }
 
 /* ---------- HUD（顶栏 + 底部控制区，idle 时淡出） ---------- */

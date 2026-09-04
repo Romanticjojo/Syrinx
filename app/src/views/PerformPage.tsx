@@ -547,7 +547,7 @@ export default function PerformPage() {
       style={{ '--song-accent': song.accent } as React.CSSProperties}
     >
       <canvas className="perform-bg" ref={bgCanvasRef} aria-hidden="true" />
-      <video className="perform-bg" ref={bgVideoRef} muted loop playsInline autoPlay aria-hidden="true" style={{ display: song.backgroundVideoUrl ? 'block' : 'none' }} />
+      <video className="perform-bg" ref={bgVideoRef} muted loop playsInline autoPlay aria-hidden="true" style={{ display: song.backgroundVideoUrl ? 'block' : 'none', background: song.backgroundPadColor }} />
       <header className="perform-hud hud-top">
         <div className="hud-song">
           <button className="back-ghost" onClick={exit} aria-label="返回曲库">
