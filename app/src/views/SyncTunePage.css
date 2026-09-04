@@ -411,6 +411,10 @@
 }
 .st-wave.collapsed {
   height: 32px;
+  position: relative;
+}
+.st-wave {
+  position: relative;
 }
 .st-wave.collapsed canvas {
   display: none;
@@ -489,6 +493,37 @@
 .st-zbtn:hover {
   border-color: var(--song-accent, #5fb8a8);
 }
+/* 从选中播放（9/4 交互定版）：复用 st-zbtn 形状，主操作强调色 */
+.st-play-sel {
+  width: 26px;
+  color: #ffb861;
+  border-color: #6b5335;
+  font-size: 11px;
+}
+.st-play-sel:hover {
+  border-color: #ff9f43;
+}
+.st-play-sel.on {
+  background: #ff9f43;
+  color: #10151a;
+  border-color: #ff9f43;
+}
+/* 未选中就点播放的一次性提示（toast）：3s 自动消隐 */
+.st-wave-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  background: rgba(24, 34, 42, 0.95);
+  border: 1px solid #3a4a54;
+  border-radius: 6px;
+  color: #e8e8e2;
+  font-size: 12px;
+  padding: 6px 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+}
 .st-wave canvas {
   flex: 1;
   min-height: 0;
@@ -503,4 +538,113 @@
   color: #5c6c73;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
+}
+
+/* —— 歌曲切换器（R3）：顶栏下拉。同源设计语言：#18222a 面板、#2a3942 边框、
+    5-8px 圆角、11-12px 字号；focus 用 accent 描边替代默认 outline —— */
+.st-sw {
+  position: relative;
+}
+.st-sw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #18222a;
+  color: #e8e8e2;
+  border: 1px solid #2a3942;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.st-sw-btn:hover,
+.st-sw-btn:focus-visible,
+.st-sw-item:focus-visible {
+  border-color: var(--song-accent, #5fb8a8);
+  outline: none;
+}
+.st-sw-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.st-sw-caret {
+  color: #7a8a90;
+  font-size: 10px;
+}
+.st-sw-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 240px;
+  max-height: 70vh;
+  overflow: auto;
+  background: #18222a;
+  border: 1px solid #2a3942;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+}
+.st-sw-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: inherit;
+  font: inherit;
+  padding: 6px 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.st-sw-item:hover {
+  background: #131b21;
+}
+.st-sw-item.cur {
+  background: #17242a;
+  box-shadow: inset 2px 0 0 var(--song-accent, #5fb8a8);
+}
+.st-sw-item-title {
+  flex: 1;
+  color: #e8e8e2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.st-sw-diff {
+  color: #ffb26b;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.st-sw-item.off {
+  opacity: 0.4;
+  cursor: default;
+}
+.st-sw-item.off .st-sw-item-title {
+  color: #7a8a90;
+}
+.st-sw-nobeats {
+  font-size: 11px;
+  color: #5c6c73;
+  border: 1px solid #2a3942;
+  border-radius: 8px;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+/* 切换确认条（R3）：有未导出微调时挂在顶栏下方，轻量确认、不弹原生 confirm */
+.st-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #ffb26b;
+  background: #141b21;
+  border-bottom: 1px solid #1d262c;
 }
