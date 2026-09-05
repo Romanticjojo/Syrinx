@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import About from '../components/About'
+import HeroCarousel from './HeroCarousel'
 import { DIFFICULTY_LABEL, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import type { SongManifest } from '../types'
@@ -152,41 +153,8 @@ export default function HomePage() {
         </nav>
       </header>
 
-      {/* 首发英雄位：点击进入预览 */}
-      <section
-        className="home-hero"
-        onClick={() => go('preview', featured.id)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && go('preview', featured.id)}
-        aria-label={`进入 ${featured.title} 预览`}
-      >
-        <div className="hero-bg" style={coverStyle(featured.accent)} />
-        {featured.coverUrl && (
-          <img className="hero-bg-img" src={assetUrl(featured.coverUrl ?? '')} alt="" style={positionOf(featured)} />
-        )}
-        <div className="hero-shade" />
-        <div className="hero-body">
-          <div className="kicker">{featured.tags.join(' · ')}</div>
-          <h1>{featured.title}</h1>
-          <div className="meta">
-            <b>{featured.composer}</b> · {DIFFICULTY_LABEL[featured.difficulty]} · {featured.durationLabel}
-          </div>
-          <p className="desc">{featured.description}</p>
-          <div className="hero-play">
-            <button
-              className="btn-play-big"
-              aria-label="开始预览"
-              onClick={(e) => {
-                e.stopPropagation()
-                go('preview', featured.id)
-              }}
-            >
-              ▶
-            </button>
-          </div>
-        </div>
-      </section>
+      {/* 首发英雄位：三曲 Netflix 式轮播，点击任意广告页进入预览 */}
+      <HeroCarousel onOpen={(song) => go('preview', song.id)} />
 
       <section className="home-section">
         <h3>曲库</h3>
