@@ -418,6 +418,11 @@ export class OSMDScore {
     for (const systemMeasures of ml) {
       if (!systemMeasures?.length) continue
       for (const m of systemMeasures) {
+        // 空槽位防御（同 ensureMarkerGeom）：真实曲谱（river-flows-in-you/
+        // birds-poem/expedition-33）的 MeasureList 可能含 undefined 小节
+        // （OSMD 内部多项小节 bug），直接访问 MeasureNumber 会抛 TypeError
+        // 且 React 无错误边界整页白屏。跳过空槽。
+        if (!m?.staffEntries) continue
         if (m.MeasureNumber !== measure) continue
         // 行内 rv 最近的含非休止音符的 staffEntry（该 entry 只有休止符时顺延到更近的）
         let best: { d: number; g: { setColor: (c: string, o?: unknown) => void } } | null = null
@@ -550,6 +555,10 @@ export class OSMDScore {
       const entries: HitEntry[] = []
       let hasEntry = false
       for (const m of measureStaves) {
+        // 空槽位防御：真实曲谱（如 expedition-33）的 MeasureList 末尾可能含
+        // undefined 小节（OSMD 内部多项小节 bug），直接访问其 PositionAndShape
+        // 会抛 TypeError 并被上层误报为「曲谱渲染失败」。跳过空槽。
+        if (!m?.PositionAndShape?.AbsolutePosition || !m?.staffEntries) continue
         const ps = m.PositionAndShape
         mTop = Math.min(mTop, ps.AbsolutePosition.y * unitPx)
         mBottom = Math.max(mBottom, (ps.AbsolutePosition.y + ps.Size.height) * unitPx)

@@ -292,12 +292,21 @@ export default function PerformPage() {
     }
   }, [song.backgroundVideoUrl])
 
-  // three.js 主题背景：挂载即渲染，伴奏 analyser 驱动呼吸，卸载全量释放（有视频时跳过）
+  // three.js 主题背景：挂载即渲染，伴奏 analyser 驱动呼吸，卸载全量释放（有视频时跳过）。
+  // WebGL 上下文创建失败（headless/无 GPU/驱动被禁/上下文数耗尽）时 THREE.WebGLRenderer
+  // 构造会 throw——不能让背景拖垮整页（React 无错误边界会白屏，river-flows/birds-poem
+  // 无视频曲目在 headless 环境实测白屏复现）。失败降级为纯色/渐变背景（canvas 保持透明）。
   useEffect(() => {
     if (song.backgroundVideoUrl) return
     const canvas = bgCanvasRef.current
     if (!canvas) return
-    const scene = new LumiereScene(canvas, song.accent)
+    let scene: LumiereScene | null = null
+    try {
+      scene = new LumiereScene(canvas, song.accent)
+    } catch (e: unknown) {
+      console.warn(`[syrinx] 动态背景不可用（WebGL 初始化失败），已降级：${e instanceof Error ? e.message : e}`)
+      return
+    }
     scene.setAnalyser(audioEngine.analyser)
     const fit = () => {
       const r = canvas.getBoundingClientRect()

@@ -13,6 +13,8 @@ function placeholderStyle(accent: string) {
       linear-gradient(150deg, ${accent}33, #0c1010 72%)`,
   }
 }
+/** 详情页大封面占位：与曲库卡片 coverStyle 同款（无封面时垫 accent 渐变再贴 flute 图） */
+const coverStyle = placeholderStyle
 
 /** 构图锚点：封面裁切时保持人物/主体可见（缺省居中） */
 const positionOf = (s: SongManifest): React.CSSProperties =>
@@ -136,8 +138,14 @@ export default function PreviewPage() {
         <div className="glow" style={{ background: `radial-gradient(60% 90% at 28% 40%, ${song.accent}4d, transparent 70%)` }} />
         {/* hero 右侧：3D 长笛展示（加载失败自动回退 CSS 长笛条） */}
         <div className="album-row">
-          <div className="cover playing" style={cover}>
-            {song.coverUrl && <img className="cover-img" src={assetUrl(song.coverUrl)} alt={`${song.title} 封面`} />}
+          <div className="cover playing" style={{ ...cover, ...(song.coverUrl ? undefined : coverStyle(song.accent)) }}>
+            {/* 无封面回退：与曲库卡片一致——accent 渐变垫底 + 品牌 flute 图（正式封面由 Song Pack 提供 cover 字段） */}
+            <img
+              className="cover-img"
+              src={assetUrl(song.coverUrl ?? '/brand/flute.jpg')}
+              alt={`${song.title} 封面`}
+              style={song.coverUrl ? positionOf(song) : undefined}
+            />
           </div>
           <div className="album-info">
             <div className="kicker">{song.tags.join(' · ')}</div>
