@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # R3 歌曲切换器浏览器验收（/sync-tune 全曲目同步微调工作台）。
-# 覆盖：裸路径重定向 luv-letter；切换器 6 行（5 可用 + lumiere 禁用「无 beats」）；
-# 5 首曲逐一切换装配（音符列表非空 + 波形有能量 + URL 同步 + 无错误态）；
+# 覆盖：裸路径重定向 luv-letter；切换器 6 行（全可用——2026-09-05 占位曲移除、interstellar 接入）；
+# 6 首曲逐一切换装配（音符列表非空 + 波形有能量 + URL 同步 + 无错误态）；
 # dirty 切曲确认条（取消不动 / 确认才切且 store 干净：未导出消失、已调归零）；
 # 浏览器回退/前进跟随；未知曲 id 装配失败态。
 # Usage: python scripts/verify_sync_switcher.py  (vite dev server on :5173)
@@ -85,7 +85,7 @@ with sync_playwright() as p:
     check("A bare /sync-tune redirects to /sync-tune/luv-letter",
           page.url.endswith("/sync-tune/luv-letter"), page.url)
 
-    # B. 切换器面板：全曲库 7 行（5 可用 + lumiere/aurora-scale 禁用标注「无 beats」）
+    # B. 切换器面板：全曲库 6 行（全部可用——内置曲库已无无 beats 占位曲）
     open_panel(page)
     panel_info = page.evaluate(
         """() => [...document.querySelectorAll('.st-sw-item')].map(b => ({
@@ -94,32 +94,31 @@ with sync_playwright() as p:
              title: b.querySelector('.st-sw-item-title')?.textContent ?? '',
            }))"""
     )
-    check("B panel lists all 7 songs", len(panel_info) == 7, str(len(panel_info)))
-    disabled_ok = (
-        len(panel_info) == 7
-        and panel_info[5]["off"] and panel_info[5]["nobeats"]
-        and panel_info[6]["off"] and panel_info[6]["nobeats"]
-        and not any(panel_info[i]["off"] for i in range(5))
+    check("B panel lists all 6 songs", len(panel_info) == 6, str(len(panel_info)))
+    enabled_ok = (
+        len(panel_info) == 6
+        and not any(panel_info[i]["off"] or panel_info[i]["nobeats"] for i in range(6))
     )
-    check("B rows 5-6 (no beats) disabled with tag, rows 0-4 enabled", disabled_ok,
-          str(panel_info[5:]))
+    check("B all 6 rows enabled (no beats-less placeholder songs remain)", enabled_ok,
+          str(panel_info))
     check("B current song highlighted (aria-selected on row 0)",
           page.evaluate("() => document.querySelectorAll('.st-sw-item')[0].getAttribute('aria-selected') === 'true'")
           and page.evaluate("() => document.querySelectorAll('.st-sw-item')[0].classList.contains('cur')"))
     page.keyboard.press("Escape")
     page.wait_for_selector(".st-sw-panel", state="detached")
 
-    # C. 5 首有 beats 的曲逐一切换：URL / 曲名 / 音符非空 / 波形能量 / 无错误态
+    # C. 全部 6 首有 beats 的曲逐一切换：URL / 曲名 / 音符非空 / 波形能量 / 无错误态
     paths = [
         "/sync-tune/luv-letter",
         "/sync-tune/flower-dance",
         "/sync-tune/river-flows-in-you",
         "/sync-tune/expedition-33",
         "/sync-tune/birds-poem",
+        "/sync-tune/interstellar",
     ]
     row_totals = {}
     # 从 idx1 起切（首曲已是 luv-letter，点当前曲是 no-op，行数不变会误判超时）
-    for i in [1, 2, 3, 4, 0]:
+    for i in [1, 2, 3, 4, 5, 0]:
         path = paths[i]
         rows = switch(page, i, path)
         row_totals[i] = rows

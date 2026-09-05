@@ -8,10 +8,13 @@ import flowerDanceManifest from '../../public/songs/flower-dance/manifest.json'
 import riverFlowsInYouManifest from '../../public/songs/river-flows-in-you/manifest.json'
 import expedition33Manifest from '../../public/songs/expedition-33/manifest.json'
 import birdsPoemManifest from '../../public/songs/birds-poem/manifest.json'
+import interstellarManifest from '../../public/songs/interstellar/manifest.json'
 
 /**
- * 内置曲库。占位曲目复用 lumiere 曲谱（不同主题色/难度元数据），
- * 用户按 Song Pack 格式放入 public/songs/<id>/ 并在此登记即可扩展。
+ * 内置曲库：正式曲目按 Song Pack 格式放入 public/songs/<id>/ 并在此登记即可扩展。
+ * （2026-09-04：移除占位示例曲 lumiere「Nocturne pour Lumière」与 aurora-scale
+ * 「晨间音阶练习」——均无伴奏锚点，仅作布局演示用；其谱面文件夹保留作为
+ * musicxml 解析测试 fixture。）
  */
 export const SONGS: SongManifest[] = [
   // 首首正式曲：Luv Letter（DJ OKAWARI）——真实伴奏 + 动画背景 + 封面 + 正式谱（图片谱 OMR 转换，t_54968084）
@@ -41,34 +44,12 @@ export const SONGS: SongManifest[] = [
     difficulty: birdsPoemManifest.difficulty as 1 | 2 | 3,
     backgroundTheme: birdsPoemManifest.backgroundTheme as SongManifest['backgroundTheme'],
   },
+  // Interstellar（Hans Zimmer，arr. Ariana & Ella）：Soundslice 官方 MusicXML（120qpm 直出，
+  // 与钢琴伴奏同时间轴渲染，beats 走 duration_locked 产线）+ 星空动画背景（曲库悬停 hoverPlayOnce 定格）
   {
-    id: 'lumiere',
-    title: 'Nocturne pour Lumière',
-    composer: 'Lorien Testard',
-    difficulty: 2,
-    durationLabel: '0:42',
-    keyLabel: 'C 大调（示例谱）',
-    description:
-      '一首写给晨光的夜曲。旋律平缓悠长，长笛在中音区低语，随伴奏渐亮。占位示例谱，正式曲谱由用户外部提供。',
-    tags: ['夜曲', '治愈', '首发曲'],
-    scoreUrl: '/songs/lumiere/score.musicxml',
-    accent: '#3ddfae',
-    backgroundTheme: 'lumiere',
-    bpm: 84,
-  },
-  {
-    id: 'aurora-scale',
-    title: '晨间音阶练习',
-    composer: '传统练习曲',
-    difficulty: 1,
-    durationLabel: '0:42',
-    keyLabel: 'C 大调',
-    description: '以音阶与琶音为主的晨间热身曲，节奏平稳，适合入门者熟悉跟谱演奏。',
-    tags: ['练习曲', '入门'],
-    scoreUrl: '/songs/lumiere/score.musicxml',
-    accent: '#6edce8',
-    backgroundTheme: 'aurora',
-    bpm: 84,
+    ...interstellarManifest,
+    difficulty: interstellarManifest.difficulty as 1 | 2 | 3,
+    backgroundTheme: interstellarManifest.backgroundTheme as SongManifest['backgroundTheme'],
   },
 ]
 

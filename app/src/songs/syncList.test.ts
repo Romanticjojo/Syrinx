@@ -29,9 +29,16 @@ describe('syncSongList', () => {
     }
   })
 
-  it('当前曲库现实：恰为 5 首有 beats 的曲（新增曲目时更新此清单）', () => {
+  it('当前曲库现实：恰为 6 首有 beats 的曲（新增曲目时更新此清单）', () => {
     expect([...list.map((s) => s.id)].sort()).toEqual(
-      ['birds-poem', 'expedition-33', 'flower-dance', 'luv-letter', 'river-flows-in-you'].sort(),
+      [
+        'birds-poem',
+        'expedition-33',
+        'flower-dance',
+        'interstellar',
+        'luv-letter',
+        'river-flows-in-you',
+      ].sort(),
     )
   })
 })
