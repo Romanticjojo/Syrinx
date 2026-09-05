@@ -30,22 +30,94 @@ export const MAX_HZ = 2500
 /** 逐帧 YIN：静音/低清晰度/超长笛音域的帧不产出轨迹点 */
 export function extractPitchTrack(
   buffer: PitchAudioBuffer,
-  { frameSec = 0.0464, hopSec = 0.0232, clarityMin = 0.6, offsetSec = 0 }: ExtractOptions = {},
+  opts: ExtractOptions = {},
 ): PitchPoint[] {
+  const o = { ...DEFAULT_EXTRACT_OPTS, ...opts }
   const sr = buffer.sampleRate
   const data = buffer.getChannelData(0)
-  const frameN = Math.max(64, Math.round(frameSec * sr))
-  const hopN = Math.max(1, Math.round(hopSec * sr))
+  const frameN = Math.max(64, Math.round(o.frameSec * sr))
+  const hopN = Math.max(1, Math.round(o.hopSec * sr))
   const points: PitchPoint[] = []
 
   for (let start = 0; start + frameN <= data.length; start += hopN) {
-    const seg = data.subarray(start, start + frameN)
-    const r = yinDetect(seg, sr)
-    if (!r || r.clarity < clarityMin) continue
-    if (r.hz < MIN_HZ || r.hz > MAX_HZ) continue
-    points.push({ time: start / sr + offsetSec, hz: r.hz, cents: 0 })
+    const p = framePoint(data, sr, start, frameN, o.offsetSec, o.clarityMin)
+    if (p) points.push(p)
   }
   return points
+}
+
+/** extractPitchTrack 参数默认值（同步/异步版共用，保证两版行为一致） */
+const DEFAULT_EXTRACT_OPTS: Required<ExtractOptions> = {
+  frameSec: 0.0464,
+  hopSec: 0.0232,
+  clarityMin: 0.6,
+  offsetSec: 0,
+}
+
+/** 单帧检测（同步/异步版共用同一逻辑，结果位级一致）：过全部门槛返回轨迹点，否则 null */
+function framePoint(
+  data: Float32Array,
+  sr: number,
+  start: number,
+  frameN: number,
+  offsetSec: number,
+  clarityMin: number,
+): PitchPoint | null {
+  const r = yinDetect(data.subarray(start, start + frameN), sr)
+  if (!r || r.clarity < clarityMin) return null
+  if (r.hz < MIN_HZ || r.hz > MAX_HZ) return null
+  return { time: start / sr + offsetSec, hz: r.hz, cents: 0 }
+}
+
+export interface AsyncExtractOptions extends ExtractOptions {
+  /** 每个计算时间片开始前回调；返回 false 立即中止并 resolve null（组件卸载时用来放弃过期计算） */
+  shouldContinue?: () => boolean
+  /** 单个连续计算片的时长（毫秒），默认 24——长任务压到一帧内，分析期间页面保持可交互 */
+  sliceMs?: number
+}
+
+/**
+ * extractPitchTrack 的分片异步版：帧接受判据与同步版共用 framePoint，结果完全一致；
+ * 每算满 sliceMs 毫秒让出主线程一次（setTimeout 0），回放页分析长录音时不再整页冻结
+ * （整页冻结会让「重新演奏/返回曲库」按钮收不到点击事件——用户实测报告的根因）。
+ * 中止时 resolve null，调用方直接丢弃即可。
+ */
+export function extractPitchTrackAsync(
+  buffer: PitchAudioBuffer,
+  opts: AsyncExtractOptions = {},
+): Promise<PitchPoint[] | null> {
+  const { shouldContinue, sliceMs = 24, ...extractOpts } = opts
+  const o = { ...DEFAULT_EXTRACT_OPTS, ...extractOpts }
+  const sr = buffer.sampleRate
+  const data = buffer.getChannelData(0)
+  const frameN = Math.max(64, Math.round(o.frameSec * sr))
+  const hopN = Math.max(1, Math.round(o.hopSec * sr))
+  const points: PitchPoint[] = []
+  let start = 0
+  let deadline = performance.now() + sliceMs
+
+  return new Promise((resolve) => {
+    const step = () => {
+      if (shouldContinue && !shouldContinue()) {
+        resolve(null)
+        return
+      }
+      while (start + frameN <= data.length) {
+        // 超出本时间片立刻让出主线程，点击/渲染得以插队
+        if (performance.now() > deadline) break
+        const p = framePoint(data, sr, start, frameN, o.offsetSec, o.clarityMin)
+        if (p) points.push(p)
+        start += hopN
+      }
+      if (start + frameN <= data.length) {
+        deadline = performance.now() + sliceMs
+        setTimeout(step, 0)
+      } else {
+        resolve(points)
+      }
+    }
+    setTimeout(step, 0)
+  })
 }
 
 export interface NoteScore {

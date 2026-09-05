@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import type { Timeline } from '../types'
-import { extractPitchTrack, scoreAgainst, timelineUpTo } from './compare'
+import { extractPitchTrack, extractPitchTrackAsync, scoreAgainst, timelineUpTo } from './compare'
 
 const SR = 44100
 
 /** AudioBuffer 替身：0-1s 441Hz、1-2s 静音、2-3s 220Hz */
 function makeBuffer() {
-  const data = new Float32Array(3 * SR)
-  for (let i = 0; i < SR; i++) data[i] = 0.5 * Math.sin((2 * Math.PI * 441 * i) / SR)
-  for (let i = 2 * SR; i < 3 * SR; i++) data[i] = 0.5 * Math.sin((2 * Math.PI * 220 * i) / SR)
+  return makeBufferOf(3)
+}
+
+/** 指定秒数的 AudioBuffer 替身：前 1/3 441Hz、中 1/3 静音、后 1/3 220Hz */
+function makeBufferOf(sec: number) {
+  const n = Math.round(sec * SR)
+  const data = new Float32Array(n)
+  const a = Math.floor(n / 3)
+  const b = Math.floor((2 * n) / 3)
+  for (let i = 0; i < a; i++) data[i] = 0.5 * Math.sin((2 * Math.PI * 441 * i) / SR)
+  for (let i = b; i < n; i++) data[i] = 0.5 * Math.sin((2 * Math.PI * 220 * i) / SR)
   return { sampleRate: SR, getChannelData: () => data }
 }
 
@@ -46,6 +54,42 @@ describe('extractPitchTrack', () => {
     const last = track.filter((p) => p.time > 2.05 && p.time < 2.95)
     expect(last.length).toBeGreaterThan(20)
     expect(last.every((p) => Math.abs(p.hz - 220) < 2)).toBe(true)
+  })
+})
+
+describe('extractPitchTrackAsync（分片异步版）', () => {
+  it('结果与同步版完全一致（默认参数）', async () => {
+    const sync = extractPitchTrack(makeBuffer())
+    const asyncResult = await extractPitchTrackAsync(makeBuffer())
+    expect(asyncResult).not.toBeNull()
+    expect(asyncResult).toEqual(sync)
+  })
+
+  it('跨多片仍一致（sliceMs=1 强制频繁让出主线程）', async () => {
+    // 短 buffer：单帧 YIN 本身 >1ms，每片必只算 1 帧 → 必然跨几十片；
+    // vitest 定时器较慢，片数过多会超时，故不用全长替身
+    const short = makeBufferOf(0.5)
+    const sync = extractPitchTrack(short)
+    const sliced = await extractPitchTrackAsync(short, { sliceMs: 1 })
+    expect(sliced).toEqual(sync)
+    expect(sync.length).toBeGreaterThan(5)
+  }, 15000)
+
+  it('shouldContinue 返回 false：立即 resolve null（组件卸载放弃计算）', async () => {
+    // 取消时机不确定：首片前或片中，两种情况都必须以 null 干净落地
+    let calls = 0
+    const r = await extractPitchTrackAsync(makeBuffer(), {
+      shouldContinue: () => ++calls < 3,
+    })
+    expect(r).toBeNull()
+    // 3s@44.1kHz 的替身远超一片，取消必然发生在计算中途，而非自然完成
+    expect(calls).toBeLessThan(1000)
+  })
+
+  it('offsetSec 平移与同步版一致', async () => {
+    const sync = extractPitchTrack(makeBuffer(), { offsetSec: 5.5 })
+    const asyncResult = await extractPitchTrackAsync(makeBuffer(), { offsetSec: 5.5 })
+    expect(asyncResult).toEqual(sync)
   })
 })
 

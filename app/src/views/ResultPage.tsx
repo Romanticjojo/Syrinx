@@ -3,7 +3,7 @@ import { audioEngine } from '../audio/AudioEngine'
 import { encodeWav } from '../audio/wav'
 import PlaybackDeck from '../components/PlaybackDeck'
 import PitchChart from '../components/PitchChart'
-import { extractPitchTrack, scoreAgainst, timelineUpTo, type ScoreResult } from '../pitch/compare'
+import { extractPitchTrackAsync, scoreAgainst, timelineUpTo, type ScoreResult } from '../pitch/compare'
 import { getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import { useAppStore } from '../store'
@@ -60,7 +60,13 @@ export default function ResultPage() {
         const buffer = await audioEngine.decode(ab)
         if (!alive) return
         // 录音起点对齐伴奏时间轴：中途开录/回开头重录时，轨迹时间整体平移 startSec
-        const track = extractPitchTrack(buffer, { offsetSec: take.startSec })
+        // 分片异步提取（每 ~24ms 让出主线程）：分析期间按钮/滚动保持可响应，
+        // 用户点「重新演奏/返回曲库」离开本页时 alive 置 false，计算立即中止丢弃
+        const track = await extractPitchTrackAsync(buffer, {
+          offsetSec: take.startSec,
+          shouldContinue: () => alive,
+        })
+        if (!alive || track === null) return
         const result = scoreAgainst(track, timelineUpTo(timeline, stopSec))
         setAnalysis({ status: 'done', result })
         setTake({ ...take, pitchTrack: result.annotatedTrack, stats: result.stats })
