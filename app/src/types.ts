@@ -76,6 +76,9 @@ export interface SongManifest {
   tags: string[]
   /** MusicXML 地址（必选） */
   scoreUrl: string
+  /** 钢琴伴奏谱地址（可选，interstellar 拼谱修复 t_7518c69e）：大谱表 MusicXML，
+   *  供预览页「钢琴伴奏谱」切换查看；未声明的曲不显示切换器，行为零变化 */
+  pianoScoreUrl?: string
   /** 外部伴奏音频（可选；缺省用曲谱程序化合成） */
   accompanimentUrl?: string
   /** 每曲动态背景视频（可选；缺省用 three.js 主题背景） */

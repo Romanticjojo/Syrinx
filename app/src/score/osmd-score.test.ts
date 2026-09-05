@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
 import { OSMDScore } from './OSMDScore'
 import type { Timeline } from '../types'
@@ -299,32 +299,8 @@ describe('OSMDScore T3 选中染色与小节聚焦', () => {
     expect(score.noteAtPoint(150, 80)).toBeNull()
   })
 
-  it('scrollToMeasure：滚动祖先 scrollTop 定位到小节行中部；未知小节 no-op', () => {
-    const scroller = document.createElement('div')
-    scroller.style.overflowY = 'auto'
-    const cursor = new FakeCursor([0, 1])
-    const container = document.createElement('div')
-    container.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
-    scroller.appendChild(container)
-    document.body.appendChild(scroller)
-    const score = new OSMDScore(
-      container,
-      '#3ddfae',
-      {
-        load: async () => {},
-        render: () => {},
-        cursor,
-        GraphicSheet: { MeasureList: ml },
-      } as unknown as OpenSheetMusicDisplay,
-    )
-    // m2：y=20 单位 * unitPx10 = 200px，h=60px -> 行中心 200+30
-    score.scrollToMeasure(2)
-    const expected = 230 - scroller.clientHeight / 2
-    expect(scroller.scrollTop).toBe(expected)
-    score.scrollToMeasure(99) // 未知小节：不抛、不动
-    expect(scroller.scrollTop).toBe(expected)
-    document.body.removeChild(scroller)
-  })
+  // scrollToMeasure 的行为断言迁移至「换行缓动滚动（t_7518c69e）」套件
+  // （直写 scrollTop → rAF 缓动后，同步断言口径不再成立）
 })
 
 // -- T3b：选中色分离（播放光标 accent vs 鼠标选中橙，fake 几何不真渲染 OSMD）--
@@ -717,5 +693,161 @@ describe('OSMDScore T4 patchMarker（标记层局部更新）', () => {
     expect(el1).toBe(el0) // 元素池复用（不重建）
     expect(score.patchMarker(1, 0.5, { color: 'rgb(9,9,9)' })).toBe(true)
     expect((el1 as HTMLElement).style.borderColor).toBe('rgb(9, 9, 9)')
+  })
+})
+
+// -- t_7518c69e：换行跟随缓动滚动（ease-out cubic rAF 滑移替代 scrollTop 直写）--
+// rAF/时钟全 stub：frame(dt) 把假时钟推进 dt ms 后执行当前挂起回调（回调内新排
+// 队的帧留待下次 frame，不连跑）；matchMedia spy 固定 reduced-motion 查询结果。
+const easeOutCubic = (k: number) => 1 - (1 - k) ** 3
+
+function stubRaf() {
+  const pending = new Map<number, FrameRequestCallback>()
+  let next = 1
+  let now = 0
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    const h = next++
+    pending.set(h, cb)
+    return h
+  })
+  vi.stubGlobal('cancelAnimationFrame', (h: number) => {
+    pending.delete(h)
+  })
+  return {
+    frame(dt: number) {
+      now += dt
+      const cbs = [...pending.values()]
+      pending.clear()
+      for (const cb of cbs) cb(now)
+    },
+    pendingCount: () => pending.size,
+  }
+}
+
+function stubMatchMedia(reduced: boolean) {
+  vi.spyOn(window, 'matchMedia').mockImplementation(
+    () =>
+      ({
+        matches: reduced,
+        media: '(prefers-reduced-motion: reduce)',
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }) as unknown as MediaQueryList,
+  )
+}
+
+describe('OSMDScore 换行缓动滚动（t_7518c69e）', () => {
+  // 两行谱面：m1 行 y=200..260px（中心 230），m2 行 y=500..560px（中心 530）
+  const m1 = fakeMeasure(1, [{ rv: 0, note: mkGNote() }])
+  const m2 = fakeMeasure(2, [{ rv: 0, note: mkGNote() }])
+  m2.PositionAndShape = {
+    AbsolutePosition: { x: 20, y: 50 },
+    Size: { width: 8, height: 6 },
+  }
+  const mlScroll = [[m1], [m2]]
+
+  function setup(reduced = false) {
+    const raf = stubRaf()
+    stubMatchMedia(reduced)
+    // 演奏页拓扑：container 自身即 scroller（.sheet-container）——base=0 恒定，
+    // 与滚动位置无关。若用「container 在 scroller 内」拓扑，happy-dom rect 恒零
+    // 会让 base 退化成 sc.scrollTop 累加制，动画中接管调用的目标会被放大
+    const scroller = document.createElement('div')
+    scroller.style.overflowY = 'auto'
+    scroller.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
+    document.body.appendChild(scroller)
+    const score = new OSMDScore(
+      scroller,
+      '#3ddfae',
+      {
+        load: async () => {},
+        render: () => {},
+        cursor: new FakeCursor([0, 1]),
+        GraphicSheet: { MeasureList: mlScroll },
+      } as unknown as OpenSheetMusicDisplay,
+    )
+    // base=0：目标 = 行中心 − clientHeight/2
+    const t1 = 230 - scroller.clientHeight / 2
+    const t2 = 530 - scroller.clientHeight / 2
+    return { score, scroller, raf, t1, t2 }
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+  })
+
+  it('缓动到位：ease-out cubic 逐帧推进，500ms 末精确落在行中心；未知小节 no-op', () => {
+    const { score, scroller, raf, t1 } = setup()
+    score.scrollToMeasure(1)
+    expect(scroller.scrollTop).toBe(0) // 未到首帧不动（不再直写）
+    raf.frame(0) // 首帧立 t0
+    raf.frame(125) // k=0.25
+    expect(scroller.scrollTop).toBeCloseTo(easeOutCubic(0.25) * t1, 5)
+    raf.frame(375) // k=1
+    expect(scroller.scrollTop).toBe(t1)
+    expect(raf.pendingCount()).toBe(0) // 到位后不再排帧
+    score.scrollToMeasure(99) // 未知小节：不抛、不动、不排帧
+    expect(scroller.scrollTop).toBe(t1)
+    expect(raf.pendingCount()).toBe(0)
+  })
+
+  it('缓动接管：动画中再次调用从当前位置重起步，不从旧起点重算', () => {
+    const { score, scroller, raf, t1, t2 } = setup()
+    score.scrollToMeasure(1)
+    raf.frame(0)
+    raf.frame(125) // 第一段行至 1/4 处
+    const mid = easeOutCubic(0.25) * t1
+    expect(scroller.scrollTop).toBeCloseTo(mid, 5)
+    score.scrollToMeasure(2) // 下一行来了：cancel 前一段，从 mid 起步
+    raf.frame(0) // 新动画首帧重立 t0
+    raf.frame(125) // 新段 k=0.25：mid + (t2-mid)*ease(0.25)
+    expect(scroller.scrollTop).toBeCloseTo(mid + (t2 - mid) * easeOutCubic(0.25), 5)
+    // 若错误地从旧起点（0）重算，此处会是 ease(0.25)*t2——数值上截然不同
+    raf.frame(375) // 新段走满 500ms
+    expect(scroller.scrollTop).toBe(t2)
+  })
+
+  it('prefers-reduced-motion：跳过动画直写目标，不排任何帧', () => {
+    const { score, scroller, raf, t2 } = setup(true)
+    score.scrollToMeasure(2)
+    expect(scroller.scrollTop).toBe(t2) // 立即到位
+    expect(raf.pendingCount()).toBe(0)
+  })
+
+  it('用户 wheel / pointerdown：立即取消进行中的动画并停在当前位置', () => {
+    const { score, scroller, raf, t1, t2 } = setup()
+    score.scrollToMeasure(1)
+    raf.frame(0)
+    raf.frame(125)
+    const stopped = easeOutCubic(0.25) * t1
+    window.dispatchEvent(new window.Event('wheel'))
+    raf.frame(500) // 动画已死：时钟再走也不动
+    expect(scroller.scrollTop).toBeCloseTo(stopped, 5)
+    expect(raf.pendingCount()).toBe(0)
+    // pointerdown 同为让位信号；第二段从 wheel 停点（stopped）起步
+    score.scrollToMeasure(2)
+    raf.frame(0)
+    raf.frame(125)
+    const stopped2 = stopped + (t2 - stopped) * easeOutCubic(0.25)
+    window.dispatchEvent(new window.Event('pointerdown'))
+    raf.frame(500)
+    expect(scroller.scrollTop).toBeCloseTo(stopped2, 5)
+  })
+
+  it('dispose：挂起的 rAF 一并取消，滚动停在原地', () => {
+    const { score, scroller, raf } = setup()
+    score.scrollToMeasure(1)
+    raf.frame(0)
+    raf.frame(125)
+    const frozen = scroller.scrollTop
+    score.dispose()
+    raf.frame(500)
+    expect(scroller.scrollTop).toBe(frozen)
+    expect(raf.pendingCount()).toBe(0)
   })
 })

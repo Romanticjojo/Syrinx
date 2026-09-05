@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import ScoreSheet from '../components/ScoreSheet'
 import { DIFFICULTY_LABEL, getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
+import { expandRepeats, stripForcedBreaks } from '../score/musicxml'
 import { useAppStore } from '../store'
 import type { SongManifest, Timeline } from '../types'
 import './PreviewPage.css'
@@ -20,6 +21,10 @@ const coverStyle = placeholderStyle
 const positionOf = (s: SongManifest): React.CSSProperties =>
   s.coverPosition ? { objectPosition: s.coverPosition } : {}
 
+/** 曲谱版本（interstellar 拼谱修复 t_7518c69e）：flute = 主谱（scoreUrl，现状）；
+ *  piano = 钢琴伴奏谱（pianoScoreUrl，大谱表）。纯 UI 态，切曲重置回 flute */
+type ScoreKind = 'flute' | 'piano'
+
 export default function PreviewPage() {
   const songId = useAppStore((s) => s.currentSongId)
   const go = useAppStore((s) => s.go)
@@ -30,6 +35,10 @@ export default function PreviewPage() {
   const [xml, setXml] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  // 钢琴伴奏谱（懒加载，首次切换才拉取；失败走独立错误态，可切回长笛谱）
+  const [scoreKind, setScoreKind] = useState<ScoreKind>('flute')
+  const [pianoXml, setPianoXml] = useState<string | null>(null)
+  const [pianoError, setPianoError] = useState<string | null>(null)
   // 切曲时重置加载状态（渲染期间调整状态，避免 effect 内 setState 级联渲染）
   const [lastSongId, setLastSongId] = useState(song.id)
   const bgVideoRef = useRef<HTMLVideoElement>(null)
@@ -38,6 +47,9 @@ export default function PreviewPage() {
     setXml(null)
     setTimeline(null)
     setLoadError(null)
+    setScoreKind('flute')
+    setPianoXml(null)
+    setPianoError(null)
   }
 
   // 加载曲谱与时间轴（预览用静态渲染）
@@ -57,6 +69,28 @@ export default function PreviewPage() {
     }
   }, [song])
 
+  // 钢琴伴奏谱懒加载：首次切到 piano 才拉取。timeline 复用长笛谱的——两谱同曲
+  // 同小节同时间轴（Soundslice 拼谱交付口径），预览为静态渲染无光标推进，
+  // timeline 仅作 ScoreSheet/OSMD load 侧输入；预处理与 loadSong 同口径
+  useEffect(() => {
+    if (scoreKind !== 'piano' || pianoXml || pianoError || !song.pianoScoreUrl) return
+    let alive = true
+    ;(async () => {
+      try {
+        const url = song.pianoScoreUrl!
+        const res = await fetch(assetUrl(url))
+        if (!res.ok) throw new Error(`曲谱加载失败：${url}（HTTP ${res.status}）`)
+        const x = expandRepeats(stripForcedBreaks(await res.text()))
+        if (alive) setPianoXml(x)
+      } catch (e: unknown) {
+        if (alive) setPianoError(e instanceof Error ? e.message : String(e))
+      }
+    })()
+    return () => {
+      alive = false
+    }
+  }, [scoreKind, pianoXml, pianoError, song])
+
   const cover = {
     background: `radial-gradient(70% 55% at 30% 28%, rgba(255,255,255,.13), transparent 60%),
       radial-gradient(90% 80% at 75% 85%, ${song.accent}73, transparent 65%),
@@ -70,6 +104,10 @@ export default function PreviewPage() {
     v.play().catch(() => {})
     return () => v.pause()
   }, [song.backgroundVideoUrl])
+  // 当前谱面：按版本取 xml/错误（钢琴谱懒加载期间显示既有「曲谱加载中…」占位）
+  const activeXml = scoreKind === 'flute' ? xml : pianoXml
+  const activeError = scoreKind === 'flute' ? loadError : pianoError
+
   // 规格条数据：签名的结构化形态（调性/速度/伴奏/技巧），难度徽章复用曲库 ●●● 标记
   const specs: { label: string; en: string; value: ReactNode; valueClass?: string; badge?: string }[] = [
     { label: '调性', en: 'KEY', value: song.keyLabel },
@@ -201,13 +239,34 @@ export default function PreviewPage() {
         </div>
       </section>
 
-      {/* 曲谱预览：静态渲染 + 缩放（M2 起接入伴奏时钟跟随） */}
+      {/* 曲谱预览：静态渲染 + 缩放（M2 起接入伴奏时钟跟随）；声明了 pianoScoreUrl
+          的曲可切「钢琴伴奏谱」大谱表（interstellar 拼谱修复 t_7518c69e），其余曲零变化 */}
       <section className="score-section" aria-label="曲谱预览">
-        <h3 className="score-section-title">曲谱预览</h3>
-        {loadError && <div className="score-load-error">曲谱加载失败：{loadError}</div>}
-        {!xml && !loadError && <div className="score-load-error">曲谱加载中…</div>}
-        {xml && timeline && (
-          <ScoreSheet xml={xml} timeline={timeline} accent={song.accent} zoom={0.85} />
+        <h3 className="score-section-title">
+          曲谱预览
+          {song.pianoScoreUrl && (
+            <div className="score-switch" role="group" aria-label="曲谱版本">
+              <button
+                className={`seg${scoreKind === 'flute' ? ' on' : ''}`}
+                aria-pressed={scoreKind === 'flute'}
+                onClick={() => setScoreKind('flute')}
+              >
+                长笛谱
+              </button>
+              <button
+                className={`seg${scoreKind === 'piano' ? ' on' : ''}`}
+                aria-pressed={scoreKind === 'piano'}
+                onClick={() => setScoreKind('piano')}
+              >
+                钢琴伴奏谱
+              </button>
+            </div>
+          )}
+        </h3>
+        {activeError && <div className="score-load-error">曲谱加载失败：{activeError}</div>}
+        {!activeXml && !activeError && <div className="score-load-error">曲谱加载中…</div>}
+        {activeXml && timeline && (
+          <ScoreSheet xml={activeXml} timeline={timeline} accent={song.accent} zoom={0.85} />
         )}
       </section>
 

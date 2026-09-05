@@ -392,6 +392,46 @@
   width: min(92svh, 1280px, 100%); /* 移动端：svh 排除地址栏/安全区 */
   margin-inline: auto;
 }
+/* 曲谱版本切换（t_7518c69e）：沿用演奏页 .ctl.cursor-mode 的分段控件语言——
+   半透明胶囊容器（control-bar 同款底/描边/模糊）+ 12px 文字段，选中段亮 accent */
+.score-switch {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--pill);
+  background: rgba(16, 16, 18, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.score-switch .seg {
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 12px;
+  padding: 6px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.score-switch .seg:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+}
+.score-switch .seg.on {
+  color: var(--song-accent, var(--accent));
+}
+/* 鼠标点击后 UA 焦点圈驻留：去掉，键盘焦点圈保留（a11y，同 .ctl.cursor-mode） */
+.score-switch .seg:focus:not(:focus-visible) {
+  outline: none;
+}
+@media (max-width: 720px) {
+  .score-section-title {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
 .score-load-error {
   color: var(--ink-dim);
   font-size: 13px;

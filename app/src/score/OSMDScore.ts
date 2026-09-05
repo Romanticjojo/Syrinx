@@ -1,6 +1,20 @@
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay'
 import type { Timeline } from '../types'
 
+/** [t_7518c69e] 换行跟随滑移动画参数：ease-out cubic，约 500ms */
+const SCROLL_ANIM_MS = 500
+const easeOutCubic = (k: number) => 1 - (1 - k) ** 3
+
+/** [t_7518c69e] 系统减少动态偏好（ui-ux-pro-max：prefers-reduced-motion
+ *  优先于一切装饰性动效）：reduce 时换行滚动跳过动画直达 */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
+
 /** 小节几何缓存结构（markerGeom）：标记层（t_perf_sync_tune）与小节聚焦（T3）共用 */
 type MarkerGeom = {
   map: Map<number, { x: number; y: number; w: number; h: number; se: { rv: number; x: number }[] }>
@@ -89,6 +103,10 @@ export class OSMDScore {
    *  （enableOrDisableCursors → 新 Cursor + init→hide），重渲后须自动恢复，
    *  否则光标永久 hidden → update() 早退 → 不滚动不高亮（切光标模式丢跟随的根因） */
   private cursorShown = false
+  /** [t_7518c69e] 换行跟随滑移动画挂起的 rAF 句柄（0 = 无动画进行） */
+  private scrollRaf = 0
+  /** [t_7518c69e] 动画期间的让位监听摘除钩子（用户 wheel/pointerdown 即停） */
+  private detachScrollGuard: (() => void) | null = null
 
   constructor(
     container: HTMLElement,
@@ -467,8 +485,9 @@ export class OSMDScore {
   }
 
   /** [sync-tune T3] 小节自动聚焦：把第 m 小节所在行滚动到最近滚动
-   *  祖先视口中部（markerGeom 同源的 MeasureList 几何）。只写 scrollTop--程序性
-   *  滚动不派发 wheel/pointerdown，与页面侧「手动滚动 5 秒让位」逻辑不冲突。
+   *  祖先视口中部（markerGeom 同源的 MeasureList 几何）。滚动写入经
+   *  animateScrollTo 缓动滑移（t_7518c69e）——程序性 scrollTop 写入不派发
+   *  wheel/pointerdown，与页面侧「手动滚动 5 秒让位」逻辑不冲突。
    *  独立可选方法：演奏页不调用，缺省行为不变。
    *  [2026-09-04 fd 跟随修复] y 推导弃用 map 里的小节 y（OSMD 音乐单位坐标，
    *  随行深与 SVG 真实 y 偏差 ~21px/行线性发散，长谱深行会滚过头——几何对账实证），
@@ -514,7 +533,56 @@ export class OSMDScore {
     const cRect = this.containerEl.getBoundingClientRect()
     const sRect = sc.getBoundingClientRect()
     const base = sc === this.containerEl ? 0 : cRect.top - sRect.top + sc.scrollTop
-    sc.scrollTop = Math.max(0, base + rowRealCenter - sc.clientHeight / 2)
+    const target = Math.max(0, base + rowRealCenter - sc.clientHeight / 2)
+    this.animateScrollTo(sc, target)
+  }
+
+  /** [t_7518c69e] 换行跟随缓动滑移：ease-out cubic 约 500ms、rAF 驱动——替代
+   *  scrollTop 直写的瞬时跳变（用户实测反馈「换行的时候滚动对演奏者很不友好」）。
+   *  - 动画进行中被新调用打断：从当前位置重起步滚向新目标（平滑接管，不从旧
+   *    起点重算——上一行还没滚完就换行的连续翻谱不断档）
+   *  - 用户 wheel/pointerdown 立即取消并停在原地：页面侧「手动滚谱 5s 让位」
+   *    （manualUntilRef）的前置防线——不取消的话让位期内动画仍会继续抢滚动；
+   *    程序性 scrollTop 写入不派发这两个事件，不会自我触发
+   *  - prefers-reduced-motion: reduce 时跳过动画直达目标
+   *  - 时间轴只用 rAF 时间戳（首帧立 t0），测试桩时钟可直接驱动 */
+  private animateScrollTo(sc: HTMLElement, target: number): void {
+    this.stopScrollAnim()
+    const delta = target - sc.scrollTop
+    if (prefersReducedMotion() || Math.abs(delta) < 1) {
+      sc.scrollTop = target
+      return
+    }
+    const stop = () => this.stopScrollAnim()
+    window.addEventListener('wheel', stop, { passive: true })
+    window.addEventListener('pointerdown', stop, { passive: true })
+    this.detachScrollGuard = () => {
+      window.removeEventListener('wheel', stop)
+      window.removeEventListener('pointerdown', stop)
+    }
+    const from = sc.scrollTop
+    let t0 = -1
+    const step = (now: number) => {
+      try {
+        if (t0 < 0) t0 = now
+        const k = Math.max(0, Math.min(1, (now - t0) / SCROLL_ANIM_MS))
+        sc.scrollTop = from + delta * easeOutCubic(k)
+        if (k < 1) this.scrollRaf = requestAnimationFrame(step)
+        else this.stopScrollAnim()
+      } catch {
+        // rAF 内异常会静默炸死主循环（65dcbef 渲染防崩前科）：止损停动画不上抛
+        this.stopScrollAnim()
+      }
+    }
+    this.scrollRaf = requestAnimationFrame(step)
+  }
+
+  /** 停止进行中的换行滑移动画（新动画起步/用户接管/到位/dispose 共用出口） */
+  private stopScrollAnim(): void {
+    if (this.scrollRaf) cancelAnimationFrame(this.scrollRaf)
+    this.scrollRaf = 0
+    this.detachScrollGuard?.()
+    this.detachScrollGuard = null
   }
 
   /** 小节几何缓存（t_perf_sync_tune，T3 起与 scrollToMeasure 共用）：
@@ -774,6 +842,7 @@ export class OSMDScore {
   dispose(): void {
     this.disposed = true
     // OSMD 无 dispose API；清空容器释放 DOM
+    this.stopScrollAnim()
     this.markerGeom = null
     this.markerEls.clear()
     this.markerLayer = null
