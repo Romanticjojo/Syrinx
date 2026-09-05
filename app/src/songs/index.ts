@@ -50,6 +50,7 @@ export const SONGS: SongManifest[] = [
     ...interstellarManifest,
     difficulty: interstellarManifest.difficulty as 1 | 2 | 3,
     backgroundTheme: interstellarManifest.backgroundTheme as SongManifest['backgroundTheme'],
+    backgroundFit: interstellarManifest.backgroundFit as SongManifest['backgroundFit'],
   },
 ]
 

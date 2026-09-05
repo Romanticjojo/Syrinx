@@ -26,6 +26,7 @@ MANIFEST = json.loads(
     Path(rf"D:\Syrinx\app\public\songs\{SLUG}\manifest.json").read_text(encoding="utf-8")
 )
 PLAY_ONCE = bool(MANIFEST.get("playOnce"))
+HOVER_ONCE = bool(MANIFEST.get("hoverPlayOnce"))
 PAD = MANIFEST.get("backgroundPadColor")
 HOVER_URL = MANIFEST.get("hoverVideoUrl")
 BG_URL = MANIFEST.get("backgroundVideoUrl")
@@ -73,7 +74,7 @@ with sync_playwright() as p:
         playing = v.evaluate("el => !el.paused && el.currentTime > 0")
         cur_src = v.evaluate("el => el.currentSrc")
         src_ok = SLUG in cur_src and (HOVER_URL is None or cur_src.endswith(HOVER_URL.split("/")[-1]))
-        loop_ok = v.evaluate("el => el.loop") == WANT_LOOP
+        loop_ok = v.evaluate("el => el.loop") == (not (PLAY_ONCE or HOVER_ONCE))
         check("悬停视频可见", visible)
         check("悬停视频在播", playing, f"paused={not playing}")
         check("悬停视频源=hover 文件", src_ok, cur_src.split("/")[-1])

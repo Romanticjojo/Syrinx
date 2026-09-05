@@ -41,6 +41,10 @@ video.perform-bg-blur {
   filter: blur(46px) saturate(1.05) brightness(0.72);
   transform: scale(1.12); /* 吃掉 blur 边缘发虚 */
 }
+/* backgroundFit=cover 曲目（风景/星空无独占主体）：视频铺满全屏裁切，任何屏幕比例都无留边 */
+video.perform-bg-cover {
+  object-fit: cover;
+}
 
 /* ---------- HUD（顶栏 + 底部控制区，idle 时淡出） ---------- */
 .perform-hud {
@@ -465,9 +469,13 @@ video.perform-bg-blur {
   }
 }
 
-/* 窄屏（手机竖屏等）：视频保持 contain 不裁人物，同色底自然延展补满留边 */
+/* 窄屏（手机竖屏等）：视频保持 contain 不裁人物，同色底自然延展补满留边；
+   backgroundFit=cover 曲目例外——星空无主体，铺满裁切在任何比例都成立 */
 @media (max-width: 768px) {
   video.perform-bg {
     object-fit: contain;
+  }
+  video.perform-bg-cover {
+    object-fit: cover;
   }
 }

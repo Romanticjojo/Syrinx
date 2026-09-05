@@ -89,6 +89,8 @@ export interface SongManifest {
   playOnce?: boolean
   /** 仅曲库卡片 hover 预览播放一次后定格末帧（详情/演奏页背景不受影响）；优先级低于 playOnce */
   hoverPlayOnce?: boolean
+  /** 演奏页背景视频铺放方式：contain=完整显示留边垫底色（缺省，人物主体曲），cover=铺满裁切（无独占主体的风景/星空曲） */
+  backgroundFit?: 'contain' | 'cover'
   /** 每曲封面图（可选；缺省用 accent 渐变） */
   coverUrl?: string
   /** 伴奏锚点文件（可选；离线分析伴奏生成，供伴奏驱动光标，见 score/anchors.ts） */

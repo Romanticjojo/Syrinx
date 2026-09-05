@@ -594,7 +594,16 @@ export default function PerformPage() {
           aria-hidden="true"
         />
       )}
-      <video className="perform-bg" ref={bgVideoRef} muted loop={!song.playOnce} playsInline autoPlay aria-hidden="true" style={{ display: song.backgroundVideoUrl ? 'block' : 'none', background: song.playOnce ? undefined : song.backgroundPadColor }} />
+      <video
+        className={`perform-bg${song.backgroundFit === 'cover' ? ' perform-bg-cover' : ''}`}
+        ref={bgVideoRef}
+        muted
+        loop={!song.playOnce}
+        playsInline
+        autoPlay
+        aria-hidden="true"
+        style={{ display: song.backgroundVideoUrl ? 'block' : 'none', background: song.playOnce || song.backgroundFit === 'cover' ? undefined : song.backgroundPadColor }}
+      />
       <header className="perform-hud hud-top">
         <div className="hud-song">
           <button className="back-ghost" onClick={exit} aria-label="返回曲库">
