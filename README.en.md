@@ -104,7 +104,7 @@ Syrinx/
 
 ## 🌊 Performance Data Flow
 
-One path from Song Pack assets to intonation feedback explains the whole app (interactive version: [syrinx-dataflow-en.html](docs/img/syrinx-dataflow-en.html)):
+One path from Song Pack assets to intonation feedback explains the whole app (interactive version: [syrinx-dataflow-en.html](docs/img/syrinx-dataflow-en.html), append `?theme=dark` for the dark theme):
 
 <p align="center">
   <img src="docs/img/syrinx-dataflow-en.png" alt="Syrinx data flow: Song Pack → parse → perform loop → capture → feedback" width="100%"/>
@@ -169,14 +169,10 @@ A: Sync uses `AudioContext.currentTime` as the sole clock; if you use an externa
 
 ## 🤝 Acknowledgements
 
-- **Music & Scores**
-  - [Hans Zimmer](https://www.hanszimmer.com/) — composer of the Interstellar main theme
-  - **Ariana & Ella Piknjač** — flute & piano arrangement of Interstellar (the score source for the bundled Interstellar song; MusicXML exported from the official edition via Soundslice)
-- **Open-source libraries** (application capabilities)
-  - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) — browser MusicXML rendering engine
-  - [three.js](https://threejs.org/) — 3D background and flute model
+- [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) — browser MusicXML rendering engine
+- [three.js](https://threejs.org/) — 3D background and flute model
 
-> Song assets (scores / accompaniments / covers) are copyrighted media and not distributed with the repo; each song belongs to its rights holders. Arrangers of the bundled performance scores are credited above.
+> Song assets (scores / accompaniments / covers) are copyrighted media and not distributed with the repo; each song belongs to its rights holders.
 
 ---
 
