@@ -110,6 +110,14 @@ One path from Song Pack assets to intonation feedback explains the whole app (in
   <img src="docs/img/syrinx-dataflow-en.png" alt="Syrinx data flow: Song Pack → parse → perform loop → capture → feedback" width="100%"/>
 </p>
 
+## 🏗️ Architecture
+
+Frontend-only SPA with an in-browser closed loop and zero backend API: a static site loads five React views, while the score / audio / recorder / pitch engines and the Song Pack asset layer each hold their place (interactive version: [syrinx-architecture-en.html](docs/img/syrinx-architecture-en.html), append `?theme=dark` for the dark theme):
+
+<p align="center">
+  <img src="docs/img/syrinx-architecture-en.png" alt="Syrinx architecture: static site → views → four engines → global state, fed by Song Pack and the anchor workbench" width="100%"/>
+</p>
+
 ## 🎵 Song Pack
 
 Each song is one asset pack placed under `app/public/songs/<song-id>/`:
