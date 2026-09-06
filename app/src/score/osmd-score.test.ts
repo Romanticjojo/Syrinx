@@ -851,3 +851,100 @@ describe('OSMDScore 换行缓动滚动（t_7518c69e）', () => {
     expect(raf.pendingCount()).toBe(0)
   })
 })
+
+// -- t_1d124051：视口缩放坐标补偿（fit 模式 transform: scale 下的几何归一）--
+// fit 拓扑与演奏页一致：.sheet-container(滚动容器) > .sheet-scale(scale wrapper)
+// > .sheet-virtual(OSMD 容器)。DOM 实测 rect 均为「视觉坐标 = 未缩放 × k」，
+// 几何缓存应 ÷viewScale 归一存储；scrollToMeasure 滚动目标 ×当下 k、
+// noteAtPoint 视口点击 ÷当下 k——旋转/缩窗只改 k，缓存不作废（谱面不重排）。
+describe('OSMDScore 视口缩放补偿（t_1d124051）', () => {
+  /** 音符头视觉几何 = 未缩放 × k 的注入替身（T3b mkGNoteGeom 同款，乘上 k） */
+  function mkGNoteVisual(
+    box: { left: number; top: number; width: number; height: number },
+    k: number,
+    mods: { left: number; top: number; width: number; height: number }[] = [],
+  ) {
+    const scale = (b: { left: number; top: number; width: number; height: number }) => ({
+      left: b.left * k,
+      top: b.top * k,
+      width: b.width * k,
+      height: b.height * k,
+    })
+    return mkGNoteGeom([scale(box)], mods.map(scale))
+  }
+
+  /** fit 拓扑 + 可缩放 viewScale 的被测件：m1 单行 y=20 单位（未缩放 200..260px），
+   *  音符头未缩放几何 [112,124]×218..226（T3b 口径），视觉 = 未缩放 × k */
+  function setupScaled(k: number) {
+    stubMatchMedia(true) // reduced-motion：scrollToMeasure 直写，断言口径稳定
+    const scroller = document.createElement('div')
+    scroller.style.overflowY = 'auto'
+    const wrap = document.createElement('div')
+    const virt = document.createElement('div')
+    virt.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
+    wrap.appendChild(virt)
+    scroller.appendChild(wrap)
+    document.body.appendChild(scroller)
+    const note = mkGNoteVisual({ left: 112, top: 218, width: 12, height: 8 }, k)
+    const score = new OSMDScore(
+      virt,
+      '#3ddfae',
+      {
+        load: async () => {},
+        render: () => {},
+        cursor: new FakeCursor([0, 1]),
+        GraphicSheet: { MeasureList: [[fakeMeasure(1, [{ rv: 0, note }])]] },
+      } as unknown as OpenSheetMusicDisplay,
+    )
+    if (k !== 1) score.setViewScale(k)
+    return { score, scroller }
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+  })
+
+  it('scrollToMeasure：滚动目标按 viewScale 折算（未缩放行中心 222 × k）', () => {
+    // k=0.5：视觉行中心 111 → 滚动目标 = 222×0.5 − clientHeight/2（happy-dom 为 0）
+    const { score, scroller } = setupScaled(0.5)
+    score.scrollToMeasure(1)
+    expect(scroller.scrollTop).toBeCloseTo(111, 5)
+  })
+
+  it('几何缓存存未缩放坐标：构建后改 k 不重建缓存，目标按新 k 折算', () => {
+    // 几何是惰性构建（scrollToMeasure 首调才建）：先在 k=0.5 下建缓存
+    // （视觉 rect 111 ÷0.5 归一成未缩放 222），再改 k=1 → 目标 = 222×1。
+    // 若缓存误存视觉值 111，第二次会得到 111（旋转改 k 后跟随错位的复现）
+    const { score, scroller } = setupScaled(0.5)
+    score.scrollToMeasure(1)
+    expect(scroller.scrollTop).toBeCloseTo(111, 5) // k=0.5：视觉行中心
+    scroller.scrollTop = 0 // 清滚动位置，隔离 base（happy-dom rect 恒零的退化项）
+    score.setViewScale(1)
+    score.scrollToMeasure(1)
+    expect(scroller.scrollTop).toBeCloseTo(222, 5)
+  })
+
+  it('缺省不 setViewScale（reflow/调试页）：行为与旧口径一致（目标=未缩放中心）', () => {
+    const { score, scroller } = setupScaled(1)
+    score.scrollToMeasure(1)
+    expect(scroller.scrollTop).toBeCloseTo(222, 5)
+  })
+
+  it('noteAtPoint：视口点击 ÷ viewScale 后命中未缩放几何', () => {
+    // k=0.5：未缩放音符头中心 114 → 视觉 57；点视觉 (59,111) = 未缩放 (118,222)
+    const { score } = setupScaled(0.5)
+    const hit = score.noteAtPoint(59, 111)
+    expect(hit?.measure).toBe(1)
+    expect(hit?.rvInMeasure).toBe(0)
+    expect(hit?.precise).toBe(true)
+  })
+
+  it('setViewScale 非法值兜底：k<=0 视为 1（除零防御）', () => {
+    const { score, scroller } = setupScaled(1)
+    score.setViewScale(0)
+    score.scrollToMeasure(1)
+    expect(scroller.scrollTop).toBeCloseTo(222, 5)
+  })
+})

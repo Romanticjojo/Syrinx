@@ -110,6 +110,14 @@ Syrinx/
   <img src="docs/img/syrinx-dataflow-zh.png" alt="Syrinx 演奏数据流：Song Pack → 解析 → 演奏主循环 → 采集 → 反馈" width="100%"/>
 </p>
 
+## 🏗️ 整体架构
+
+纯前端 SPA，浏览器内闭环、零后端 API：静态站点装载 React 五视图，谱面 / 音频 / 录音 / 音准四大引擎与 Song Pack 素材层各就各位（交互版见 [syrinx-architecture-zh.html](docs/img/syrinx-architecture-zh.html)，暗色主题可加 `?theme=dark`）：
+
+<p align="center">
+  <img src="docs/img/syrinx-architecture-zh.png" alt="Syrinx 整体架构：静态站点 → 视图层 → 四大引擎 → 全局状态，Song Pack 与锚点工作台供给" width="100%"/>
+</p>
+
 ## 🎵 曲目接入（Song Pack）
 
 每首曲子一个素材包，放入 `app/public/songs/<song-id>/`：
