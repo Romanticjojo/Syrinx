@@ -29,15 +29,13 @@ describe('syncSongList', () => {
     }
   })
 
-  it('当前曲库现实：恰为 6 首有 beats 的曲（新增曲目时更新此清单）', () => {
+  it('当前曲库现实：恰为 4 首有 beats 的曲（web-deploy 体验版隐藏 river-flows-in-you / birds-poem 半成品；dev 分支为 6 首，新增曲目时更新此清单）', () => {
     expect([...list.map((s) => s.id)].sort()).toEqual(
       [
-        'birds-poem',
         'expedition-33',
         'flower-dance',
         'interstellar',
         'luv-letter',
-        'river-flows-in-you',
       ].sort(),
     )
   })

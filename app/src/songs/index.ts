@@ -5,9 +5,11 @@ import { assetUrl } from '../lib/assetUrl'
 import { expandRepeats, parseMusicXml, stripForcedBreaks } from '../score/musicxml'
 import luvLetterManifest from '../../public/songs/luv-letter/manifest.json'
 import flowerDanceManifest from '../../public/songs/flower-dance/manifest.json'
-import riverFlowsInYouManifest from '../../public/songs/river-flows-in-you/manifest.json'
+// web-deploy 体验版（2026-09-06）：river-flows-in-you / birds-poem 半成品隐藏，
+// manifest import 与注册块一并注释（dev 分支保留全部）；恢复时两处都要解开
+// import riverFlowsInYouManifest from '../../public/songs/river-flows-in-you/manifest.json'
 import expedition33Manifest from '../../public/songs/expedition-33/manifest.json'
-import birdsPoemManifest from '../../public/songs/birds-poem/manifest.json'
+// import birdsPoemManifest from '../../public/songs/birds-poem/manifest.json'
 import interstellarManifest from '../../public/songs/interstellar/manifest.json'
 
 /**
@@ -29,21 +31,23 @@ export const SONGS: SongManifest[] = [
     difficulty: flowerDanceManifest.difficulty as 1 | 2 | 3,
     backgroundTheme: flowerDanceManifest.backgroundTheme as SongManifest['backgroundTheme'],
   },
-  {
-    ...riverFlowsInYouManifest,
-    difficulty: riverFlowsInYouManifest.difficulty as 1 | 2 | 3,
-    backgroundTheme: riverFlowsInYouManifest.backgroundTheme as SongManifest['backgroundTheme'],
-  },
+  // web-deploy 体验版（2026-09-06）：隐藏半成品 river-flows-in-you 与 birds-poem（开发版 dev 分支仍保留）
+  // {
+  //   ...riverFlowsInYouManifest,
+  //   difficulty: riverFlowsInYouManifest.difficulty as 1 | 2 | 3,
+  //   backgroundTheme: riverFlowsInYouManifest.backgroundTheme as SongManifest['backgroundTheme'],
+  // },
   {
     ...expedition33Manifest,
     difficulty: expedition33Manifest.difficulty as 1 | 2 | 3,
     backgroundTheme: expedition33Manifest.backgroundTheme as SongManifest['backgroundTheme'],
   },
-  {
-    ...birdsPoemManifest,
-    difficulty: birdsPoemManifest.difficulty as 1 | 2 | 3,
-    backgroundTheme: birdsPoemManifest.backgroundTheme as SongManifest['backgroundTheme'],
-  },
+  // web-deploy 体验版（2026-09-06）：隐藏半成品 birds-poem（同上）
+  // {
+  //   ...birdsPoemManifest,
+  //   difficulty: birdsPoemManifest.difficulty as 1 | 2 | 3,
+  //   backgroundTheme: birdsPoemManifest.backgroundTheme as SongManifest['backgroundTheme'],
+  // },
   // Interstellar（Hans Zimmer，arr. Ariana & Ella）：Soundslice 官方 MusicXML（120qpm 直出，
   // 与钢琴伴奏同时间轴渲染，beats 走 duration_locked 产线）+ 星空动画背景（曲库悬停 hoverPlayOnce 定格）
   {
