@@ -169,18 +169,16 @@ video.perform-bg-cover {
   flex: 1;
   min-height: 0;
 }
-/* 印刷谱比例（t_c10d648d → 印刷比例重校）：参照 luv-letter 纸质谱扫描件
-   （resources/luv-letter/score/2.jpg）实测——页宽≈118 个谱线间距、每行 4-7 小节。
-   旧口径 66vh+zoom1.05 宽度比仅 ≈68，音符相对版面过大 1.7 倍；改为
-   min(92vh, 1280px) + zoom 0.85（10px×0.85=8.5px 谱线间距），1080p 下宽度比 ≈117，
-   观感与纸谱一致：每行 5-8 小节，音符小而密。100% 兜底窄屏。换行由 OSMD 按容器
-   宽自适应（强制换行已在 loadSong 剥离）。 */
+/* 印刷谱比例（t_c10d648d → t_1d124051 混合适配）：谱面上限恒 1280px（zoom 0.85，
+   谱线间距 8.5px），≥640px 视口由 ScoreSheet 以 1280px 虚拟宽渲染 + transform
+   等比缩放（k = 容器宽/1280，旋转/缩窗只改 k 不重排）；<640px 手机竖屏容器
+   自适应宽重排（min 的 100% 支路天然给出全宽，无需媒体查询分档）。旧 92vh/svh
+   上限随虚拟宽方案移除——宽度不再跟视口高走。 */
 .perform-stage .sheet-container {
   height: 100%;
   overflow-y: auto; /* 谱面滚动容器：OSMD 光标 scrollIntoView 只卷这里，不卷窗口 */
   overflow-x: hidden; /* 滚动条已隐藏（ScoreSheet.css），防子像素溢出顶出横条 */
-  width: min(92vh, 1280px, 100%);
-  width: min(92svh, 1280px, 100%); /* 移动端：svh 排除地址栏/安全区，vh 虚高会溢出屏 */
+  width: min(1280px, 100%);
   margin-inline: auto;
   /* 谱面半透面板：压谱可读，但背景动画必须透出来可见（t_a857b79e：0.66 压暗过重）；
      backdrop blur 把透出的动画柔化成光影，不再与谱线打架（t_3b9cfc25） */
@@ -422,10 +420,8 @@ video.perform-bg-cover {
   .perform-stage {
     padding: 4px 10px 0;
   }
-  /* 移动端谱面全宽（62vh 在窄屏反而过窄），小边距防贴边（t_c10d648d） */
-  .perform-stage .sheet-container {
-    width: 100%;
-  }
+  /* 谱面全宽由基础规则 min(1280px, 100%) 的 100% 支路天然给出（t_1d124051），
+     旧的 width:100% 覆盖不再需要 */
   .ov-card {
     padding: 30px 26px;
   }

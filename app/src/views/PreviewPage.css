@@ -385,11 +385,11 @@
   align-items: center;
   justify-content: space-between;
 }
-/* 印刷谱比例：与演奏页同口径（92vh + 1280px 兜底，zoom 同为 0.85）——
-   对齐纸质谱扫描件的页宽/谱线间距比（≈118） */
+/* 印刷谱比例：与演奏页同口径（t_1d124051 混合适配——上限恒 1280px，≥640px 视口
+   由 ScoreSheet 虚拟宽渲染 + transform 等比缩放，<640px 手机竖屏 min 的 100%
+   支路天然全宽重排）；zoom 同为 0.85 */
 .score-section .sheet-container {
-  width: min(92vh, 1280px, 100%);
-  width: min(92svh, 1280px, 100%); /* 移动端：svh 排除地址栏/安全区 */
+  width: min(1280px, 100%);
   margin-inline: auto;
 }
 /* 曲谱版本切换（t_7518c69e）：沿用演奏页 .ctl.cursor-mode 的分段控件语言——

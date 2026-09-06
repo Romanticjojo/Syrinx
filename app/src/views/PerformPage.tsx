@@ -642,6 +642,7 @@ export default function PerformPage() {
             onMeasureChange={handleMeasure}
             zoom={0.85}
             autoScroll={false}
+            autoShowCursor={phase === 'performing' || phase === 'countdown'}
           />
         )}
       </div>

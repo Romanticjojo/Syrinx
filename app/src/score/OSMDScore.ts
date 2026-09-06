@@ -107,6 +107,11 @@ export class OSMDScore {
   private scrollRaf = 0
   /** [t_7518c69e] 动画期间的让位监听摘除钩子（用户 wheel/pointerdown 即停） */
   private detachScrollGuard: (() => void) | null = null
+  /** [t_1d124051] 谱面视口缩放系数（调用方 CSS transform: scale(k) 施加在渲染
+   *  容器祖先上，fit 模式用）。几何缓存一律存「未缩放虚拟坐标」：构建时 DOM
+   *  实测 rect（视觉值 = 未缩放 × k）÷ viewScale 归一；使用时滚动目标 ×
+   *  viewScale、点击换算 ÷ viewScale——旋转/缩窗只更新 k，缓存不作废 */
+  private viewScale = 1
 
   constructor(
     container: HTMLElement,
@@ -125,6 +130,13 @@ export class OSMDScore {
      *  原生 follow 同时开着，两个滚动驱动会打架（原生 follow 在让位期内仍会
      *  挪 scrollTop，与「手动滚谱 5s 让位」语义冲突，2026-09-04 fd 跟随修复实证） */
     autoScroll = true,
+    /** [t_1d124051] OSMD window-resize 自动重渲开关（缺省 true=原行为）。fit 模式
+     *  （固定 1280px 虚拟宽 + 外层 CSS scale）必须传 false：OSMD 的 autoResize 监听
+     *  window resize（200ms 去抖）后不看容器宽是否变化、无条件全量 render()
+     *  （min.js 实证 handleResize→renderAndScrollBack）——开着的话旋转/缩窗必然
+     *  重排谱面，违背「只更新 scale 不重排」。reflow 模式（<640px 手机）容器宽真
+     *  随视口变，保留原行为 */
+    autoResize = true,
   ) {
     this.containerEl = container
     this.accent = accent
@@ -133,7 +145,7 @@ export class OSMDScore {
     this.baseNoteColor = '#e8e8e2' // 暗底下降一档对比：纯白刺眼（t_3b9cfc25）
     // osmdInstance：测试注入口（happy-dom 下不真正渲染 OSMD），缺省构造真实实例
     this.osmd = osmdInstance ?? new OpenSheetMusicDisplay(container, {
-      autoResize: true,
+      autoResize,
       backend: 'svg',
       followCursor: autoScroll,
       drawTitle: false,
@@ -257,6 +269,12 @@ export class OSMDScore {
     this.lastMeasure = 0
     this.nextIdx = 1
     this.updateCursorSpan()
+  }
+
+  /** [t_1d124051] 更新视口缩放系数（fit 模式旋转/缩窗时由谱面容器调用）。
+   *  几何缓存存未缩放坐标，改 k 不作废缓存；k<=0 非法值兜底为 1 */
+  setViewScale(k: number): void {
+    this.viewScale = k > 0 ? k : 1
   }
 
   /** 把当前光标下的音符染成 accent 色，上一帧的恢复原色 */
@@ -396,8 +414,10 @@ export class OSMDScore {
     const geom = this.ensureMarkerGeom()
     if (!geom || !geom.hitRows.length) return null
     const svgRect = svg.getBoundingClientRect()
-    const x = clientX - svgRect.left
-    const y = clientY - svgRect.top
+    // [t_1d124051] 点击坐标是视觉值（svg 也被 transform 缩放，相减只剩 k 倍数），
+    // ÷ viewScale 回未缩放虚拟坐标再比对 hitRows
+    const x = (clientX - svgRect.left) / this.viewScale
+    const y = (clientY - svgRect.top) / this.viewScale
     // y 最近的小节行；行判定收紧（T3b）：超行高一半直接淘汰
     let bestRow: { row: HitRow; d: number } | null = null
     for (const row of geom.hitRows) {
@@ -533,7 +553,9 @@ export class OSMDScore {
     const cRect = this.containerEl.getBoundingClientRect()
     const sRect = sc.getBoundingClientRect()
     const base = sc === this.containerEl ? 0 : cRect.top - sRect.top + sc.scrollTop
-    const target = Math.max(0, base + rowRealCenter - sc.clientHeight / 2)
+    // [t_1d124051] rowRealCenter 为未缩放虚拟坐标（fit 模式谱面经 transform
+    // 缩放，滚动容器的坐标是视觉/布局值）——× viewScale 折算后写入 scrollTop
+    const target = Math.max(0, base + rowRealCenter * this.viewScale - sc.clientHeight / 2)
     this.animateScrollTo(sc, target)
   }
 
@@ -676,8 +698,9 @@ export class OSMDScore {
     }
     this.markerGeom = {
       map,
-      offX: svgRect.left - cRect.left,
-      offY: svgRect.top - cRect.top,
+      // [t_1d124051] 视觉偏移 ÷ viewScale 归一成未缩放坐标（标记层/滚动换算共用）
+      offX: (svgRect.left - cRect.left) / this.viewScale,
+      offY: (svgRect.top - cRect.top) / this.viewScale,
       unitPx,
       hitRows,
       cursorStops: stopsDedup,
@@ -716,11 +739,16 @@ export class OSMDScore {
         const modRects = (gn.getModifierSVGs?.() ?? [])
           .map((el) => el.getBoundingClientRect())
           .filter((r) => r && (r.width > 0 || r.height > 0))
+        // [t_1d124051] DOM 实测为视觉坐标（= 未缩放 × viewScale），÷k 归一存储
         return {
-          left: Math.min(...headRects.map((r) => r.left), ...modRects.map((r) => r.left)) - svgRect.left,
-          right: Math.max(...headRects.map((r) => r.right), ...modRects.map((r) => r.right)) - svgRect.left,
-          ys: headRects.map((r) => r.top + r.height / 2 - svgRect.top),
-          hw: Math.max(...headRects.map((r) => r.width / 2)),
+          left:
+            (Math.min(...headRects.map((r) => r.left), ...modRects.map((r) => r.left)) - svgRect.left) /
+            this.viewScale,
+          right:
+            (Math.max(...headRects.map((r) => r.right), ...modRects.map((r) => r.right)) - svgRect.left) /
+            this.viewScale,
+          ys: headRects.map((r) => (r.top + r.height / 2 - svgRect.top) / this.viewScale),
+          hw: Math.max(...headRects.map((r) => r.width / 2)) / this.viewScale,
         }
       }
       // 几何回退：GraphicalNote 包络（OSMD bbox 含 accidental 时同样并入）
