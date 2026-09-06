@@ -12,7 +12,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-HOST=47.95.167.143
+HOST=syrinx-server   # ssh 别名（~/.ssh/config 已配 ed25519 免密；真机 IP 47.95.167.143）
 USER=root
 REMOTE_DIR=/var/www/syrinx
 STAMP=$(date +%Y%m%d-%H%M%S)
