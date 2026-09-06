@@ -1,0 +1,369 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Syrinx 演奏数据流",
+    "locale": "zh-CN",
+    "subtitle": "从 Song Pack 素材到音准反馈的完整数据链路",
+    "output": "docs/img/syrinx-dataflow-zh.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1068,
+      760
+    ],
+    "views": [
+      {
+        "id": "score-pipeline",
+        "label": "谱面链路",
+        "focus": [
+          "songpack",
+          "manifest",
+          "parser",
+          "timeline",
+          "osmd"
+        ],
+        "note": "MusicXML 如何变成可跟随的谱面时间轴。"
+      },
+      {
+        "id": "perform-loop",
+        "label": "演奏主循环",
+        "focus": [
+          "engine",
+          "osmd",
+          "bg",
+          "rec",
+          "yin"
+        ],
+        "note": "以 AudioContext 为主时钟的谱 / 音 / 背景三方同步。"
+      },
+      {
+        "id": "feedback-loop",
+        "label": "回放与反馈",
+        "focus": [
+          "rec",
+          "wav",
+          "result",
+          "playback"
+        ],
+        "note": "录音与实测音高如何汇成音准对比图表。"
+      }
+    ]
+  },
+  "stages": [
+    {
+      "label": "素材"
+    },
+    {
+      "label": "解析"
+    },
+    {
+      "label": "演奏"
+    },
+    {
+      "label": "采集"
+    },
+    {
+      "label": "反馈"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "songpack",
+      "type": "database",
+      "label": "Song Pack",
+      "sublabel": "songs/<id>/",
+      "stage": 0,
+      "row": 0,
+      "tag": "五件套",
+      "width": 128
+    },
+    {
+      "id": "manifest",
+      "type": "backend",
+      "label": "曲库清单",
+      "sublabel": "SONGS 注册表",
+      "stage": 0,
+      "row": 2,
+      "tag": "src/songs"
+    },
+    {
+      "id": "parser",
+      "type": "backend",
+      "label": "谱面解析",
+      "sublabel": "反复展开 · 换行剥离",
+      "stage": 1,
+      "row": 0,
+      "tag": "musicxml.ts"
+    },
+    {
+      "id": "timeline",
+      "type": "backend",
+      "label": "演奏时间轴",
+      "sublabel": "恒速 + beats 重映射",
+      "stage": 1,
+      "row": 2,
+      "tag": "anchors.ts"
+    },
+    {
+      "id": "osmd",
+      "type": "frontend",
+      "label": "谱面渲染",
+      "sublabel": "OSMD 光标逐音符",
+      "stage": 2,
+      "row": 0,
+      "tag": "rAF 直写 DOM"
+    },
+    {
+      "id": "engine",
+      "type": "backend",
+      "label": "主时钟引擎",
+      "sublabel": "AudioContext 唯一时钟",
+      "stage": 2,
+      "row": 2,
+      "tag": "<50ms 同步"
+    },
+    {
+      "id": "rec",
+      "type": "frontend",
+      "label": "演奏录音",
+      "sublabel": "AudioWorklet 直采",
+      "stage": 3,
+      "row": 0,
+      "tag": "PCM"
+    },
+    {
+      "id": "yin",
+      "type": "backend",
+      "label": "YIN 音高检测",
+      "sublabel": "累积均值 + 抛物线插值",
+      "stage": 3,
+      "row": 2,
+      "tag": "纯 TS · TDD"
+    },
+    {
+      "id": "bg",
+      "type": "frontend",
+      "label": "动态背景",
+      "sublabel": "three.js 音频呼吸",
+      "stage": 3,
+      "row": 4,
+      "tag": "audio-reactive"
+    },
+    {
+      "id": "wav",
+      "type": "database",
+      "label": "WAV 导出",
+      "sublabel": "录音 Blob",
+      "stage": 4,
+      "row": 0,
+      "tag": "回放音源"
+    },
+    {
+      "id": "result",
+      "type": "frontend",
+      "label": "音准图表",
+      "sublabel": "命中 / 偏音 / 漏音",
+      "stage": 4,
+      "row": 2,
+      "tag": "±50 音分"
+    },
+    {
+      "id": "playback",
+      "type": "frontend",
+      "label": "对照回放",
+      "sublabel": "录音 × 伴奏混音",
+      "stage": 4,
+      "row": 4,
+      "tag": "双音量滑杆"
+    }
+  ],
+  "flows": [
+    {
+      "id": "pack-to-parser",
+      "from": "songpack",
+      "to": "parser",
+      "label": "score.musicxml",
+      "classification": "谱面资产",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -20
+    },
+    {
+      "id": "pack-to-manifest",
+      "from": "songpack",
+      "to": "manifest",
+      "label": "资产挂载",
+      "classification": "注册",
+      "labelAt": [
+        100,
+        271
+      ]
+    },
+    {
+      "id": "manifest-to-parser",
+      "from": "manifest",
+      "to": "parser",
+      "label": "manifest.json",
+      "classification": "元数据",
+      "labelAt": [
+        207,
+        271
+      ]
+    },
+    {
+      "id": "parser-to-timeline",
+      "from": "parser",
+      "to": "timeline",
+      "label": "音符事件流",
+      "classification": "小节/拍/音符",
+      "variant": "emphasis",
+      "labelAt": [
+        315,
+        200
+      ]
+    },
+    {
+      "id": "manifest-to-timeline",
+      "from": "manifest",
+      "to": "timeline",
+      "label": "beats 锚点",
+      "classification": "对齐数据",
+      "route": "straight",
+      "labelAt": [
+        200,
+        440
+      ]
+    },
+    {
+      "id": "manifest-to-engine",
+      "from": "manifest",
+      "to": "engine",
+      "label": "accompaniment.mp3",
+      "classification": "音频资产",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          100,
+          480
+        ],
+        [
+          530,
+          480
+        ]
+      ],
+      "labelAt": [
+        315,
+        480
+      ]
+    },
+    {
+      "id": "timeline-to-osmd",
+      "from": "timeline",
+      "to": "osmd",
+      "label": "光标定位",
+      "classification": "逐音符",
+      "variant": "emphasis"
+    },
+    {
+      "id": "engine-to-osmd",
+      "from": "engine",
+      "to": "osmd",
+      "label": "当前播放时刻",
+      "classification": "rAF 每帧",
+      "labelAt": [
+        560,
+        500
+      ]
+    },
+    {
+      "id": "engine-to-rec",
+      "from": "engine",
+      "to": "rec",
+      "label": "起奏/停止指令",
+      "classification": "控制"
+    },
+    {
+      "id": "engine-to-bg",
+      "from": "engine",
+      "to": "bg",
+      "label": "低频能量",
+      "classification": "audio-reactive"
+    },
+    {
+      "id": "rec-to-yin",
+      "from": "rec",
+      "to": "yin",
+      "label": "PCM 帧",
+      "classification": "实时分析",
+      "variant": "emphasis",
+      "labelAt": [
+        745,
+        200
+      ]
+    },
+    {
+      "id": "yin-to-result",
+      "from": "yin",
+      "to": "result",
+      "label": "实测 × 目标对比",
+      "classification": "音准序列",
+      "variant": "emphasis"
+    },
+    {
+      "id": "rec-to-wav",
+      "from": "rec",
+      "to": "wav",
+      "label": "编码 WAV",
+      "classification": "导出"
+    },
+    {
+      "id": "wav-to-playback",
+      "from": "wav",
+      "to": "playback",
+      "label": "录音音源",
+      "classification": "回放",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          1100,
+          157
+        ],
+        [
+          1100,
+          613
+        ]
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "主数据链路",
+      "items": [
+        "Song Pack 五件套是一切数据源头，manifest 声明资产与主题色",
+        "谱面与伴奏锚点在解析阶段汇成同一条演奏时间轴",
+        "演奏期所有消费方共享 AudioContext 唯一时钟"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "性能红线",
+      "items": [
+        "光标驱动走 rAF 直写 DOM，不进响应式 store，避免重渲染抖动",
+        "录音与分析同源（AudioWorklet 直采），保证音准统计可信",
+        "谱 / 音 / 背景三方同步误差听感 < 50ms"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "反馈闭环",
+      "items": [
+        "YIN 实测音高 × 谱面目标音高 → 命中 / 偏音 / 漏音三态图表",
+        "录音 WAV 与伴奏可在回放页混音对照，双音量独立调节",
+        "每轮演奏结束即生成完整反馈，无需任何服务器"
+      ]
+    }
+  ]
+}

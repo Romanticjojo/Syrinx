@@ -102,6 +102,14 @@ Syrinx/
 └── resources/                  # 素材源（本地私有，不入库）
 ```
 
+## 🌊 演奏数据流
+
+从 Song Pack 素材到音准反馈，一条链路看懂全应用（交互版见 [syrinx-dataflow-zh.html](docs/img/syrinx-dataflow-zh.html)）：
+
+<p align="center">
+  <img src="docs/img/syrinx-dataflow-zh.png" alt="Syrinx 演奏数据流：Song Pack → 解析 → 演奏主循环 → 采集 → 反馈" width="100%"/>
+</p>
+
 ## 🎵 曲目接入（Song Pack）
 
 每首曲子一个素材包，放入 `app/public/songs/<song-id>/`：
@@ -161,9 +169,14 @@ A：同步以 `AudioContext.currentTime` 为唯一时钟；若使用外部伴奏
 
 ## 🤝 致谢
 
-- [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) — 浏览器 MusicXML 曲谱引擎
-- [three.js](https://threejs.org/) — 3D 背景与长笛模型
-- [Vite](https://vitejs.dev/) / [React](https://react.dev/) — 工程基座
+- **音乐与谱面**
+  - [Hans Zimmer](https://www.hanszimmer.com/) — 《Interstellar》主题曲原作
+  - **Ariana & Ella Piknjač** — Interstellar 长笛与钢琴改编谱（本仓库 Interstellar 演奏谱的谱面来源，MusicXML 经 Soundslice 自官方乐谱导出）
+- **开源库**（应用能力）
+  - [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) — 浏览器 MusicXML 曲谱渲染引擎
+  - [three.js](https://threejs.org/) — 3D 背景与长笛模型
+
+> 谱面 / 伴奏 / 封面等曲目素材（版权媒体）不随仓库分发，各曲目版权归其权利人所有；仓库内置曲目的演奏谱改编者见上方致谢。
 
 ---
 
