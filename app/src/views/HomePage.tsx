@@ -31,6 +31,14 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
   const videoRef = useRef<HTMLVideoElement>(null)
   // play() 被浏览器静默拒绝（首次挂载视频未就绪）时置位，canplay 后补播
   const pendingPlay = useRef(false)
+  // 触屏语境（无 hover）：挂载时判定一次（设备能力运行期不变）
+  const coarseTouch = useRef(
+    typeof window !== 'undefined' &&
+      window.matchMedia('(hover: none) and (pointer: coarse)').matches,
+  ).current
+  const cardRef = useRef<HTMLButtonElement>(null)
+  // 触屏自动预览只播一次的标记（滚动往返不反复拉流）
+  const touchPlayedRef = useRef(false)
 
   const stopPreview = () => {
     clearTimeout(timer.current)
@@ -71,9 +79,39 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
   }
   useEffect(() => () => clearTimeout(timer.current), [])
 
+  // 触屏自动预览（t_e031ae5d 方案 A）：卡片进视口自动播一次。播过即标记——
+  // 滚动往返不反复拉流；hoverPlayOnce 曲 loop=false 播完定格末帧（再次进视口
+  // 不重播，与桌面 hover 语义一致），其余曲播完暂停回封面；离开视口暂停。
+  // 桌面（hover:hover）不创建 observer，hover 行为零变化。
+  useEffect(() => {
+    if (!coarseTouch) return
+    const el = cardRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) {
+          if (en.isIntersecting) {
+            if (!touchPlayedRef.current) {
+              touchPlayedRef.current = true
+              startPreview()
+            }
+          } else {
+            stopPreview()
+          }
+        }
+      },
+      { threshold: 0.5 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+    // startPreview/stopPreview 稳定读 refs/state setter，依赖留空
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <button
       className="song-card"
+      ref={cardRef}
       onClick={onOpen}
       onMouseEnter={startPreview}
       onMouseLeave={stopPreview}
@@ -97,7 +135,11 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
             style={positionOf(song)}
           />
         )}
-        {/* 预览片段：静音自动播放（muted 满足 WebView 自动播放策略）；预热后隐藏保活 */}
+        {/* 预览片段：静音自动播放（muted 满足 WebView 自动播放策略）；预热后隐藏保活。
+            触屏自动预览是设备上唯一预览路径，非 once 曲也要「播完暂停回封面」：
+            loop 一并关闭 + ended 停播；once 曲（hoverPlayOnce/playOnce）ended 保持
+            末帧可见（定格），离开视口才隐藏——与桌面「hover 定格/移开回封面」语义
+            一致（桌面 hover 路径零变化，非 once 曲保持循环） */}
         {warmed && (song.hoverVideoUrl ?? song.backgroundVideoUrl) && (
           <video
             ref={videoRef}
@@ -105,10 +147,11 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
             style={{ visibility: previewing ? 'visible' : 'hidden' }}
             src={assetUrl(song.hoverVideoUrl ?? song.backgroundVideoUrl ?? '')}
             muted
-            loop={!(song.playOnce || song.hoverPlayOnce)}
+            loop={!(coarseTouch || song.playOnce || song.hoverPlayOnce)}
             playsInline
             autoPlay
             onCanPlay={handleCanPlay}
+            onEnded={coarseTouch && !(song.playOnce || song.hoverPlayOnce) ? stopPreview : undefined}
             aria-hidden="true"
           />
         )}

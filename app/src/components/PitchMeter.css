@@ -95,3 +95,27 @@
 .pitch-meter.off {
   border-color: color-mix(in srgb, var(--rec) 45%, transparent);
 }
+
+/* ---------- 手机端（<640px）：悬浮改流内，谱面零遮挡（t_e031ae5d Bug1） ---------- */
+/* 390px 实测悬浮条横向盖住谱面右 2/3（pm x:102 w:264 vs 谱面容器 y:55 全宽）。
+   .perform 是 flex column，本元素 DOM 序在进度轨与控制条之间——static 化后
+   谱面舞台 flex:1 自动收缩让位，任何视口宽下与谱面可见区布局级零交集。 */
+@media (max-width: 639.98px) {
+  .pitch-meter {
+    position: static;
+    align-self: center;
+    margin: 2px 16px 4px;
+  }
+}
+
+/* 超窄屏（<360px）：内容实测 261.6px，320px 视口可用仅 258px——量规与间距
+   紧凑一档（配色语义与桌面完全一致，仅几何收缩） */
+@media (max-width: 359.98px) {
+  .pitch-meter {
+    gap: 8px;
+    padding: 6px 10px;
+  }
+  .pm-gauge {
+    width: 112px;
+  }
+}

@@ -391,6 +391,12 @@
 .score-section .sheet-container {
   width: min(1280px, 100%);
   margin-inline: auto;
+  /* 预览页谱面容器不是滚动容器（无高度约束、整体平铺在页面流里）：自身无可
+     滚溢出，ScoreSheet.css 的 overscroll-behavior:contain 会在触摸滚动时按
+     「已到边界」把滚动链掐断——手势进不了容器也传不到文档，页面纹丝不动
+     （t_e031ae5d Bug2）。恢复 auto 让触摸/滚轮手势冒泡给整页；演奏页
+     .sheet-container 是真滚动容器，contain 语义保持不变（滚谱到头不带跑整页） */
+  overscroll-behavior: auto;
 }
 /* 曲谱版本切换（t_7518c69e）：沿用演奏页 .ctl.cursor-mode 的分段控件语言——
    半透明胶囊容器（control-bar 同款底/描边/模糊）+ 12px 文字段，选中段亮 accent */
