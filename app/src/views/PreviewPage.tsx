@@ -52,6 +52,14 @@ export default function PreviewPage() {
     setPianoError(null)
   }
 
+  // 进入/切曲即回顶（t_e031ae5d Bug3）：滚动器是 document（.preview 自身无
+  // 约束不滚），组件复用不 remount——底部 more-card 切曲、首页长滚进详情都
+  // 带着旧 scrollTop（长→短谱曲视觉即「贴底」）。谱面异步加载期间无人改写
+  // scrollTop，归零后保持为 0。
+  useEffect(() => {
+    document.scrollingElement?.scrollTo(0, 0)
+  }, [song.id])
+
   // 加载曲谱与时间轴（预览用静态渲染）
   useEffect(() => {
     let alive = true
