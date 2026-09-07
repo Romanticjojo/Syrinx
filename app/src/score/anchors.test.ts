@@ -194,10 +194,11 @@ describe('applyBeats 伴奏锚点重写', () => {
     const beats = JSON.parse(
       readFileSync('public/songs/luv-letter/beats.json', 'utf-8'),
     ) as BeatsFile
-    // v6：97 小节锚点不变 + 音符级控制点（~600：谐波通量+音高门控吸附 + 段落边界）
-    expect(beats.version).toBe(6)
+    // v7（2026-09-08）：Lumière 钢琴母谱自造时间轴——恒速段 85/100/85（谱面速度标记），
+    // 音频与 beats 同源合成（D:/LLM_work/luv-piano-acc/work/build_v2.py），零漂移。
+    expect(beats.version).toBe(7)
     expect(beats.anchors).toHaveLength(97)
-    expect(beats.beatAnchors!.length).toBeGreaterThan(500)
+    expect(beats.beatAnchors!.length).toBeGreaterThan(300)
     const ts = beats.anchors.map((a) => a.t)
     expect(ts[0]).toBeGreaterThanOrEqual(0)
     for (const [i, t] of ts.entries()) {
@@ -216,7 +217,7 @@ describe('applyBeats 伴奏锚点重写', () => {
 
     const pre = parseMusicXml(expandRepeats(raw))
     const out = applyBeats(pre, beats)
-    expect(out.tempo).toBe(90)
+    expect(out.tempo).toBe(100) // v7 自造时间轴名义 bpm（Moderato 段）
     expect(out.measureTimes).toHaveLength(98) // 97 播放小节 + 终点标记
     expect(out.measureTimes[0].time).toBeCloseTo(beats.anchors[0].t, 2)
     expect(out.measureTimes[96].time).toBeCloseTo(beats.anchors[96].t, 2)
@@ -241,13 +242,7 @@ describe('applyBeats 伴奏锚点重写', () => {
       const b = ba[Math.min(lo + 1, ba.length - 1)]
       return a.t + ((b.t - a.t) * (q - a.q)) / Math.max(b.q - a.q, 1e-9)
     }
-    // 小节级等分基准（v3 语义）：用于确认拍级路径确实生效
-    const q2tMeasure = (q: number): number => {
-      const pi = Math.min(Math.floor(q / 4), 96)
-      const t0 = ts[pi]
-      const t1 = pi + 1 < 97 ? ts[pi + 1] : beats.end!
-      return t0 + ((t1 - t0) * (q - 4 * pi)) / 4
-    }
+    // v7 恒速段时间轴下拍级/小节级插值数学重合，小节级基准已无鉴别力，删除；
 
     // 抽样 10 音：m1 首音、7 个散点小节首音、m70 全音符（播放序 92 最长音）、m97 终音
     const indexByMeasure = new Map<number, number>()
@@ -291,12 +286,19 @@ describe('applyBeats 伴奏锚点重写', () => {
         `m${pre.notes[i].measure}#i${i} q=${noteQOf(i)}`,
       ).toBeLessThan(0.05)
     }
-    // 拍级路径确实生效：全曲至少一音明显偏离小节级等分（>0.05s）
-    let maxDelta = 0
-    for (let i = 0; i < pre.notes.length; i++) {
-      maxDelta = Math.max(maxDelta, Math.abs(out.notes[i].time - q2tMeasure(noteQOf(i))))
-    }
-    expect(maxDelta, '拍级 vs 小节级最大偏差').toBeGreaterThan(0.05)
+    // v7 恒速段时间轴：拍级与小节级插值在段内数学重合（无 rubato），改用
+    // 速度段结构钉子——各段 inter-anchor 时长必须精确等于 4q×段速度：
+    //   m1-8 @85（fm8 拉伸 8q）、m9-88 @100、m89-97 @85（fm97 拉伸 8q）
+    const D85 = 4 * 60 / 85.0002
+    const D100 = 4 * 60 / 100
+    const closeTo = (a: number, b: number, eps: number) =>
+      expect(Math.abs(a - b)).toBeLessThan(eps)
+    for (let i = 1; i <= 7; i++) closeTo(ts[i] - ts[i - 1], D85, 0.01)
+    closeTo(ts[8] - ts[7], 2 * D85, 0.01) // fm8 = pm8+pm9 拉伸 8q
+    for (let i = 9; i <= 87; i++) closeTo(ts[i] - ts[i - 1], D100, 0.01)
+    for (let i = 89; i <= 96; i++) closeTo(ts[i] - ts[i - 1], D85, 0.01)
+    // 终点：fm97 拉伸 8q @85
+    closeTo(beats.end! - ts[96], 2 * D85, 0.01)
 
     // 变速段钉子：q 换算必须用局部速率——若有人改回全局 secPerQuarter 直算，
     // 86 段小节内音符的落点会整体偏移，此处断言立即失败
