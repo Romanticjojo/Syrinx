@@ -285,7 +285,7 @@ def glyph_count(page: Page) -> int:
 
 def run_bug4(page: Page, base: str, shots: Path) -> None:
     page.set_viewport_size({"width": 390, "height": 844})
-    entry_preview(page, base, "Expedition 33")
+    entry_preview(page, base, "Lumière")
     page.wait_for_selector(".sheet-container svg", timeout=30000)
     if not check(
         page.locator(".score-switch").count() == 1,
@@ -341,12 +341,12 @@ def run_bug5(page: Page, base: str, shots: Path) -> None:
     check(state in ("playing", "ended"), "bug5: 触屏卡片进视口自动播放", f"video={state}")
     shot(tp, shots, "bug5_touch_autoplay")
     # hoverPlayOnce 定格：exp33 卡播完 ended 后 currentTime 不变
-    card_e33 = tp.locator(".song-card[title^='Expedition 33']")
+    card_e33 = tp.locator(".song-card[title^='Lumière']")
     card_e33.scroll_into_view_if_needed()
     try:
         tp.wait_for_function(
             """() => {
-            const c = document.querySelector(".song-card[title^='Expedition 33']");
+            const c = document.querySelector(".song-card[title^='Lumière']");
             const v = c && c.querySelector('.art-preview');
             return v && v.ended;
         }""",
