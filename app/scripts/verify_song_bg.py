@@ -10,7 +10,7 @@ perform-bg-blur 模糊垫底层（cover+blur46px），主视频不留纯色垫�
 用法: python verify_song_bg.py <port> <song-slug> <SongTitle>
 覆盖曲目: python verify_song_bg.py <port> luv-letter "Luv Letter"  (回归 loop)
           python verify_song_bg.py <port> flower-dance "Flower Dance"  (loop 新曲)
-          python verify_song_bg.py <port> expedition-33 "Expedition 33"  (playOnce)
+          python verify_song_bg.py <port> expedition-33 "Lumière"  (playOnce)
 前置: dev server 已起；Chromium 走 %LOCALAPPDATA%/ms-playwright。
 """
 import json
