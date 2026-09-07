@@ -76,7 +76,7 @@ with sync_playwright() as p:
     check("右箭头→Interstellar", hero_title(page) == "Interstellar", hero_title(page))
     safe_click(page.locator(".home-hero .hero-arrow.next"))
     page.wait_for_timeout(FADE_WAIT)
-    check("再右→Expedition 33", hero_title(page) == "Expedition 33", hero_title(page))
+    check("再右→Lumière", hero_title(page) == "Lumière", hero_title(page))
     c2 = dot_color(page, 2)
     check("expedition 当前点点亮(#b9a0d8)", c2 == "rgb(185, 160, 216)", c2)
     safe_click(page.locator(".home-hero .hero-arrow.next"))
@@ -87,7 +87,7 @@ with sync_playwright() as p:
     # ---- 3) 左箭头反向循环：luv → expedition ----
     safe_click(page.locator(".home-hero .hero-arrow.prev"))
     page.wait_for_timeout(FADE_WAIT)
-    check("首张再左反向循环→Expedition 33", hero_title(page) == "Expedition 33", hero_title(page))
+    check("首张再左反向循环→Lumière", hero_title(page) == "Lumière", hero_title(page))
 
     # ---- 4) 指示点直达 ----
     safe_click(page.locator(".home-hero .hero-dot").nth(1))
@@ -102,7 +102,7 @@ with sync_playwright() as p:
     page.focus(".home-hero")
     page.keyboard.press("ArrowRight")
     page.wait_for_timeout(FADE_WAIT)
-    check("键盘 → 切到 Expedition 33", hero_title(page) == "Expedition 33", hero_title(page))
+    check("键盘 → 切到 Lumière", hero_title(page) == "Lumière", hero_title(page))
     page.keyboard.press("ArrowLeft")
     page.wait_for_timeout(FADE_WAIT)
     check("键盘 ← 切回 Interstellar", hero_title(page) == "Interstellar", hero_title(page))
