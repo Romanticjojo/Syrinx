@@ -95,7 +95,7 @@ describe('SongCard 触屏自动预览（t_e031ae5d）', () => {
     expect(v!.style.visibility).toBe('visible')
   })
 
-  it('触屏语境：只自动播一次；离开视口暂停回封面；滚动往返不重播', async () => {
+  it('触屏语境：离开视口暂停回封面；再进视口恢复播放（9/8 二轮循环语义）', async () => {
     const container = await mountHome(true)
     act(() => {
       fireAll(true)
@@ -103,20 +103,21 @@ describe('SongCard 触屏自动预览（t_e031ae5d）', () => {
     await act(async () => {
       vi.advanceTimersByTime(250)
     })
+    const v = container.querySelector<HTMLVideoElement>('.art-preview')!
+    expect(v.style.visibility).toBe('visible')
+
     act(() => {
       fireAll(false) // 离开视口 → 暂停回封面（video 预热保活，可见性回隐藏）
     })
-    const v = container.querySelector<HTMLVideoElement>('.art-preview')
     expect(v).not.toBeNull() // warmed 保活不卸载
-    expect(v!.style.visibility).toBe('hidden')
+    expect(v.style.visibility).toBe('hidden')
 
-    act(() => {
-      fireAll(true) // 再次进视口：播过即标记，不重播
-    })
     await act(async () => {
+      fireAll(true) // 再次进视口：循环语义下恢复播放（旧「只播一次」闸已删）
       vi.advanceTimersByTime(300)
     })
-    expect(v!.style.visibility).toBe('hidden')
+    expect(v.style.visibility).toBe('visible')
+    expect(v.loop).toBe(true) // 非 once 曲触屏一律循环（用户钦定 9/8）
   })
 
   it('桌面语境：observer 不创建，hover 预览行为保持原样', async () => {
@@ -135,7 +136,7 @@ describe('SongCard 触屏自动预览（t_e031ae5d）', () => {
     expect(v!.style.visibility).toBe('visible')
   })
 
-  it('触屏语境：hoverPlayOnce/playOnce 曲 ended 定格末帧可见，非 once 曲 ended 回封面', async () => {
+  it('触屏语境：hoverPlayOnce/playOnce 曲 ended 定格末帧可见，非 once 曲 loop 循环（9/8 二轮）', async () => {
     const container = await mountHome(true)
     act(() => {
       fireAll(true)
@@ -143,7 +144,7 @@ describe('SongCard 触屏自动预览（t_e031ae5d）', () => {
     await act(async () => {
       vi.advanceTimersByTime(250) // 全部卡片越过 PREVIEW_DELAY_MS，视频挂载
     })
-    // 卡片与 SONGS 顺序一一对应；只挑有预览视频的曲做 ended 对照
+    // 卡片与 SONGS 顺序一一对应；只挑有预览视频的曲做 ended/loop 对照
     const playable = SONGS.filter((s) => s.hoverVideoUrl || s.backgroundVideoUrl)
     const once = playable.find((s) => s.playOnce || s.hoverPlayOnce)
     const loop = playable.find((s) => !s.playOnce && !s.hoverPlayOnce)
@@ -152,12 +153,17 @@ describe('SongCard 触屏自动预览（t_e031ae5d）', () => {
     const cards = Array.from(container.querySelectorAll<HTMLButtonElement>('.song-card'))
     const vOnce = cards[SONGS.indexOf(once!)].querySelector<HTMLVideoElement>('.art-preview')!
     const vLoop = cards[SONGS.indexOf(loop!)].querySelector<HTMLVideoElement>('.art-preview')!
+    // 循环语义（用户钦定 9/8）：非 once 曲 loop=true 原生循环，ended 不会发生；
+    // once 曲 loop=false 播完 ended 定格末帧
+    expect(vOnce.loop).toBe(false)
+    expect(vLoop.loop).toBe(true)
     act(() => {
-      // 媒体事件不冒泡、React 直接在元素上挂监听——派发 ended 触发 onEnded
+      // 媒体事件不冒泡、React 直接在元素上挂监听——派发 ended 触发 onEnded（once 曲仍无监听，
+      // 派发只为验证「无 onEnded 停播」——定格曲 visibility 由 previewing 态保持）
       vOnce.dispatchEvent(new Event('ended'))
       vLoop.dispatchEvent(new Event('ended'))
     })
     expect(vOnce.style.visibility).toBe('visible') // 定格曲：末帧保持可见
-    expect(vLoop.style.visibility).toBe('hidden') // 循环曲：播完暂停回封面
+    expect(vLoop.style.visibility).toBe('visible') // 循环曲：ended 后仍在播放态（循环无停播）
   })
 })

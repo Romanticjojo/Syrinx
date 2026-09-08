@@ -96,11 +96,14 @@
   border-color: color-mix(in srgb, var(--rec) 45%, transparent);
 }
 
-/* ---------- 手机端（<640px）：悬浮改流内，谱面零遮挡（t_e031ae5d Bug1） ---------- */
+/* ---------- 触屏设备：悬浮改流内，谱面零遮挡（t_e031ae5d Bug1） ---------- */
 /* 390px 实测悬浮条横向盖住谱面右 2/3（pm x:102 w:264 vs 谱面容器 y:55 全宽）。
    .perform 是 flex column，本元素 DOM 序在进度轨与控制条之间——static 化后
-   谱面舞台 flex:1 自动收缩让位，任何视口宽下与谱面可见区布局级零交集。 */
-@media (max-width: 639.98px) {
+   谱面舞台 flex:1 自动收缩让位，任何视口宽下与谱面可见区布局级零交集。
+   9/8 二轮：断点由 max-width 改按输入方式判定——折叠屏展开（vivo X Fold3 /
+   Find N6 ~910px）落不进 640px 宽度档，仍走桌面悬浮档盖谱（用户实测报障）；
+   触屏判定不依赖宽度，折叠屏开合/旋转全态覆盖。窄桌面窗口保留宽度兜底。 */
+@media (max-width: 639.98px), (hover: none) and (pointer: coarse) {
   .pitch-meter {
     position: static;
     align-self: center;
