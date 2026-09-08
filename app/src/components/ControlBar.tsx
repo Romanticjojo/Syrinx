@@ -1,4 +1,3 @@
-import type { CursorMode } from '../types'
 import './ControlBar.css'
 
 interface Props {
@@ -9,9 +8,6 @@ interface Props {
   /** 录音采集开关状态（只控采集，实时音准反馈不受其影响） */
   recOn: boolean
   volume: number
-  /** 光标数据源与切换回调（PlanB T2）：传了才渲染切换按钮（曲谱两种数据源能力齐备时才显示） */
-  cursorMode?: CursorMode
-  onCursorModeToggle?: () => void
   onToggle: () => void
   onRecToggle: () => void
   onRestart: () => void
@@ -28,8 +24,6 @@ export default function ControlBar({
   active,
   recOn,
   volume,
-  cursorMode,
-  onCursorModeToggle,
   onToggle,
   onRecToggle,
   onRestart,
@@ -89,19 +83,6 @@ export default function ControlBar({
 
       {/* 运输组（▶/rec/↺/■）与音量+✕ 分组：分隔线防 ✕ 被误认成停止（t_c10d648d） */}
       <span className="ctl-sep" aria-hidden="true" />
-
-      {/* 光标数据源切换（PlanB T2）：锚点 = 伴奏对齐（缺省），谱面 = 确定性时值换算。
-          谱面模式亮 accent 提示已离开伴奏锚点 */}
-      {onCursorModeToggle && (
-        <button
-          className={`ctl cursor-mode${cursorMode === 'score' ? ' on' : ''}`}
-          onClick={onCursorModeToggle}
-          aria-label={`光标数据源：${cursorMode === 'score' ? '谱面' : '锚点'}，点击切换`}
-          title="光标数据源：锚点（伴奏对齐）/ 谱面（确定性时值换算）"
-        >
-          光标：{cursorMode === 'score' ? '谱面' : '锚点'}
-        </button>
-      )}
 
       <label className="ctl-volume" aria-label="伴奏音量">
         <span className="vol-icon">♪</span>

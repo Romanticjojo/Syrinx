@@ -475,3 +475,31 @@ video.perform-bg-cover {
     object-fit: cover;
   }
 }
+
+/* ---------- 触屏设备：顶栏两行布局 + 控制区安全间距（9/8 二轮，折叠屏/手机） ----------
+   输入方式判定（同 PitchMeter/ControlBar 的触屏档）：折叠屏展开 ~910px 落不进
+   640px 宽度档。顶栏单行塞「返回+歌名+小节+时间」在小屏过于紧凑（用户实测）：
+   换行为两行——上行歌名左/统计右，下行谱面让出的空间归谱面。控制区底部
+   预留 iOS/Android 手势区（env(safe-area-inset-bottom)），时间数字不贴屏底。 */
+@media (hover: none) and (pointer: coarse) {
+  .hud-top {
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 10px 14px 8px;
+  }
+  .hud-song {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .hud-stats {
+    flex: none;
+    gap: 16px;
+  }
+  .hud-song-text span {
+    display: block; /* 覆写 640px 档的 display:none：两行布局有空间放回作者行 */
+  }
+  .hud-bottom {
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+}
+

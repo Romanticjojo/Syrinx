@@ -37,8 +37,6 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
       window.matchMedia('(hover: none) and (pointer: coarse)').matches,
   ).current
   const cardRef = useRef<HTMLButtonElement>(null)
-  // 触屏自动预览只播一次的标记（滚动往返不反复拉流）
-  const touchPlayedRef = useRef(false)
 
   const stopPreview = () => {
     clearTimeout(timer.current)
@@ -79,9 +77,11 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
   }
   useEffect(() => () => clearTimeout(timer.current), [])
 
-  // 触屏自动预览（t_e031ae5d 方案 A）：卡片进视口自动播一次。播过即标记——
-  // 滚动往返不反复拉流；hoverPlayOnce 曲 loop=false 播完定格末帧（再次进视口
-  // 不重播，与桌面 hover 语义一致），其余曲播完暂停回封面；离开视口暂停。
+  // 触屏自动预览（t_e031ae5d 方案 A → 9/8 二轮改循环）：卡片进视口自动开播。
+  // 9/8 用户钦定「播放一次就停了，能做成循环的吗」——触屏路径与非 once 曲一律
+  // loop 循环（loop 属性原生循环，无 ended）；once 曲（hoverPlayOnce/playOnce）
+  // 保持定格语义：播完 ended 保持末帧可见，与桌面 hover 语义一致。离开视口暂停
+  // 回封面、再进视口恢复播放（含 once 曲外的所有曲——循环语义下恢复而非重播）。
   // 桌面（hover:hover）不创建 observer，hover 行为零变化。
   useEffect(() => {
     if (!coarseTouch) return
@@ -91,10 +91,7 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
       (entries) => {
         for (const en of entries) {
           if (en.isIntersecting) {
-            if (!touchPlayedRef.current) {
-              touchPlayedRef.current = true
-              startPreview()
-            }
+            startPreview()
           } else {
             stopPreview()
           }
@@ -136,10 +133,10 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
           />
         )}
         {/* 预览片段：静音自动播放（muted 满足 WebView 自动播放策略）；预热后隐藏保活。
-            触屏自动预览是设备上唯一预览路径，非 once 曲也要「播完暂停回封面」：
-            loop 一并关闭 + ended 停播；once 曲（hoverPlayOnce/playOnce）ended 保持
-            末帧可见（定格），离开视口才隐藏——与桌面「hover 定格/移开回封面」语义
-            一致（桌面 hover 路径零变化，非 once 曲保持循环） */}
+            触屏（9/8 二轮用户钦定循环）：与非 once 曲一律 loop 循环，无 ended 事件；
+            once 曲（hoverPlayOnce/playOnce）loop=false 播完 ended 定格末帧可见，
+            离开视口才隐藏——与桌面「hover 定格/移开回封面」语义一致。
+            桌面 hover 路径零变化：非 once 曲保持循环。 */}
         {warmed && (song.hoverVideoUrl ?? song.backgroundVideoUrl) && (
           <video
             ref={videoRef}
@@ -147,11 +144,10 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
             style={{ visibility: previewing ? 'visible' : 'hidden' }}
             src={assetUrl(song.hoverVideoUrl ?? song.backgroundVideoUrl ?? '')}
             muted
-            loop={!(coarseTouch || song.playOnce || song.hoverPlayOnce)}
+            loop={!(song.playOnce || song.hoverPlayOnce)}
             playsInline
             autoPlay
             onCanPlay={handleCanPlay}
-            onEnded={coarseTouch && !(song.playOnce || song.hoverPlayOnce) ? stopPreview : undefined}
             aria-hidden="true"
           />
         )}

@@ -83,21 +83,9 @@
 .ctl.exit:hover {
   color: var(--rec);
 }
-/* 光标数据源切换（PlanB T2）：文字小按钮；谱面模式亮 accent 提示已离开伴奏锚点 */
-.ctl.cursor-mode {
-  width: auto;
-  min-width: 40px;
-  padding: 0 12px;
-  font-size: 12px;
-  white-space: nowrap;
-}
-/* 鼠标点击后 UA 焦点圈（椭圆边框）驻留按钮上：去掉，键盘焦点圈保留（a11y） */
-.ctl.cursor-mode:focus:not(:focus-visible) {
-  outline: none;
-}
-.ctl.cursor-mode.on {
-  color: var(--song-accent, var(--accent));
-}
+/* 光标数据源切换按钮已删（9/8 用户钦定）：loadSong 的 cursorMode 能力保留给
+   T3 评估脚本（运行时覆盖），UI 入口移除。预览页 .score-switch 沿用本文件原
+   .ctl.cursor-mode 的分段控件语言，样式自含不受影响。 */
 /* 运输组与音量/✕ 的视觉分隔：细竖线把「停止」和「退出」隔开不同分组，
    降低 ✕ 被误认成停止键的概率（t_c10d648d） */
 .ctl-sep {
@@ -125,5 +113,36 @@
 @media (max-width: 640px) {
   .ctl-volume input[type='range'] {
     width: 56px;
+  }
+}
+
+/* 触屏紧凑档（含折叠屏展开 ~910px，输入方式判定同 PitchMeter.css 的流内档）：
+   控制条自然宽 ~530px，360px 视口截断溢出——按钮 40→34px、音量条 90→44px、
+   间距收紧（9/8 用户实测「底部进度条、按钮等显示不全，没有等比例缩放」）。
+   桌面 hover 设备保持胶囊不缩。 */
+@media (hover: none) and (pointer: coarse) {
+  .control-bar {
+    gap: 6px;
+    padding: 8px 10px;
+    max-width: calc(100vw - 24px);
+  }
+  .ctl {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
+  }
+  .ctl.rec {
+    min-width: 34px;
+    padding: 0 8px;
+  }
+  .ctl-sep {
+    margin: 0;
+  }
+  .ctl-volume {
+    gap: 5px;
+    padding: 0 2px;
+  }
+  .ctl-volume input[type='range'] {
+    width: 44px;
   }
 }
