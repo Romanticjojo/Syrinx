@@ -24,6 +24,8 @@ const IN_TUNE_CENTS = 50
 
 /** 平滑窗口：最近 N 次有效检测取中位数 */
 const SMOOTH_N = 3
+/** 连续无检测达到平滑窗长度后，旧值不再可信。 */
+const STALE_AFTER_MISSES = SMOOTH_N
 
 export const midiToHz = (midi: number): number => 440 * Math.pow(2, (midi - 69) / 12)
 
@@ -36,12 +38,17 @@ export function midiToNoteName(midi: number): string {
 export class LivePitchTracker {
   /** 最近有效检测频率（新进前出），取中位数做显示平滑 */
   private recent: number[] = []
+  private consecutiveMisses = 0
 
   /** 每帧更新：hz=null（静音/检测失败）与 note=null（休止）都如实透传 */
   update(hz: number | null, note: NoteEvent | null): LiveFeedback {
     if (hz !== null) {
+      this.consecutiveMisses = 0
       this.recent.unshift(hz)
       if (this.recent.length > SMOOTH_N) this.recent.length = SMOOTH_N
+    } else {
+      this.consecutiveMisses += 1
+      if (this.consecutiveMisses >= STALE_AFTER_MISSES) this.recent = []
     }
     const smoothHz = this.median()
     if (note === null || smoothHz === null) {
@@ -54,6 +61,7 @@ export class LivePitchTracker {
   /** 换段（回开头重录）时清空平滑窗，避免跨段污染 */
   reset(): void {
     this.recent = []
+    this.consecutiveMisses = 0
   }
 
   private median(): number | null {

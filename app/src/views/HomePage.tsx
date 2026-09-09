@@ -5,6 +5,7 @@ import { DIFFICULTY_LABEL, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import type { SongManifest } from '../types'
 import { useAppStore } from '../store'
+import { syncTunePath } from '../synctune/route'
 import './HomePage.css'
 
 /** 封面占位：由曲目主题色生成的渐变（正式封面由 Song Pack 提供 cover 字段） */
@@ -193,19 +194,26 @@ export default function HomePage() {
       </header>
 
       {/* 首发英雄位：三曲 Netflix 式轮播，点击任意广告页进入预览 */}
-      <HeroCarousel onOpen={(song) => go('preview', song.id)} />
+      {featured && <HeroCarousel onOpen={(song) => go('preview', song.id)} />}
 
       <section className="home-section">
         <h3>曲库</h3>
-        <div className="song-grid">
-          {SONGS.map((s) => (
-            <SongCard key={s.id} song={s} onOpen={() => go('preview', s.id)} />
-          ))}
-        </div>
+        {SONGS.length > 0 ? (
+          <div className="song-grid">
+            {SONGS.map((s) => (
+              <SongCard key={s.id} song={s} onOpen={() => go('preview', s.id)} />
+            ))}
+          </div>
+        ) : (
+          <div className="catalog-empty" role="status">
+            <b>当前没有可用曲目</b>
+            <span>这个版本尚未包含所选曲目，请检查曲目配置或稍后重试。</span>
+          </div>
+        )}
       </section>
       {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
-      {showSyncTune && (
-        <a className="debug-link" href={`/sync-tune/${featured.id}`}>
+      {showSyncTune && featured && (
+        <a className="debug-link" href={syncTunePath(featured.id)}>
           同步调试（beats 微调）
         </a>
       )}

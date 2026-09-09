@@ -6,7 +6,7 @@ import { OSMDScore } from '../score/OSMDScore'
 import { expandRepeats, parseMusicXml } from '../score/musicxml'
 import { assetUrl } from '../lib/assetUrl'
 import { getSong, SONGS } from '../songs'
-import { resolveSyncRoute, syncTunePath } from '../synctune/route'
+import { resolveSyncRoute, syncTunePath, syncTuneHomePath } from '../synctune/route'
 import SongSwitcher from './SongSwitcher'
 import {
   buildBeatsExport,
@@ -997,7 +997,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
   //  退到非 /sync-tune 路径时不动作（本页独立渲染树，无 App 可回）
   useEffect(() => {
     const onPop = () => {
-      const r = resolveSyncRoute(window.location.pathname)
+      const r = resolveSyncRoute(window.location.pathname, window.location.search)
       if (r) setCurrentId(r.songId)
     }
     window.addEventListener('popstate', onPop)
@@ -1119,7 +1119,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     <div className="st-page" style={{ '--song-accent': accent } as React.CSSProperties}>
       <div className="st-topwrap">
         <header className="st-topbar">
-        <a className="st-back" href="/">
+        <a className="st-back" href={syncTuneHomePath()}>
           ← 返回
         </a>
         {/* 歌曲切换器（R3）：全曲库下拉（无 beats 的曲在列但禁用），选中即重跑装配 */}

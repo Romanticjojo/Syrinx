@@ -167,3 +167,67 @@ describe('state getter', () => {
     expect(engine.state).toBe('running')
   })
 })
+
+describe('pending playback lifecycle', () => {
+  async function pendingEngine() {
+    const { ctx, sources } = makeCtx()
+    let resume!: () => void
+    const resumed = new Promise<void>((resolve) => { resume = resolve })
+    ctx.resume.mockImplementation(async () => { await resumed; ctx.state = 'running' })
+    const engine = await freshEngine(ctx)
+    await engine.load(BUF)
+    return { engine, sources, resume }
+  }
+
+  it('pause cancels playback waiting for browser audio permission', async () => {
+    const { engine, sources, resume } = await pendingEngine()
+    const started = engine.play(2)
+    engine.pause()
+    resume()
+    expect(await started).toBe(false)
+    expect(sources).toHaveLength(0)
+    expect(engine.playing).toBe(false)
+  })
+
+  it('loading another song cannot start it from a previous pending play', async () => {
+    const { engine, sources, resume } = await pendingEngine()
+    const started = engine.play(2)
+    await engine.load({ duration: 9 } as AudioBuffer)
+    resume()
+    expect(await started).toBe(false)
+    expect(sources).toHaveLength(0)
+    expect(engine.time).toBe(0)
+    expect(engine.duration).toBe(9)
+  })
+
+  it('a seek while waiting leaves the transport paused at the requested time', async () => {
+    const { engine, sources, resume } = await pendingEngine()
+    const started = engine.play(2)
+    engine.seek(4)
+    resume()
+    expect(await started).toBe(false)
+    expect(sources).toHaveLength(0)
+    expect(engine.time).toBe(4)
+  })
+
+  it('two pending starts create only the latest audio source', async () => {
+    const { engine, sources, resume } = await pendingEngine()
+    const first = engine.play(1)
+    const latest = engine.play(3)
+    resume()
+    expect(await first).toBe(false)
+    expect(await latest).toBe(true)
+    expect(sources).toHaveLength(1)
+    expect(sources[0].start).toHaveBeenCalledWith(0, 3)
+    engine.pause()
+  })
+
+  it('does not claim playback when resume resolves without restoring audio', async () => {
+    const { ctx, sources } = makeCtx()
+    ctx.resume.mockImplementation(async () => {})
+    const engine = await freshEngine(ctx)
+    await engine.load(BUF)
+    expect(await engine.play()).toBe(false)
+    expect(sources).toHaveLength(0)
+  })
+})

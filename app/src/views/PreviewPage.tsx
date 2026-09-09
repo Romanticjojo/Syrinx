@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import ScoreSheet from '../components/ScoreSheet'
+import { cancelPendingAccompaniment, preloadAccompaniment } from '../audio/accompaniment'
 import { DIFFICULTY_LABEL, getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import { expandRepeats, stripForcedBreaks } from '../score/musicxml'
@@ -39,6 +40,9 @@ export default function PreviewPage() {
   const [scoreKind, setScoreKind] = useState<ScoreKind>('flute')
   const [pianoXml, setPianoXml] = useState<string | null>(null)
   const [pianoError, setPianoError] = useState<string | null>(null)
+  const [accompanimentState, setAccompanimentState] = useState<'waiting' | 'loading' | 'ready' | 'synthesized' | 'error'>('waiting')
+  const [preloadAttempt, setPreloadAttempt] = useState(0)
+  const handoffToPerformRef = useRef(false)
   // 切曲时重置加载状态（渲染期间调整状态，避免 effect 内 setState 级联渲染）
   const [lastSongId, setLastSongId] = useState(song.id)
   const bgVideoRef = useRef<HTMLVideoElement>(null)
@@ -50,6 +54,8 @@ export default function PreviewPage() {
     setScoreKind('flute')
     setPianoXml(null)
     setPianoError(null)
+    setAccompanimentState('waiting')
+    setPreloadAttempt(0)
   }
 
   // 进入/切曲即回顶（t_e031ae5d Bug3）：滚动器是 document（.preview 自身无
@@ -76,6 +82,28 @@ export default function PreviewPage() {
       alive = false
     }
   }, [song])
+
+  // 谱面时间轴就绪后只准备当前曲目。演奏页调用同一 loader 时会接续这里的
+  // 下载/解码结果；普通离开取消未完成项，同曲进入演奏页则保留并交接。
+  useEffect(() => {
+    if (!timeline) return
+    let alive = true
+    preloadAccompaniment(song, timeline).then(
+      ({ synthesized }) => {
+        if (alive) setAccompanimentState(synthesized ? 'synthesized' : 'ready')
+      },
+      (error: unknown) => {
+        if (alive && (!(error instanceof Error) || error.name !== 'AbortError')) {
+          setAccompanimentState('error')
+        }
+      },
+    )
+    return () => {
+      alive = false
+      if (!handoffToPerformRef.current) cancelPendingAccompaniment(song.id)
+      handoffToPerformRef.current = false
+    }
+  }, [song, timeline, preloadAttempt])
 
   // 钢琴伴奏谱懒加载：首次切到 piano 才拉取。timeline 复用长笛谱的——两谱同曲
   // 同小节同时间轴（Soundslice 拼谱交付口径），预览为静态渲染无光标推进，
@@ -208,12 +236,34 @@ export default function PreviewPage() {
               <button
                 className="btn-play-big"
                 style={{ background: song.accent }}
-                onClick={() => go('perform', song.id)}
+                onClick={() => {
+                  handoffToPerformRef.current = true
+                  go('perform', song.id)
+                }}
                 aria-label="开始演奏"
                 title="开始演奏"
               >
                 ▶
               </button>
+              <span className={`accompaniment-state ${accompanimentState}`} role="status">
+                {accompanimentState === 'ready' && '伴奏已准备，可以开始演奏'}
+                {accompanimentState === 'synthesized' && '真实伴奏不可用，已准备合成伴奏'}
+                {(accompanimentState === 'waiting' || accompanimentState === 'loading') && '正在提前准备伴奏…'}
+                {accompanimentState === 'error' && (
+                  <>
+                    伴奏预载失败，开始演奏时仍会重试
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAccompanimentState('loading')
+                        setPreloadAttempt((value) => value + 1)
+                      }}
+                    >
+                      重试
+                    </button>
+                  </>
+                )}
+              </span>
               {/* 收藏与伴奏提示：暂时隐藏（功能未上线） */}
               {false && (
                 <>

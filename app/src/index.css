@@ -143,3 +143,11 @@ a {
     transition-duration: 0.01ms !important;
   }
 }
+/* Page chunks load only when their route is opened. */
+.route-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--ink-dim);
+  background: var(--bg);
+}

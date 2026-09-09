@@ -59,13 +59,15 @@ export default function HeroCarousel({ onOpen }: { onOpen: (song: SongManifest) 
 
   // 自动轮播：hover / 页面隐藏时暂停；任何切换（含手动）后重新倒计时
   useEffect(() => {
-    if (hovering || hidden) return
+    if (n < 2 || hovering || hidden) return
     const t = window.setTimeout(() => show(active + 1), AUTOPLAY_MS)
     return () => clearTimeout(t)
   }, [active, hovering, hidden])
 
   // 卸载清残留定时器，避免离场回调打到已卸载组件
   useEffect(() => () => clearTimeout(fadeTimer.current), [])
+
+  if (!current) return null
 
   return (
     <section

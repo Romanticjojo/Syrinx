@@ -65,6 +65,17 @@ describe('LivePitchTracker', () => {
     expect(fb.hz).toBe(440)
   })
 
+  it('有声后连续 3 个无检测帧：旧音高失效，不再一直显示准确', () => {
+    const t = new LivePitchTracker()
+    t.update(440, note(0, 1, 69))
+
+    expect(t.update(null, note(0, 1, 69)).hz).toBe(440)
+    expect(t.update(null, note(0, 1, 69)).hz).toBe(440)
+    const silent = t.update(null, note(0, 1, 69))
+
+    expect(silent).toEqual({ hz: null, midi: 69, cents: null, inTune: null })
+  })
+
   it('窗口只留最近 3 帧：连续偏高后跟随新值', () => {
     const t = new LivePitchTracker()
     t.update(440, note(0, 1, 69))

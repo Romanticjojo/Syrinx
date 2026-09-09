@@ -173,6 +173,26 @@ export function timelineUpTo(timeline: Timeline, stopSec: number): Timeline {
   return { ...timeline, notes: timeline.notes.filter((n) => n.time < stopSec) }
 }
 
+/**
+ * 截取实际采集区间。仅评分完整落在开麦与停麦之间的目标音，避免把
+ * 权限等待期间或录音关闭期间的目标音误记成漏音。
+ */
+export function timelineInRange(
+  timeline: Timeline,
+  startSec: number,
+  stopSec: number,
+): Timeline {
+  if (!Number.isFinite(startSec) || !Number.isFinite(stopSec) || stopSec <= startSec) {
+    return { ...timeline, notes: [] }
+  }
+  return {
+    ...timeline,
+    notes: timeline.notes.filter(
+      (n) => n.time >= startSec && n.time + n.duration <= stopSec,
+    ),
+  }
+}
+
 export function scoreAgainst(track: PitchPoint[], timeline: Timeline): ScoreResult {
   const notes: NoteScore[] = timeline.notes.map((note) => {
     const targetHz = midiToHz(note.midi)
@@ -201,6 +221,9 @@ export function scoreAgainst(track: PitchPoint[], timeline: Timeline): ScoreResu
   const measured = notes.filter((n): n is NoteScore & { cents: number } => n.cents !== null)
   const stats: TuneStats = {
     noteCount: measured.length,
+    totalNoteCount: notes.length,
+    missedNoteCount: notes.length - measured.length,
+    coverageRatio: notes.length ? measured.length / notes.length : 0,
     inTuneRatio: measured.length ? measured.filter((n) => n.inTune).length / measured.length : 0,
     avgAbsCents: measured.length
       ? measured.reduce((s, n) => s + Math.abs(n.cents), 0) / measured.length

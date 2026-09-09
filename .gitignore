@@ -35,6 +35,8 @@ app/public/songs/
 *.aac
 
 # --- 日志与临时产物 ---
+__pycache__/
+*.pyc
 *.log
 claude-replay-fix*.log
 

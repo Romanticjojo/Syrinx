@@ -33,6 +33,8 @@ export interface Timeline {
 
 /** 一次演奏会话的产出（录音 + 音高分析） */
 export interface Take {
+  /** 创建本次演奏时生成的标识；异步保存/分析只能写回同一会话 */
+  sessionId: string
   songId: string
   startedAt: number
   durationSec: number
@@ -41,6 +43,8 @@ export interface Take {
   mimeType: string
   /** 录音起点对应的伴奏时间（秒）：起奏即录为 0；回开头重录/中途开录为当时进度 */
   startSec: number
+  /** 录音停止对应的伴奏时间（秒） */
+  stopSec: number
   /** 演奏时长内实测的音高轨迹（时间 → 频率/音分偏移） */
   pitchTrack: PitchPoint[] | null
   /** 音准统计（无法分析时为 null） */
@@ -55,12 +59,34 @@ export interface PitchPoint {
 }
 
 export interface TuneStats {
-  /** ±50 音分内的音符占比（0-1） */
+  /** 在成功测得音高的音符中，±50 音分内的比例（0-1） */
   inTuneRatio: number
-  /** 全部音符平均音分偏差绝对值 */
+  /** 成功测得音高的音符平均音分偏差绝对值 */
   avgAbsCents: number
   /** 参与统计的音符数（无实测样本的音符不计） */
   noteCount: number
+  /** 本次实际采集区间内的目标音符总数 */
+  totalNoteCount: number
+  /** 采集区间内没有有效音高样本的目标音符数 */
+  missedNoteCount: number
+  /** 成功测得音高的目标音符覆盖率（0-1） */
+  coverageRatio: number
+}
+
+export type PerformanceStatus =
+  | 'preparing'
+  | 'recording'
+  | 'saving'
+  | 'completed'
+  | 'no-recording'
+  | 'failed'
+
+export interface PerformanceSession {
+  id: string
+  songId: string
+  status: PerformanceStatus
+  take: Take | null
+  message?: string
 }
 
 /** 曲目包元数据（Song Pack manifest） */

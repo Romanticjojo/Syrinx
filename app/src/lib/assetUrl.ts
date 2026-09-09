@@ -1,9 +1,30 @@
-// 运行时资源 URL 解析：manifest 里的 /songs/... 是绝对路径，
-// 部署在子路径或以相对 base 构建时需要折算回站点根：
-// - http(s)：origin + path（站点根部署时与原路径一致）
-// - 相对路径 / 非 http 协议：原样返回
+export interface AssetUrlOptions {
+  baseUrl: string
+  origin: string
+  audioFormat?: string
+}
+
+/** Resolve manifest root paths against Vite's deployed base directory. */
+export function resolveAssetUrl(path: string, options: AssetUrlOptions): string {
+  if (/^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//') || !path.startsWith('/')) {
+    return path
+  }
+
+  const releasePath = options.audioFormat === 'm4a'
+    ? path.replace(
+        /^(\/songs\/[^/]+\/accompaniment)\.mp3(?=([?#]|$))/,
+        '$1.m4a',
+      )
+    : path
+  const base = options.baseUrl.endsWith('/') ? options.baseUrl : `${options.baseUrl}/`
+  return new URL(`${base}${releasePath.slice(1)}`, `${options.origin}/`).toString()
+}
+
+/** Resolve an asset using the base and media format embedded by Vite. */
 export function assetUrl(path: string): string {
-  if (/^(https?:|blob:|data:)/.test(path)) return path
-  if (!path.startsWith('/')) return path
-  return window.location.origin + path
+  return resolveAssetUrl(path, {
+    baseUrl: import.meta.env.BASE_URL,
+    origin: window.location.origin,
+    audioFormat: import.meta.env.VITE_AUDIO_FORMAT,
+  })
 }

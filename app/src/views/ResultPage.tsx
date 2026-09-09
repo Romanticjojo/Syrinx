@@ -3,7 +3,7 @@ import { audioEngine } from '../audio/AudioEngine'
 import { encodeWav } from '../audio/wav'
 import PlaybackDeck from '../components/PlaybackDeck'
 import PitchChart from '../components/PitchChart'
-import { extractPitchTrackAsync, scoreAgainst, timelineUpTo, type ScoreResult } from '../pitch/compare'
+import { extractPitchTrackAsync, scoreAgainst, timelineInRange, type ScoreResult } from '../pitch/compare'
 import { getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import { useAppStore } from '../store'
@@ -19,24 +19,41 @@ const fmt = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
 export default function ResultPage() {
-  const take = useAppStore((s) => s.lastTake)
-  const songId = useAppStore((s) => s.currentSongId)
+  const session = useAppStore((s) => s.performanceSession)
+  const take = session?.status === 'completed' ? session.take : null
+  const takeSessionId = take?.sessionId
+  const takeAudioUrl = take?.audioUrl
+  const takeStartSec = take?.startSec
+  const currentSongId = useAppStore((s) => s.currentSongId)
+  const songId = session?.songId ?? currentSongId
   const go = useAppStore((s) => s.go)
-  const setTake = useAppStore((s) => s.setTake)
+  const cacheTakeAnalysis = useAppStore((s) => s.cacheTakeAnalysis)
   const song = getSong(songId) ?? SONGS[0]
 
   const [analysis, setAnalysis] = useState<Analysis>({ status: 'analyzing' })
-  const [syncPlaying, setSyncPlaying] = useState(false)
+  const [syncEnabled, setSyncEnabled] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const syncEnabledRef = useRef(false)
+  const ignoreNextPlayRef = useRef(false)
+  const mountedRef = useRef(true)
+  const syncOperationRef = useRef(0)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      syncOperationRef.current += 1
+    }
+  }, [])
 
   // 音高分析：解码录音 → 逐帧 YIN → 与目标时间轴对比（不支持解码的浏览器保留纯回放）
   useEffect(() => {
     if (!take) return
-    // 停止时刻（伴奏时间轴绝对位置）= 封存时 finish() 记录的 audioEngine.time：
-    // 自然结束 ≈ 全曲时长（timelineUpTo 原引用直通）；停止演奏 = 点击时刻，
-    // 之后的音符未被演奏、不进统计，伴奏对照也只播到这（下方截断守卫）。
-    const stopSec = take.durationSec
+    // 只分析完整落在实际采集起止位置内的目标音；延迟开麦和中途关录前后的
+    // 音符不进入漏音分母。
+    const scoreTimeline = (timeline: Awaited<ReturnType<typeof loadSong>>['timeline']) =>
+      timelineInRange(timeline, take.startSec, take.stopSec)
     let alive = true
     if (take.stats && take.pitchTrack) {
       // 已有缓存结果：仅重建图表数据（属性收窄不进闭包，先取局部量）
@@ -44,7 +61,7 @@ export default function ResultPage() {
       void (async () => {
         const { timeline } = await loadSong(song)
         if (!alive) return
-        setAnalysis({ status: 'done', result: scoreAgainst(cachedTrack, timelineUpTo(timeline, stopSec)) })
+        setAnalysis({ status: 'done', result: scoreAgainst(cachedTrack, scoreTimeline(timeline)) })
       })()
       return () => {
         alive = false
@@ -67,9 +84,9 @@ export default function ResultPage() {
           shouldContinue: () => alive,
         })
         if (!alive || track === null) return
-        const result = scoreAgainst(track, timelineUpTo(timeline, stopSec))
+        const result = scoreAgainst(track, scoreTimeline(timeline))
         setAnalysis({ status: 'done', result })
-        setTake({ ...take, pitchTrack: result.annotatedTrack, stats: result.stats })
+        cacheTakeAnalysis(take.sessionId, result.annotatedTrack, result.stats)
       } catch (e) {
         if (!alive) return
         setAnalysis({
@@ -82,60 +99,126 @@ export default function ResultPage() {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [take])
+  }, [take, cacheTakeAnalysis])
 
-  // 对照播放：录音与伴奏共享时间轴，同步起停
+  // 对照播放：录音文件使用局部时间，伴奏使用 startSec + 录音局部时间。
   useEffect(() => {
     const el = audioRef.current
+    let alive = true
     const onEnded = () => {
+      syncOperationRef.current += 1
       audioEngine.pause()
-      setSyncPlaying(false)
+      syncEnabledRef.current = false
+      setSyncEnabled(false)
+    }
+    const alignPlayback = () => {
+      if (!syncEnabledRef.current || takeStartSec === undefined || !el || el.paused) return
+      const operation = ++syncOperationRef.current
+      void (async () => {
+        try {
+          await audioEngine.resume()
+        } catch {
+          return
+        }
+        if (!alive || !syncEnabledRef.current || el.paused || operation !== syncOperationRef.current) return
+        const started = await audioEngine.play(takeStartSec + el.currentTime)
+        if (!started && alive && operation === syncOperationRef.current) {
+          syncEnabledRef.current = false
+          setSyncEnabled(false)
+        }
+      })()
+    }
+    const onPlay = () => {
+      if (ignoreNextPlayRef.current) {
+        ignoreNextPlayRef.current = false
+        return
+      }
+      alignPlayback()
+    }
+    const onPause = () => {
+      syncOperationRef.current += 1
+      if (syncEnabledRef.current) audioEngine.pause()
+    }
+    const onSeeking = () => {
+      syncOperationRef.current += 1
+      if (syncEnabledRef.current && takeStartSec !== undefined && el) {
+        audioEngine.pause()
+        audioEngine.seek(takeStartSec + el.currentTime)
+        alignPlayback()
+      }
     }
     el?.addEventListener('ended', onEnded)
+    el?.addEventListener('play', onPlay)
+    el?.addEventListener('pause', onPause)
+    el?.addEventListener('seeking', onSeeking)
     audioEngine.onEnd = onEnded
     return () => {
+      alive = false
+      syncOperationRef.current += 1
       el?.removeEventListener('ended', onEnded)
+      el?.removeEventListener('play', onPlay)
+      el?.removeEventListener('pause', onPause)
+      el?.removeEventListener('seeking', onSeeking)
       audioEngine.onEnd = undefined
       audioEngine.pause()
     }
-  }, [])
+  }, [takeSessionId, takeAudioUrl, takeStartSec])
 
   // 对照播放截断：伴奏只播到停止时刻（录音 ended 通常同时刻先到，此处兜底
   // 录音时长偏差/静音尾场景；自然结束 stopSec≈buffer 末尾，行为与现状一致）
   useEffect(() => {
-    if (!syncPlaying || !take) return
-    const stopSec = take.durationSec
+    if (!syncEnabled || !take) return
+    const stopSec = take.stopSec
     let raf = 0
     const check = () => {
       if (audioEngine.playing && audioEngine.time >= stopSec) {
         audioRef.current?.pause()
         audioEngine.pause()
-        setSyncPlaying(false)
+        syncEnabledRef.current = false
+        setSyncEnabled(false)
         return
       }
       raf = requestAnimationFrame(check)
     }
     raf = requestAnimationFrame(check)
     return () => cancelAnimationFrame(raf)
-  }, [syncPlaying, take])
+  }, [syncEnabled, take])
 
   const toggleSyncPlay = useCallback(async () => {
     const el = audioRef.current
     if (!el || audioEngine.duration === 0 || !take) return
-    await audioEngine.resume()
-    if (syncPlaying) {
+    const operation = ++syncOperationRef.current
+    if (syncEnabledRef.current) {
+      syncEnabledRef.current = false
       el.pause()
       audioEngine.pause()
-      setSyncPlaying(false)
+      setSyncEnabled(false)
     } else {
-      // 录音与伴奏按起点对齐：起奏即录 startSec=0，回开头/中途重录则从 startSec 起播伴奏
-      const startSec = take.startSec
-      el.currentTime = startSec
-      void el.play()
-      audioEngine.play(startSec)
-      setSyncPlaying(true)
+      try {
+        await audioEngine.resume()
+      } catch {
+        return
+      }
+      if (!mountedRef.current || operation !== syncOperationRef.current) return
+      el.currentTime = 0
+      const started = await audioEngine.play(take.startSec)
+      if (!mountedRef.current || operation !== syncOperationRef.current || !started) return
+      syncEnabledRef.current = true
+      setSyncEnabled(true)
+      ignoreNextPlayRef.current = true
+      try {
+        await el.play()
+        if (!mountedRef.current || operation !== syncOperationRef.current) return
+        ignoreNextPlayRef.current = false
+      } catch {
+        if (!mountedRef.current || operation !== syncOperationRef.current) return
+        ignoreNextPlayRef.current = false
+        syncEnabledRef.current = false
+        setSyncEnabled(false)
+        audioEngine.pause()
+      }
     }
-  }, [syncPlaying, take])
+  }, [take])
 
   /** 下载录音按钮：32kHz 单声道 WAV 直采录音直接下载；旧版 MediaRecorder
    *  webm/mp4 take 解码重编码 WAV（webm 缺 duration 元数据，直接下载在部分
@@ -172,13 +255,26 @@ export default function ResultPage() {
     }
   }
 
-  if (!take) {
+  if (!session || session.status !== 'completed' || !take) {
+    const noRecording = session?.status === 'no-recording'
+    const failed = session?.status === 'failed'
+    const saving = session?.status === 'saving'
+    const title = noRecording
+      ? '本次没有录音'
+      : failed
+        ? '录音保存失败'
+        : saving
+          ? '正在保存录音'
+          : '还没有演奏记录'
+    const message = session?.message ?? (saving
+      ? '保存完成后即可查看回放与音准分析。'
+      : '完成一次演奏后来这里查看回放与音准分析。')
     return (
       <main className="result empty">
         <div className="empty-card">
           <div className="empty-glyph">♪</div>
-          <h2>还没有演奏记录</h2>
-          <p>完成一次演奏后来这里查看回放与音准分析。</p>
+          <h2>{title}</h2>
+          <p>{message}</p>
           <div className="empty-actions">
             <button className="btn-pill" onClick={() => go('home')}>
               去曲库选曲
@@ -189,18 +285,16 @@ export default function ResultPage() {
     )
   }
 
-  const stats = take.stats
-  const missCount =
-    analysis.status === 'done' ? analysis.result.notes.length - analysis.result.stats.noteCount : null
+  const stats = analysis.status === 'done' ? analysis.result.stats : null
   // 图表时间域：演奏录音与目标时间轴取大（保险起见至少 1s）
   const chartDuration =
     analysis.status === 'done'
       ? Math.max(
-          take.durationSec,
+          take.stopSec,
           1,
           ...analysis.result.notes.map((n) => n.note.time + n.note.duration),
         )
-      : Math.max(take.durationSec, 1)
+      : Math.max(take.stopSec, 1)
 
   return (
     <main className="result" style={{ '--song-accent': song.accent } as React.CSSProperties}>
@@ -227,7 +321,8 @@ export default function ResultPage() {
         <div className="kicker">演奏回放 · REPLAY</div>
         <h1>{song.title}</h1>
         <div className="result-meta">
-          {new Date(take.startedAt).toLocaleString('zh-CN')} · 演奏时长 {fmt(take.durationSec)}
+          {new Date(take.startedAt).toLocaleString('zh-CN')} · 录音时长 {fmt(take.durationSec)} ·{' '}
+          采集位置 {fmt(take.startSec)}–{fmt(take.stopSec)}
         </div>
       </section>
 
@@ -241,7 +336,8 @@ export default function ResultPage() {
               src={take.audioUrl}
               accent={song.accent}
               audioRef={audioRef}
-              showAccVol={syncPlaying}
+              fallbackDurationSec={take.durationSec}
+              showAccVol={syncEnabled}
             />
           </div>
           <div className="playback-actions">
@@ -251,7 +347,7 @@ export default function ResultPage() {
               disabled={audioEngine.duration === 0}
               title="录音与伴奏从同一时刻起播，对照听辨"
             >
-              {syncPlaying ? '❚❚ 停止对照' : '♫ 对照伴奏播放'}
+              {syncEnabled ? '❚❚ 停止对照' : '♫ 对照伴奏播放'}
             </button>
             <button
               className="btn-pill"
@@ -282,7 +378,7 @@ export default function ResultPage() {
                 <b style={{ color: stats.inTuneRatio >= 0.7 ? song.accent : 'var(--rec)' }}>
                   {Math.round(stats.inTuneRatio * 100)}%
                 </b>
-                <span>音准率（±50 音分）</span>
+                <span>已测音符音准率（±50 音分）</span>
               </div>
               <div className="stat">
                 <b>{stats.avgAbsCents.toFixed(0)}</b>
@@ -290,14 +386,14 @@ export default function ResultPage() {
               </div>
               <div className="stat">
                 <b>
-                  {stats.noteCount}
-                  <i className="miss"> / {missCount ? `漏 ${missCount}` : '全中'}</i>
+                  {Math.round(stats.coverageRatio * 100)}%
+                  <i className="miss"> / {stats.missedNoteCount ? `漏 ${stats.missedNoteCount}` : '无漏音'}</i>
                 </b>
-                <span>评估音符数</span>
+                <span>音符覆盖率（已测 {stats.noteCount} / {stats.totalNoteCount}）</span>
               </div>
               <div className="stat">
                 <b>{fmt(take.durationSec)}</b>
-                <span>演奏时长</span>
+                <span>实际录音时长</span>
               </div>
             </div>
             </>
