@@ -503,9 +503,3 @@ video.perform-bg-cover {
   }
 }
 
-
-.hud-song-text .loop-progress { color: var(--song-accent); font-size: 12px; max-width: 50vw; white-space: normal; }
-
-.capture-status { position: fixed; z-index: 20; top: 88px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 9px 14px; border: 1px solid #ffffff30; border-radius: 12px; background: #102019ed; color: #d6e8df; font-size: 13px; max-width: calc(100vw - 32px); white-space: nowrap; }
-.capture-status button { color: #90e3bc; background: transparent; border: 0; text-decoration: underline; cursor: pointer; }
-@media(max-width: 520px) { .capture-status { top: 96px; flex-wrap: wrap; justify-content: center; width: max-content; white-space: normal; } }

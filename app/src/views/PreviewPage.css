@@ -541,11 +541,3 @@
 }
 @media (prefers-reduced-motion: reduce) {
 }
-
-.practice-config { position: relative; margin: 24px auto; padding: 24px; width: min(1120px, calc(100% - 40px)); border: 1px solid #ffffff22; border-radius: 18px; background: #101b18cc; }
-.practice-config h3 { margin: 0 0 8px; } .practice-config p { color: #afbbb5; font-size: 13px; }
-.practice-fields { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; }
-.practice-fields label { display: grid; gap: 8px; font-size: 13px; }
-.practice-fields select { color: #edf5f0; background: #17241f; border: 1px solid #ffffff30; padding: 10px; border-radius: 8px; }
-.practice-fields button:disabled { opacity: .4; cursor: not-allowed; }
-@media(max-width: 540px) { .practice-fields label { flex: 1; min-width: 100px; } .practice-fields button { width: 100%; } }

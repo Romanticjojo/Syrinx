@@ -6,7 +6,6 @@ const state = vi.hoisted(() => ({
   preload: vi.fn(),
   cancelPending: vi.fn(),
   go: vi.fn(),
-  setPracticeConfig: vi.fn(),
   song: {
     id: 'sample', title: 'Sample', composer: 'Composer', difficulty: 1,
     durationLabel: '0:04', keyLabel: 'C major', description: 'Description',
@@ -32,7 +31,6 @@ vi.mock('../store', () => ({
   useAppStore: (selector: (value: unknown) => unknown) => selector({
     currentSongId: 'sample',
     go: state.go,
-    setPracticeConfig: state.setPracticeConfig,
     toggleFavorite: vi.fn(),
     favorites: [],
   }),
@@ -110,22 +108,4 @@ describe('PreviewPage accompaniment preload', () => {
     expect(state.go).toHaveBeenCalledWith('perform', 'sample')
     expect(state.cancelPending).not.toHaveBeenCalled()
   })
-})
-
-
-it('offers a valid playback-bar range and clears it for normal whole-song playback', async () => {
-  state.timeline.measureTimes = [{ measure: 1, time: 0, quarters: 0 }, { measure: 1, time: 2, quarters: 2 }] as never
-  state.preload.mockResolvedValue({ buffer: { duration: 4 }, synthesized: false })
-  const container = document.createElement('div')
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  await act(async () => root.render(createElement(PreviewPage)))
-  const start = container.querySelector<HTMLSelectElement>('[aria-label="起始小节"]')
-  expect(start).not.toBeNull()
-  await act(async () => { start!.value = '2'; start!.dispatchEvent(new Event('change', { bubbles: true })) })
-  await act(async () => [...container.querySelectorAll('button')].find(b => b.textContent?.includes('开始分段练习'))!.click())
-  expect(state.setPracticeConfig).toHaveBeenLastCalledWith({ songId: 'sample', range: { startMeasure: 2, endMeasure: 2, startSec: 2, stopSec: 4 }, rounds: 3 })
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="开始演奏"]')!.click())
-  expect(state.setPracticeConfig).toHaveBeenLastCalledWith(null)
-  await act(async () => root.unmount())
 })
