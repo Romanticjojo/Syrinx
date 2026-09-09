@@ -4,13 +4,19 @@ import { encodeWav } from '../audio/wav'
 import PlaybackDeck from '../components/PlaybackDeck'
 import PitchChart from '../components/PitchChart'
 import { extractPitchTrackAsync, scoreAgainst, timelineInRange, type ScoreResult } from '../pitch/compare'
-import { getSong, loadSong, SONGS } from '../songs'
+import { getSong, loadSong } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import { useAppStore } from '../store'
+import { loadAccompaniment } from '../audio/accompaniment'
+import { listPractices, updatePracticeAnalysis, type StoredPractice } from '../practice/history'
+import { comparisonReason, songVersion, weakMeasures, SCORING_VERSION } from '../practice/model'
+import { downloadPracticeBlob } from '../practice/service'
+import type { Timeline, TuneStats } from '../types'
 import './ResultPage.css'
 
 type Analysis =
   | { status: 'analyzing' }
+  | { status: 'incompatible'; message: string }
   | { status: 'done'; result: ScoreResult }
   | { status: 'unsupported'; message: string }
   | { status: 'error'; message: string }
@@ -28,7 +34,18 @@ export default function ResultPage() {
   const songId = session?.songId ?? currentSongId
   const go = useAppStore((s) => s.go)
   const cacheTakeAnalysis = useAppStore((s) => s.cacheTakeAnalysis)
-  const song = getSong(songId) ?? SONGS[0]
+  const song = getSong(songId)
+  const accent = song?.accent ?? '#61c9a3'
+  const setPracticeConfig = useAppStore(s => s.setPracticeConfig)
+  const storageError = useAppStore(s => s.storageError)
+  const [historyError, setHistoryError] = useState('')
+  const [scoreTimeline, setScoreTimeline] = useState<Timeline | null>(null)
+  const [previous, setPrevious] = useState<{ stats: TuneStats; startedAt: number } | null>(null)
+  const [comparisonMessage, setComparisonMessage] = useState('')
+  const [syncLoading, setSyncLoading] = useState(false)
+  const [syncError, setSyncError] = useState('')
+  const compatibleRef = useRef<string | null>(null)
+  const accompanimentForRef = useRef<string | null>(null)
 
   const [analysis, setAnalysis] = useState<Analysis>({ status: 'analyzing' })
   const [syncEnabled, setSyncEnabled] = useState(false)
@@ -50,60 +67,77 @@ export default function ResultPage() {
   // 音高分析：解码录音 → 逐帧 YIN → 与目标时间轴对比（不支持解码的浏览器保留纯回放）
   useEffect(() => {
     if (!take) return
-    // 只分析完整落在实际采集起止位置内的目标音；延迟开麦和中途关录前后的
-    // 音符不进入漏音分母。
-    const scoreTimeline = (timeline: Awaited<ReturnType<typeof loadSong>>['timeline']) =>
-      timelineInRange(timeline, take.startSec, take.stopSec)
     let alive = true
-    if (take.stats && take.pitchTrack) {
-      // 已有缓存结果：仅重建图表数据（属性收窄不进闭包，先取局部量）
-      const cachedTrack = take.pitchTrack
-      void (async () => {
-        const { timeline } = await loadSong(song)
-        if (!alive) return
-        setAnalysis({ status: 'done', result: scoreAgainst(cachedTrack, scoreTimeline(timeline)) })
-      })()
-      return () => {
-        alive = false
-      }
-    }
-    ;(async () => {
+    setAnalysis({ status: 'analyzing' })
+    setScoreTimeline(null)
+    setPrevious(null)
+    setComparisonMessage('')
+    setHistoryError('')
+    compatibleRef.current = null
+    const run = async () => {
       try {
-        // 先让「分析中」状态渲染出来，再进入重计算
-        await new Promise((r) => setTimeout(r, 60))
-        const { timeline } = await loadSong(song)
-        const res = await fetch(take.audioUrl)
-        const ab = await res.arrayBuffer()
-        const buffer = await audioEngine.decode(ab)
+        if (!song) {
+          setAnalysis({ status: 'incompatible', message: '这首曲目不在当前曲库，仍可回放和下载原录音；音准分析、重练与伴奏对照不可用。' })
+          return
+        }
+        const { xml, timeline } = await loadSong(song)
         if (!alive) return
-        // 录音起点对齐伴奏时间轴：中途开录/回开头重录时，轨迹时间整体平移 startSec
-        // 分片异步提取（每 ~24ms 让出主线程）：分析期间按钮/滚动保持可响应，
-        // 用户点「重新演奏/返回曲库」离开本页时 alive 置 false，计算立即中止丢弃
-        const track = await extractPitchTrackAsync(buffer, {
-          offsetSec: take.startSec,
-          shouldContinue: () => alive,
-        })
-        if (!alive || track === null) return
-        const result = scoreAgainst(track, scoreTimeline(timeline))
+        if (take.practice && (take.practice.songVersion !== songVersion(xml, timeline) || take.practice.scoringVersion !== SCORING_VERSION)) {
+          setAnalysis({ status: 'incompatible', message: '曲谱、时间轴或评分版本已变更，仍可回放和下载原录音；本记录不重新评分、不提供比较或重练。' })
+          return
+        }
+        compatibleRef.current = take.sessionId
+        setScoreTimeline(timeline)
+        let result: ScoreResult
+        if (take.stats && take.pitchTrack) {
+          result = scoreAgainst(take.pitchTrack, timelineInRange(timeline, take.startSec, take.stopSec))
+        } else {
+          await new Promise(r => setTimeout(r, 60))
+          if (!alive) return
+          const ab = take.audioBlob ? await take.audioBlob.arrayBuffer() : await (await fetch(take.audioUrl)).arrayBuffer()
+          if (!alive) return
+          const buffer = await audioEngine.decode(ab)
+          if (!alive) return
+          const track = await extractPitchTrackAsync(buffer, { offsetSec: take.startSec, shouldContinue: () => alive })
+          if (!alive || track === null) return
+          result = scoreAgainst(track, timelineInRange(timeline, take.startSec, take.stopSec))
+          cacheTakeAnalysis(take.sessionId, result.annotatedTrack, result.stats)
+          if (take.practice && take.audioBlob && !useAppStore.getState().storageError) {
+            try { await updatePracticeAnalysis(take.sessionId, result.annotatedTrack, result.stats) }
+            catch (error) { if (alive) setHistoryError(`分析结果未保存：${error instanceof Error ? error.message : String(error)}`) }
+          }
+        }
+        if (!alive) return
         setAnalysis({ status: 'done', result })
-        cacheTakeAnalysis(take.sessionId, result.annotatedTrack, result.stats)
-      } catch (e) {
-        if (!alive) return
-        setAnalysis({
-          status: 'unsupported',
-          message: e instanceof Error ? e.message : String(e),
-        })
+        if (take.practice && take.audioBlob) {
+          try {
+            const records = await listPractices()
+            if (!alive) return
+            const current: StoredPractice = { ...take, schemaVersion: 1, audioBlob: take.audioBlob, practice: take.practice }
+            const candidates = records.filter(r => r.sessionId !== take.sessionId && r.startedAt <= take.startedAt && r.stats)
+            const prior = candidates.find(r => comparisonReason(current, r) === null)
+            if (prior?.stats) setPrevious({ stats: prior.stats, startedAt: prior.startedAt })
+            else setComparisonMessage(candidates.length ? comparisonReason(current, candidates[0]) ?? '暂无可比较记录。' : '还没有已分析的兼容记录，打开之前的练习记录分析后再来比较。')
+          } catch (error) { if (alive) setHistoryError(`无法读取比较记录：${error instanceof Error ? error.message : String(error)}`) }
+        }
+      } catch (error) {
+        if (alive) setAnalysis({ status: 'unsupported', message: error instanceof Error ? error.message : String(error) })
       }
-    })()
-    return () => {
-      alive = false
     }
+    void run()
+    return () => { alive = false; compatibleRef.current = null }
+    // Analysis cache updates must not restart extraction or interrupt playback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [take, cacheTakeAnalysis])
+  }, [takeSessionId, takeAudioUrl, cacheTakeAnalysis])
 
   // 对照播放：录音文件使用局部时间，伴奏使用 startSec + 录音局部时间。
   useEffect(() => {
     const el = audioRef.current
+    syncEnabledRef.current = false
+    setSyncEnabled(false)
+    setSyncLoading(false)
+    setSyncError('')
+    accompanimentForRef.current = null
     let alive = true
     const onEnded = () => {
       syncOperationRef.current += 1
@@ -137,6 +171,7 @@ export default function ResultPage() {
     }
     const onPause = () => {
       syncOperationRef.current += 1
+      setSyncLoading(false)
       if (syncEnabledRef.current) audioEngine.pause()
     }
     const onSeeking = () => {
@@ -186,7 +221,7 @@ export default function ResultPage() {
 
   const toggleSyncPlay = useCallback(async () => {
     const el = audioRef.current
-    if (!el || audioEngine.duration === 0 || !take) return
+    if (!el || !take || !song || compatibleRef.current !== take.sessionId || syncLoading) return
     const operation = ++syncOperationRef.current
     if (syncEnabledRef.current) {
       syncEnabledRef.current = false
@@ -196,7 +231,22 @@ export default function ResultPage() {
     } else {
       try {
         await audioEngine.resume()
-      } catch {
+        if (!mountedRef.current || operation !== syncOperationRef.current) return
+        // Restored records cannot inherit another song's retained engine buffer.
+        if (take.practice && accompanimentForRef.current !== take.sessionId) {
+          setSyncLoading(true)
+          const { xml, timeline } = await loadSong(song)
+          if (!mountedRef.current || operation !== syncOperationRef.current) return
+          if (take.practice.songVersion !== songVersion(xml, timeline)) throw new Error('曲目版本已变更，无法对照播放。')
+          const { buffer } = await loadAccompaniment(song, timeline)
+          if (!mountedRef.current || operation !== syncOperationRef.current) return
+          await audioEngine.load(buffer)
+          if (!mountedRef.current || operation !== syncOperationRef.current) return
+          accompanimentForRef.current = take.sessionId
+          setSyncLoading(false)
+        }
+      } catch (error) {
+        if (mountedRef.current && operation === syncOperationRef.current) { setSyncLoading(false); setSyncError(`伴奏无法载入：${error instanceof Error ? error.message : String(error)}`) }
         return
       }
       if (!mountedRef.current || operation !== syncOperationRef.current) return
@@ -218,7 +268,7 @@ export default function ResultPage() {
         audioEngine.pause()
       }
     }
-  }, [take])
+  }, [take, song, syncLoading])
 
   /** 下载录音按钮：32kHz 单声道 WAV 直采录音直接下载；旧版 MediaRecorder
    *  webm/mp4 take 解码重编码 WAV（webm 缺 duration 元数据，直接下载在部分
@@ -230,10 +280,11 @@ export default function ResultPage() {
     const saveAs = (href: string, ext: string) => {
       const a = document.createElement('a')
       a.href = href
-      a.download = `syrinx-${song.id}-${stamp}.${ext}`
+      a.download = `syrinx-${take.songId}-${stamp}.${ext}`
       a.click()
     }
     try {
+      if (take.audioBlob) { downloadPracticeBlob(take, take.audioBlob); return }
       if (take.mimeType === 'audio/wav') {
         // 直采录音已是 32kHz 单声道 WAV：直接下载，解码重编码反而放大体积
         saveAs(take.audioUrl, 'wav')
@@ -276,6 +327,7 @@ export default function ResultPage() {
           <h2>{title}</h2>
           <p>{message}</p>
           <div className="empty-actions">
+            <button className="btn-pill" onClick={() => go('history')}>练习记录</button>
             <button className="btn-pill" onClick={() => go('home')}>
               去曲库选曲
             </button>
@@ -297,7 +349,7 @@ export default function ResultPage() {
       : Math.max(take.stopSec, 1)
 
   return (
-    <main className="result" style={{ '--song-accent': song.accent } as React.CSSProperties}>
+    <main className="result" style={{ '--song-accent': accent } as React.CSSProperties}>
       <header className="result-topbar">
         <button className="back-ghost" onClick={() => go('home')} aria-label="返回曲库">
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -319,13 +371,15 @@ export default function ResultPage() {
 
       <section className="result-hero">
         <div className="kicker">演奏回放 · REPLAY</div>
-        <h1>{song.title}</h1>
+        <h1>{song?.title ?? take.songId}</h1>
         <div className="result-meta">
           {new Date(take.startedAt).toLocaleString('zh-CN')} · 录音时长 {fmt(take.durationSec)} ·{' '}
           采集位置 {fmt(take.startSec)}–{fmt(take.stopSec)}
         </div>
       </section>
 
+      {(storageError || historyError) && <p className="result-warning" role="alert">{storageError || historyError}</p>}
+      {take.practice && <p className="practice-summary">{take.practice.range ? `第 ${take.practice.range.startMeasure}–${take.practice.range.endMeasure} 小节` : '整曲'} · 第 {take.practice.round} / {take.practice.rounds} 轮</p>}
       <section className="result-grid">
         <div className="playback-card">
           <h3>录音回放</h3>
@@ -334,20 +388,21 @@ export default function ResultPage() {
                 且伴奏增益与演奏页共用，不该在回放页随手可动 */}
             <PlaybackDeck
               src={take.audioUrl}
-              accent={song.accent}
+              accent={accent}
               audioRef={audioRef}
               fallbackDurationSec={take.durationSec}
               showAccVol={syncEnabled}
             />
           </div>
+          {syncError && <p role="alert" className="result-warning">{syncError}</p>}
           <div className="playback-actions">
             <button
               className="btn-pill sync"
               onClick={() => void toggleSyncPlay()}
-              disabled={audioEngine.duration === 0}
+              disabled={!song || compatibleRef.current !== take.sessionId || syncLoading}
               title="录音与伴奏从同一时刻起播，对照听辨"
             >
-              {syncEnabled ? '❚❚ 停止对照' : '♫ 对照伴奏播放'}
+              {syncLoading ? '正在准备本曲伴奏…' : syncEnabled ? '❚❚ 停止对照' : '♫ 对照伴奏播放'}
             </button>
             <button
               className="btn-pill"
@@ -362,6 +417,7 @@ export default function ResultPage() {
 
         <div className="stats-card">
           <h3>音准统计</h3>
+          {analysis.status === 'incompatible' && <div className="stats-state warn">{analysis.message}</div>}
           {analysis.status === 'analyzing' && <div className="stats-state">音高分析中…</div>}
           {analysis.status === 'unsupported' && (
             <div className="stats-state warn">
@@ -375,7 +431,7 @@ export default function ResultPage() {
             <>
               <div className="stats-grid">
               <div className="stat">
-                <b style={{ color: stats.inTuneRatio >= 0.7 ? song.accent : 'var(--rec)' }}>
+                <b style={{ color: stats.inTuneRatio >= 0.7 ? accent : 'var(--rec)' }}>
                   {Math.round(stats.inTuneRatio * 100)}%
                 </b>
                 <span>已测音符音准率（±50 音分）</span>
@@ -408,7 +464,7 @@ export default function ResultPage() {
               notes={analysis.result.notes}
               track={analysis.result.annotatedTrack}
               durationSec={chartDuration}
-              accent={song.accent}
+              accent={accent}
             />
             <div className="chart-legend">
               <span>
@@ -429,10 +485,16 @@ export default function ResultPage() {
         )}
       </section>
 
+      {analysis.status === 'done' && scoreTimeline && <section className="practice-feedback" aria-label="待练小节">
+        <h3>下次重点练习</h3><p>按本次采集范围内的完整音符统计。未检测到音高也可能与录音质量有关。</p>
+        <div className="weak-bars">{weakMeasures(analysis.result, scoreTimeline).map(bar => <div key={bar.range.startMeasure}><b>第 {bar.range.startMeasure} 小节</b><span>漏 {bar.missed} / {bar.total} · 偏差 {bar.avgAbsCents === null ? '暂无实测' : `${Math.round(bar.avgAbsCents)} 音分`}</span><button className="btn-pill" onClick={() => { if (!song) return; setPracticeConfig({ songId: song.id, range: bar.range, rounds: 3 }); go('perform', song.id) }}>重练此小节 · 3 轮</button></div>)}</div>
+        {previous ? <p className="practice-delta">与 {new Date(previous.startedAt).toLocaleString('zh-CN')} 的兼容练习相比：音准率 {((analysis.result.stats.inTuneRatio - previous.stats.inTuneRatio) * 100).toFixed(0)} 个百分点，漏音 {analysis.result.stats.missedNoteCount - previous.stats.missedNoteCount} 个（负数表示减少）。</p> : comparisonMessage && <p>{comparisonMessage}</p>}
+      </section>}
       <footer className="result-actions">
-        <button className="btn-pill primary" style={{ background: song.accent, color: '#06130d', borderColor: 'transparent' }} onClick={() => go('perform', song.id)}>
+        <button className="btn-pill primary" style={{ background: accent, color: '#06130d', borderColor: 'transparent' }} disabled={!song || analysis.status === 'incompatible'} onClick={() => { if (!song) return; setPracticeConfig(null); go('perform', song.id) }}>
           ↺ 重新演奏
         </button>
+        <button className="btn-pill" onClick={() => go('history')}>练习记录</button>
         <button className="btn-pill" onClick={() => go('home')}>
           返回曲库
         </button>

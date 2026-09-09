@@ -503,3 +503,5 @@ video.perform-bg-cover {
   }
 }
 
+
+.hud-song-text .loop-progress { color: var(--song-accent); font-size: 12px; max-width: 50vw; white-space: normal; }

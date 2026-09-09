@@ -6,6 +6,7 @@ import { assetUrl } from '../lib/assetUrl'
 import { expandRepeats, stripForcedBreaks } from '../score/musicxml'
 import { useAppStore } from '../store'
 import type { SongManifest, Timeline } from '../types'
+import { practiceMeasures, practiceRange } from '../practice/model'
 import './PreviewPage.css'
 
 /** 封面占位渐变（与目录页一致，正式封面由 Song Pack 提供） */
@@ -29,6 +30,10 @@ type ScoreKind = 'flute' | 'piano'
 export default function PreviewPage() {
   const songId = useAppStore((s) => s.currentSongId)
   const go = useAppStore((s) => s.go)
+  const setPracticeConfig = useAppStore((s) => s.setPracticeConfig)
+  const [startMeasure, setStartMeasure] = useState(1)
+  const [endMeasure, setEndMeasure] = useState(1)
+  const [rounds, setRounds] = useState(3)
   const toggleFavorite = useAppStore((s) => s.toggleFavorite)
   const favorites = useAppStore((s) => s.favorites)
   const song = getSong(songId) ?? SONGS[0]
@@ -48,6 +53,9 @@ export default function PreviewPage() {
   const bgVideoRef = useRef<HTMLVideoElement>(null)
   if (lastSongId !== song.id) {
     setLastSongId(song.id)
+    setStartMeasure(1)
+    setEndMeasure(1)
+    setRounds(3)
     setXml(null)
     setTimeline(null)
     setLoadError(null)
@@ -167,6 +175,9 @@ export default function PreviewPage() {
     },
   ]
 
+  const measures = timeline ? practiceMeasures(timeline) : []
+  const selectedRange = timeline ? practiceRange(timeline, startMeasure, endMeasure) : null
+
   return (
     <div className="preview">
       {/* 全屏背景层：动画视频/封面铺满（object-fit cover）+ accent 青绿调模糊垫底 + 暗部纱罩 */}
@@ -237,6 +248,7 @@ export default function PreviewPage() {
                 className="btn-play-big"
                 style={{ background: song.accent }}
                 onClick={() => {
+                  setPracticeConfig(null)
                   handoffToPerformRef.current = true
                   go('perform', song.id)
                 }}
@@ -276,6 +288,23 @@ export default function PreviewPage() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="practice-config" aria-label="分段练习">
+        <div><h3>分段练习</h3><p>按实际播放顺序选择小节，每轮独立保存录音。</p></div>
+        <div className="practice-fields">
+          <label>起始小节<select aria-label="起始小节" value={startMeasure} disabled={!measures.length} onChange={e => { const n = Number(e.target.value); setStartMeasure(n); if (endMeasure < n) setEndMeasure(n) }}>
+            {measures.map(m => <option key={m.startMeasure} value={m.startMeasure}>第 {m.startMeasure} 小节</option>)}
+          </select></label>
+          <label>结束小节<select aria-label="结束小节" value={endMeasure} disabled={!measures.length} onChange={e => setEndMeasure(Number(e.target.value))}>
+            {measures.filter(m => m.startMeasure >= startMeasure).map(m => <option key={m.startMeasure} value={m.startMeasure}>第 {m.startMeasure} 小节</option>)}
+          </select></label>
+          <label>练习轮数<select aria-label="练习轮数" value={rounds} disabled={!measures.length} onChange={e => setRounds(Number(e.target.value))}>
+            {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n} 轮</option>)}
+          </select></label>
+          <button className="btn-pill" disabled={!selectedRange} onClick={() => { if (!selectedRange) return; setPracticeConfig({ songId: song.id, range: selectedRange, rounds }); handoffToPerformRef.current = true; go('perform', song.id) }}>开始分段练习</button>
+        </div>
+        {!measures.length && <p role="status">时间轴准备好后即可选择练习小节。</p>}
       </section>
 
       <section className="info-list" aria-label="曲目信息">

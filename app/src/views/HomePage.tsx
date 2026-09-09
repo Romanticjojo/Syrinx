@@ -187,6 +187,7 @@ export default function HomePage() {
         </div>
         <nav className="home-nav">
           <button className="nav-pill on">曲库</button>
+          <button className="nav-pill" onClick={() => go('history')}>练习记录</button>
           <button className="nav-pill" onClick={() => setAboutOpen(true)}>
             关于
           </button>
