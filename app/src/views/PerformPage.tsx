@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
 import { openMic, type MicSession } from '../audio/recorder'
-import { synthAccompaniment } from '../audio/synth'
+import { loadAccompaniment, cancelPendingAccompaniment } from '../audio/accompaniment'
 import { LumiereScene } from '../background/LumiereScene'
 import ControlBar from '../components/ControlBar'
 import PitchMeter, { type PitchMeterHandle } from '../components/PitchMeter'
@@ -39,6 +39,9 @@ interface CaptureStart {
 export default function PerformPage() {
   const songId = useAppStore((s) => s.currentSongId)
   const go = useAppStore((s) => s.go)
+  const beginPerformance = useAppStore((s) => s.beginPerformance)
+  const setPerformanceStatus = useAppStore((s) => s.setPerformanceStatus)
+  const completePerformance = useAppStore((s) => s.completePerformance)
   const song = getSong(songId) ?? SONGS[0]
 
   const [phase, setPhase] = useState<Phase>('loading')
@@ -51,12 +54,17 @@ export default function PerformPage() {
   const [xml, setXml] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [synthesizedAccompaniment, setSynthesizedAccompaniment] = useState(false)
 
   // rAF 循环用的 ref 镜像（避开闭包过期）
   const timelineRef = useRef<Timeline | null>(null)
   const phaseRef = useRef<Phase>('loading')
   const playingRef = useRef(false)
   const finishedRef = useRef(false)
+  const mountedRef = useRef(true)
+  const sessionIdRef = useRef<string | null>(null)
+  const startPendingRef = useRef(false)
+  const resumePendingRef = useRef(false)
   const countdownRef = useRef({ t0: 0, beat: 0.7 })
   const idleTimer = useRef(0)
   const toastTimer = useRef(0)
@@ -124,6 +132,11 @@ export default function PerformPage() {
     if (!micOpeningRef.current) {
       micOpeningRef.current = openMic(audioEngine.audioCtx)
         .then((mic) => {
+          if (!mountedRef.current) {
+            mic.release()
+            micOpeningRef.current = null
+            throw new Error('麦克风请求已取消')
+          }
           micRef.current = mic
           micOpeningRef.current = null
           return mic
@@ -149,6 +162,7 @@ export default function PerformPage() {
   const finish = useCallback(() => {
     if (finishedRef.current) return
     finishedRef.current = true
+    const stopSec = audioEngine.time
     audioEngine.pause()
     playingRef.current = false
     setPlaying(false)
@@ -158,47 +172,68 @@ export default function PerformPage() {
     // 停麦克风并封存 Take（音高分析在回放页按需进行）；录音关着则丢弃采集
     const mic = micRef.current
     micRef.current = null
-    micOpeningRef.current = null
     const started = recStartedRef.current
     recStartedRef.current = null
-    const discard = !recOnRef.current || !started
+    const recordingRequested = recOnRef.current
+    const discard = !recordingRequested || !started
     recOnRef.current = false
     setRecOn(false)
-    const durationSec = audioEngine.time
-    if (mic) {
-      mic
-        .stop()
-        .then((r) => {
-          if (discard) {
-            URL.revokeObjectURL(r.url)
-            return
-          }
-          if (r.silent) showToast('警告：录音电平接近 0，回放将无声；请检查麦克风/系统输入设备')
-          const prev = useAppStore.getState().lastTake
-          if (prev?.audioUrl) URL.revokeObjectURL(prev.audioUrl)
-          useAppStore.getState().setTake({
-            songId: song.id,
-            startedAt: started!.wall,
-            durationSec,
-            audioUrl: r.url,
-            mimeType: r.mime,
-            startSec: started!.t,
-            pitchTrack: null,
-            stats: null,
-          })
+    const sessionId = sessionIdRef.current
+    if (!sessionId) return
+    setPerformanceStatus(sessionId, 'saving')
+    void (async () => {
+      try {
+        const recording = mic ? await mic.stop() : null
+        if (!mountedRef.current) {
+          if (recording) URL.revokeObjectURL(recording.url)
+          return
+        }
+        if (discard || !recording) {
+          if (recording) URL.revokeObjectURL(recording.url)
+          const message = recordingRequested
+            ? '麦克风不可用，本次演奏没有录音。'
+            : '本次演奏未开启录音。'
+          if (setPerformanceStatus(sessionId, 'no-recording', message)) go('result')
+          return
+        }
+        if (recording.silent)
+          showToast('警告：录音电平接近 0，回放将无声；请检查麦克风/系统输入设备')
+        const accepted = completePerformance(sessionId, {
+          sessionId,
+          songId: song.id,
+          startedAt: started.wall,
+          durationSec: Math.max(0, stopSec - started.t),
+          audioUrl: recording.url,
+          mimeType: recording.mime,
+          startSec: started.t,
+          stopSec,
+          pitchTrack: null,
+          stats: null,
         })
-        .catch(() => {
-          if (!discard) showToast('录音保存失败，回放页将无录音')
-        })
-    } else if (!discard) {
-      showToast('麦克风不可用，本次演奏无录音')
-    }
-    window.setTimeout(() => go('result'), 1200)
-  }, [go, showToast, song.id])
+        if (!accepted) {
+          URL.revokeObjectURL(recording.url)
+          return
+        }
+        go('result')
+      } catch (e: unknown) {
+        if (!mountedRef.current) return
+        if (discard) {
+          if (setPerformanceStatus(sessionId, 'no-recording', '本次演奏未开启录音。')) go('result')
+          return
+        }
+        const message = e instanceof Error ? e.message : String(e)
+        if (setPerformanceStatus(sessionId, 'failed', `录音保存失败：${message}`)) go('result')
+      }
+    })()
+  }, [completePerformance, go, setPerformanceStatus, showToast, song.id])
 
   // 进入即装配：曲谱解析 → 伴奏装入（真实伴奏优先，缺省合成） → 装入主时钟（就绪前由浮层遮罩）
   useEffect(() => {
     let alive = true
+    mountedRef.current = true
+    const previousTake = useAppStore.getState().lastTake
+    if (previousTake?.audioUrl) URL.revokeObjectURL(previousTake.audioUrl)
+    sessionIdRef.current = beginPerformance(song.id)
     audioEngine.onEnd = finish
     ;(async () => {
       try {
@@ -207,22 +242,12 @@ export default function PerformPage() {
         setXml(x)
         setTimeline(t)
         timelineRef.current = t
-        // 真实伴奏优先：Song Pack 有音频文件时解码装入；缺文件或解码失败回退程序化合成
-        let buffer: AudioBuffer | null = null
-        if (song.accompanimentUrl) {
-          try {
-            const res = await fetch(assetUrl(song.accompanimentUrl))
-            if (!res.ok) throw new Error(`HTTP ${res.status}`)
-            buffer = await audioEngine.decode(await res.arrayBuffer())
-          } catch (e: unknown) {
-            console.warn(`[luv] 伴奏加载失败，回退程序化合成：${e instanceof Error ? e.message : e}`)
-            buffer = null
-          }
-        }
-        if (!buffer) buffer = await synthAccompaniment(t)
+        if (timeEl.current) timeEl.current.textContent = `0:00 / ${fmt(t.durationSec)}`
+        const { buffer, synthesized } = await loadAccompaniment(song, t)
         if (!alive) return
         await audioEngine.load(buffer)
         if (!alive) return
+        setSynthesizedAccompaniment(synthesized)
         setPhase('ready')
       } catch (e: unknown) {
         if (alive) {
@@ -233,6 +258,10 @@ export default function PerformPage() {
     })()
     return () => {
       alive = false
+      mountedRef.current = false
+      startPendingRef.current = false
+      resumePendingRef.current = false
+      cancelPendingAccompaniment(song.id)
       audioEngine.onEnd = undefined
       audioEngine.pause()
       clearTimeout(idleTimer.current)
@@ -240,7 +269,6 @@ export default function PerformPage() {
       // 中途退出：整个麦克风会话作废（含未封存的录音）
       const mic = micRef.current
       micRef.current = null
-      micOpeningRef.current = null
       if (mic) mic.release()
     }
     // song 由 currentSongId 派生，进入本页才加载一次
@@ -307,12 +335,27 @@ export default function PerformPage() {
 
   /** 就绪 → 用户手势起奏：恢复音频上下文 + 预开麦克风 + 调度 4 拍节拍音 */
   const start = useCallback(async () => {
-    if (phaseRef.current !== 'ready') return
+    if (phaseRef.current !== 'ready' || startPendingRef.current) return
     const tl = timelineRef.current
     if (!tl) return
-    await audioEngine.resume()
+    startPendingRef.current = true
+    try {
+      await audioEngine.resume()
+    } catch {
+      startPendingRef.current = false
+      if (mountedRef.current) showToast('音频无法启动，请重试')
+      return
+    }
+    if (!mountedRef.current || phaseRef.current !== 'ready') {
+      startPendingRef.current = false
+      return
+    }
+    startPendingRef.current = false
+    phaseRef.current = 'countdown'
     // 麦克风在倒数期间申请（权限弹窗时间被倒数盖住）；失败不阻断演奏
-    ensureMic().catch(() => showToast('麦克风不可用，实时音准与录音不可用'))
+    ensureMic().catch(() => {
+      if (mountedRef.current) showToast('麦克风不可用，实时音准与录音不可用')
+    })
     scoreRef.current?.showCursor()
     const beat = 60 / tl.tempo
     const t0 = audioEngine.ctxTime + 0.12
@@ -328,24 +371,42 @@ export default function PerformPage() {
   useEffect(() => {
     if (phase !== 'countdown') return
     let raf = 0
+    let alive = true
     const step = () => {
       const { t0, beat } = countdownRef.current
       const remain = t0 + beat * COUNT_BEATS - audioEngine.ctxTime
       if (remain <= 0) {
-        audioEngine.play(0)
-        playingRef.current = true
-        setPlaying(true)
-        setPhase('performing')
-        // 默认开录（录音开着才封存 Take）；麦克风没就绪时等它就绪后补开。
-        // 一次性提示采集确实开起来了（t_b22f5467 项 2）
-        const REC_ON_TOAST = '🎙️ 录音已开启，结束后可在回放页查看'
-        recOnRef.current = true
-        setRecOn(true)
-        if (micRef.current && startCapture(0, false)) showToast(REC_ON_TOAST)
-        else void ensureMic().then((mic) => {
-          if (playingRef.current && recOnRef.current && micRef.current === mic && !recStartedRef.current)
-            if (startCapture(0, false)) showToast(REC_ON_TOAST)
-        }).catch(() => {})
+        void (async () => {
+          const started = await audioEngine.play(0)
+          if (!alive || phaseRef.current !== 'countdown') return
+          if (!started) {
+            phaseRef.current = 'ready'
+            setPhase('ready')
+            showToast('伴奏无法开始，请重试')
+            return
+          }
+          phaseRef.current = 'performing'
+          playingRef.current = true
+          setPlaying(true)
+          setPhase('performing')
+          // 默认开录（录音开着才封存 Take）；麦克风没就绪时等它就绪后补开。
+          const REC_ON_TOAST = '🎙️ 录音已开启，结束后可在回放页查看'
+          recOnRef.current = true
+          setRecOn(true)
+          const sessionId = sessionIdRef.current
+          if (sessionId) setPerformanceStatus(sessionId, 'recording')
+          if (micRef.current && startCapture(audioEngine.time, false)) showToast(REC_ON_TOAST)
+          else void ensureMic().then((mic) => {
+            if (
+              mountedRef.current &&
+              phaseRef.current === 'performing' &&
+              recOnRef.current &&
+              micRef.current === mic &&
+              !recStartedRef.current
+            )
+              if (startCapture(audioEngine.time, !playingRef.current)) showToast(REC_ON_TOAST)
+          }).catch(() => {})
+        })()
         return
       }
       if (countEl.current)
@@ -353,8 +414,11 @@ export default function PerformPage() {
       raf = requestAnimationFrame(step)
     }
     raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [phase, ensureMic, startCapture])
+    return () => {
+      alive = false
+      cancelAnimationFrame(raf)
+    }
+  }, [phase, ensureMic, setPerformanceStatus, showToast, startCapture])
 
   // 演奏主循环：唯一时间源 audioEngine.time → 光标推进 + HUD 直写 + 实时音准 + 结束判定
   useEffect(() => {
@@ -397,14 +461,32 @@ export default function PerformPage() {
       playingRef.current = false
       setPlaying(false)
       shellRef.current?.classList.remove('idle')
-    } else {
-      audioEngine.play()
-      micRef.current?.resumeCapture()
-      playingRef.current = true
-      setPlaying(true)
-      wake()
+    } else if (!resumePendingRef.current) {
+      resumePendingRef.current = true
+      void (async () => {
+        let started = false
+        try {
+          started = await audioEngine.play()
+        } catch {
+          // 下方按 started=false 统一保留暂停态并提示
+        }
+        resumePendingRef.current = false
+        if (!mountedRef.current || finishedRef.current || phaseRef.current !== 'performing') return
+        if (!started) {
+          showToast('伴奏无法继续，请重试')
+          return
+        }
+        const mic = micRef.current
+        if (recOnRef.current && mic) {
+          if (recStartedRef.current) mic.resumeCapture()
+          else startCapture(audioEngine.time, false)
+        }
+        playingRef.current = true
+        setPlaying(true)
+        wake()
+      })()
     }
-  }, [wake])
+  }, [showToast, startCapture, wake])
 
   /** 停止演奏：走与自然结束相同的 finish() 封存流程（伴奏停在点击时刻、
    *  Take.durationSec 截断为该时刻，回放页按截断口径统计与播放） */
@@ -644,7 +726,7 @@ export default function PerformPage() {
           <div className="ov-card">
             <div className="ov-glyph">𝄞</div>
             <div className="ov-title">正在准备伴奏…</div>
-            <div className="ov-sub">解析曲谱 · 程序化合成 · 对齐主时钟</div>
+            <div className="ov-sub">正在准备曲谱与伴奏，请稍候</div>
             <div className="ov-bar">
               <i />
             </div>
@@ -672,6 +754,9 @@ export default function PerformPage() {
             <div className="ov-sub">
               {song.composer} · {song.bpm} BPM · {song.durationLabel}
             </div>
+            {synthesizedAccompaniment && <div className="ov-sub" role="status">
+              {song.accompanimentUrl ? '原始伴奏暂不可用，已准备合成伴奏。' : '已准备合成伴奏。'}
+            </div>}
             <button className="ov-start" onClick={() => void start()}>
               ▶ 开始演奏
             </button>

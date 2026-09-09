@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Timeline } from '../types'
-import { extractPitchTrack, extractPitchTrackAsync, scoreAgainst, timelineUpTo } from './compare'
+import {
+  extractPitchTrack,
+  extractPitchTrackAsync,
+  scoreAgainst,
+  timelineInRange,
+  timelineUpTo,
+} from './compare'
 
 const SR = 44100
 
@@ -116,6 +122,9 @@ describe('scoreAgainst', () => {
 
   it('统计：noteCount 只计有实测的音符，inTuneRatio=0.5，avgAbsCents≈602', () => {
     expect(result.stats.noteCount).toBe(2)
+    expect(result.stats.totalNoteCount).toBe(3)
+    expect(result.stats.missedNoteCount).toBe(1)
+    expect(result.stats.coverageRatio).toBeCloseTo(2 / 3, 5)
     expect(result.stats.inTuneRatio).toBeCloseTo(0.5, 5)
     expect(result.stats.avgAbsCents).toBeCloseTo(602, 0)
   })
@@ -176,5 +185,21 @@ describe('timelineUpTo（停止演奏截断口径）', () => {
     expect(r.notes).toHaveLength(2)
     expect(r.notes.map((n) => n.note.midi)).toEqual([69, 60])
     expect(r.stats.noteCount).toBeLessThanOrEqual(2)
+  })
+})
+
+describe('timelineInRange（实际采集区间口径）', () => {
+  it('延迟开麦后只评估完整落在采集起止位置内的音符', () => {
+    const t = timelineInRange(timeline, 1.5, 3)
+    expect(t.notes.map((n) => n.midi)).toEqual([45])
+  })
+
+  it('停在音符中间时不把未录完整的末音记成漏音', () => {
+    const t = timelineInRange(timeline, 0, 2.5)
+    expect(t.notes.map((n) => n.midi)).toEqual([69, 60])
+  })
+
+  it('无效起止位置返回空音符，不把整曲算成漏音', () => {
+    expect(timelineInRange(timeline, 2, 1).notes).toEqual([])
   })
 })

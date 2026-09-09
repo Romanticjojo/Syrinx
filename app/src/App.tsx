@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import Intro from './components/Intro'
 import { useAppStore } from './store'
 import HomePage from './views/HomePage'
-import PerformPage from './views/PerformPage'
-import PreviewPage from './views/PreviewPage'
-import ResultPage from './views/ResultPage'
+
+const PreviewPage = lazy(() => import('./views/PreviewPage'))
+const PerformPage = lazy(() => import('./views/PerformPage'))
+const ResultPage = lazy(() => import('./views/ResultPage'))
 
 /** 视图路由：zustand 状态机（四个页面不值得引入路由库）+ 入场动画覆盖层 */
 export default function App() {
@@ -15,15 +16,17 @@ export default function App() {
   return (
     <>
       {showIntro && <Intro onDone={() => setShowIntro(false)} />}
-      {view === 'preview' ? (
-        <PreviewPage />
-      ) : view === 'perform' ? (
-        <PerformPage />
-      ) : view === 'result' ? (
-        <ResultPage />
-      ) : (
-        <HomePage />
-      )}
+      <Suspense fallback={<div className="route-loading" role="status">正在打开…</div>}>
+        {view === 'preview' ? (
+          <PreviewPage />
+        ) : view === 'perform' ? (
+          <PerformPage />
+        ) : view === 'result' ? (
+          <ResultPage />
+        ) : (
+          <HomePage />
+        )}
+      </Suspense>
     </>
   )
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveSyncRoute, syncTunePath, SYNC_TUNE_DEFAULT_ID } from './route'
+import { resolveSyncRoute, syncTunePath, syncTuneHomePath, SYNC_TUNE_DEFAULT_ID } from './route'
 
 /** 同步页路由解析（R3）：裸 /sync-tune 落默认曲并要求 replaceState 补全 URL；
  *  带 id 原样透传（未知曲由页面显示装配失败态，不在路由层拦截）。 */
@@ -43,5 +43,17 @@ describe('resolveSyncRoute', () => {
 
   it('syncTunePath 生成 /sync-tune/<id>', () => {
     expect(syncTunePath('luv-letter')).toBe('/sync-tune/luv-letter')
+  })
+
+  it('keeps workbench navigation in the selected immutable release', () => {
+    expect(syncTunePath('flower-dance', '/releases/r1/'))
+      .toBe('/releases/r1/index.html?sync-tune=flower-dance')
+    expect(syncTuneHomePath('/releases/r1/')).toBe('/releases/r1/index.html')
+    expect(syncTuneHomePath('/')).toBe('/')
+    expect(resolveSyncRoute('/releases/r1/index.html', '?sync-tune=flower-dance'))
+      .toEqual({ songId: 'flower-dance', needsReplace: false })
+    expect(resolveSyncRoute('/releases/r1/index.html', '?sync-tune='))
+      .toEqual({ songId: SYNC_TUNE_DEFAULT_ID, needsReplace: true })
+    expect(resolveSyncRoute('/releases/r1/index.html', '?sync-tune=bad%20id')).toBeNull()
   })
 })

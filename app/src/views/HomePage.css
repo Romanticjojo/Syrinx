@@ -315,6 +315,19 @@
   letter-spacing: 0.04em;
 }
 
+.catalog-empty {
+  display: grid;
+  gap: 8px;
+  padding: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--ink);
+}
+.catalog-empty span {
+  color: var(--ink-dim);
+}
+
 @media (max-width: 720px) {
   .home-topbar,
   .home-hero,

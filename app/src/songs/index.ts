@@ -3,14 +3,8 @@ import { applyAnchorOffset, applyBeats, type BeatsFile } from '../score/anchors'
 import { buildScoreTimeline } from '../score/deterministic-adapter'
 import { assetUrl } from '../lib/assetUrl'
 import { expandRepeats, parseMusicXml, stripForcedBreaks } from '../score/musicxml'
-import luvLetterManifest from '../../public/songs/luv-letter/manifest.json'
-import flowerDanceManifest from '../../public/songs/flower-dance/manifest.json'
-// web-deploy 体验版（2026-09-06）：river-flows-in-you / birds-poem 半成品隐藏，
-// manifest import 与注册块一并注释（dev 分支保留全部）；恢复时两处都要解开
-// import riverFlowsInYouManifest from '../../public/songs/river-flows-in-you/manifest.json'
-import expedition33Manifest from '../../public/songs/expedition-33/manifest.json'
-// import birdsPoemManifest from '../../public/songs/birds-poem/manifest.json'
-import interstellarManifest from '../../public/songs/interstellar/manifest.json'
+import sampleManifest from './sample/manifest.json'
+import { buildSongCatalog } from './catalog'
 
 /**
  * 内置曲库：正式曲目按 Song Pack 格式放入 public/songs/<id>/ 并在此登记即可扩展。
@@ -18,45 +12,20 @@ import interstellarManifest from '../../public/songs/interstellar/manifest.json'
  * 「晨间音阶练习」——均无伴奏锚点，仅作布局演示用；其谱面文件夹保留作为
  * musicxml 解析测试 fixture。）
  */
-export const SONGS: SongManifest[] = [
-  // 首首正式曲：Luv Letter（DJ OKAWARI）——真实伴奏 + 动画背景 + 封面 + 正式谱（图片谱 OMR 转换，t_54968084）
-  {
-    ...luvLetterManifest,
-    difficulty: luvLetterManifest.difficulty as 1 | 2 | 3,
-    backgroundTheme: luvLetterManifest.backgroundTheme as SongManifest['backgroundTheme'],
-  },
-  // 产线二期四首（t_0ad1f095）：谱面 OMR 清洗 + 伴奏锚点离线生成，媒体不入库
-  {
-    ...flowerDanceManifest,
-    difficulty: flowerDanceManifest.difficulty as 1 | 2 | 3,
-    backgroundTheme: flowerDanceManifest.backgroundTheme as SongManifest['backgroundTheme'],
-  },
-  // web-deploy 体验版（2026-09-06）：隐藏半成品 river-flows-in-you 与 birds-poem（开发版 dev 分支仍保留）
-  // {
-  //   ...riverFlowsInYouManifest,
-  //   difficulty: riverFlowsInYouManifest.difficulty as 1 | 2 | 3,
-  //   backgroundTheme: riverFlowsInYouManifest.backgroundTheme as SongManifest['backgroundTheme'],
-  // },
-  {
-    ...expedition33Manifest,
-    difficulty: expedition33Manifest.difficulty as 1 | 2 | 3,
-    backgroundTheme: expedition33Manifest.backgroundTheme as SongManifest['backgroundTheme'],
-  },
-  // web-deploy 体验版（2026-09-06）：隐藏半成品 birds-poem（同上）
-  // {
-  //   ...birdsPoemManifest,
-  //   difficulty: birdsPoemManifest.difficulty as 1 | 2 | 3,
-  //   backgroundTheme: birdsPoemManifest.backgroundTheme as SongManifest['backgroundTheme'],
-  // },
-  // Interstellar（Hans Zimmer，arr. Ariana & Ella）：Soundslice 官方 MusicXML（120qpm 直出，
-  // 与钢琴伴奏同时间轴渲染，beats 走 duration_locked 产线）+ 星空动画背景（曲库悬停 hoverPlayOnce 定格）
-  {
-    ...interstellarManifest,
-    difficulty: interstellarManifest.difficulty as 1 | 2 | 3,
-    backgroundTheme: interstellarManifest.backgroundTheme as SongManifest['backgroundTheme'],
-    backgroundFit: interstellarManifest.backgroundFit as SongManifest['backgroundFit'],
-  },
-]
+const privateManifestModules = import.meta.glob('../../public/songs/*/manifest.json', {
+  eager: true,
+})
+
+/**
+ * Private Song Packs are optional in a clean checkout. When none are present,
+ * the checked-in sample keeps the development build useful. An explicit
+ * deployment allowlist never falls back to that sample implicitly.
+ */
+export const SONGS: SongManifest[] = buildSongCatalog(
+  privateManifestModules,
+  sampleManifest,
+  import.meta.env.VITE_SONG_IDS,
+)
 
 export function getSong(id: string | null): SongManifest | undefined {
   return SONGS.find((s) => s.id === id)

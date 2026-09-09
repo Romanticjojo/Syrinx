@@ -12,6 +12,7 @@ class AudioEngine {
   private startCtxTime = 0
   private startOffset = 0
   private endRaf = 0
+  private playGeneration = 0
 
   rate = 1
   playing = false
@@ -30,6 +31,7 @@ class AudioEngine {
   }
 
   async load(buffer: AudioBuffer): Promise<void> {
+    this.playGeneration++
     this.stopSource()
     this.buffer = buffer
     this.startOffset = 0
@@ -40,9 +42,11 @@ class AudioEngine {
    *  必须先 await resume 再 start：浏览器自动播放策略下 ctx suspended 时
    *  fire-and-forget 的 resume 会让 src.start() 先于恢复执行 -> 静音。
    *  resume 失败（仍 suspended）返回 false 且不置 playing，调用方据此提示。
-   *  兼容性：不 await 调用方（PerformPage 等）不受影响，忽略返回值即可。 */
+   *  等待恢复期间 pause/load/seek 或新的 play 会撤销旧请求。 */
   async play(offsetSec?: number): Promise<boolean> {
-    if (!this.buffer) return false
+    const generation = ++this.playGeneration
+    const buffer = this.buffer
+    if (!buffer) return false
     if (this.ctx.state === 'suspended') {
       try {
         await this.ctx.resume()
@@ -51,12 +55,13 @@ class AudioEngine {
         return false
       }
     }
+    if (generation !== this.playGeneration || this.ctx.state !== 'running') return false
     if (offsetSec !== undefined) this.startOffset = offsetSec
-    if (this.startOffset >= this.buffer.duration) this.startOffset = 0
+    if (this.startOffset >= buffer.duration) this.startOffset = 0
     this.stopSource()
 
     const src = this.ctx.createBufferSource()
-    src.buffer = this.buffer
+    src.buffer = buffer
     src.playbackRate.value = this.rate
     src.connect(this.gain)
     src.start(0, this.startOffset)
@@ -73,6 +78,7 @@ class AudioEngine {
   }
 
   pause(): void {
+    this.playGeneration++
     if (!this.playing) return
     this.startOffset = this.time
     this.stopSource()
@@ -84,6 +90,7 @@ class AudioEngine {
     if (this.playing) {
       this.play(clamped)
     } else {
+      this.playGeneration++
       this.startOffset = clamped
     }
   }

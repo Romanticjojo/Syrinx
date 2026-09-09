@@ -1,0 +1,15 @@
+{
+  "id": "syrinx-sample",
+  "title": "Syrinx 四小节练习",
+  "composer": "Syrinx",
+  "difficulty": 1,
+  "durationLabel": "0:08",
+  "keyLabel": "C 大调",
+  "description": "随应用附带的短练习曲，用于在尚未安装私人曲目素材时体验读谱与演奏流程。",
+  "tags": ["示例", "长笛", "入门"],
+  "scoreUrl": "/sample-song/score.musicxml",
+  "accent": "#5fb8a8",
+  "backgroundTheme": "lumiere",
+  "bpm": 120,
+  "cursorMode": "score"
+}
