@@ -363,7 +363,11 @@ it('fresh analysis updates the matching persisted record and keeps playback on u
   mocked.engine.decode.mockResolvedValueOnce({ sampleRate: 8000, length: 16000, duration: 2, numberOfChannels: 1, getChannelData: () => new Float32Array(16000) })
   mocked.updatePracticeAnalysis.mockRejectedValueOnce(new Error('analysis quota'))
   const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
-  await act(async () => new Promise(r => setTimeout(r, 180)))
+  await act(async () => {
+    await vi.waitFor(() => {
+      expect(mocked.updatePracticeAnalysis).toHaveBeenCalledWith('session-1', [], expect.objectContaining({ missedNoteCount: 2, totalNoteCount: 2 }))
+    }, { timeout: 3000, interval: 20 })
+  })
   expect(useAppStore.getState().lastTake?.stats?.missedNoteCount).toBe(2)
   expect(mocked.updatePracticeAnalysis).toHaveBeenCalledWith('session-1', [], expect.objectContaining({ missedNoteCount: 2, totalNoteCount: 2 }))
   expect(page.textContent).toContain('analysis quota')
