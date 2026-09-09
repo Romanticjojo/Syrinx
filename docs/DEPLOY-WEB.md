@@ -9,7 +9,11 @@ R1 使用不可变版本目录。线上入口仍是 `/var/www/syrinx/index.html`
 - `/etc/nginx/sites-enabled/proxy` 的 `romanticjojo.com` 443 块；
 - `/etc/nginx/sites-enabled/syrinx` 的 8090 块。
 
-保留共享文件中的 Alnazar server、现有 `root /var/www/syrinx;`、ACME challenge、证书和其他 location。不要用仓库文件覆盖服务器配置。合并后先执行 `nginx -t`；只有检查成功才 reload。确认主 nginx 配置包含 `mime.types`，其中 `.m4a` 应返回 `audio/mp4`。
+保留共享文件中的 Alnazar server、现有 `root /var/www/syrinx;`、ACME challenge、证书和其他 location。不要用仓库文件覆盖服务器配置。
+
+先把 `/etc/nginx/mime.types` 复制为 `/etc/nginx/snippets/syrinx-mime.types`，只把其中 `.m4a` 的 `audio/x-m4a` 映射改为 `audio/mp4`（已经是 `audio/mp4` 时保留）。版本资源 location 引用这份专用表，其他类型保留原值，也不改变同机其他网站的 MIME 配置。实际 Ubuntu 表默认为 `audio/x-m4a`，不能仅假定 include 标准表就满足验收。
+
+合并后先执行 `nginx -t`；只有检查成功才 reload。分别请求 8090 和 HTTPS 的版本 M4A，确认 `Content-Type: audio/mp4`、字节范围请求返回 206，以及 JS/CSS 类型和缓存正常。
 
 ## 准备候选版（Windows 或 Linux）
 
