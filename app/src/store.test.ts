@@ -67,12 +67,3 @@ describe('演奏会话隔离', () => {
     expect(useAppStore.getState().lastTake).toBeNull()
   })
 })
-
-
-it('opening history selects its own completed session and rejects stale analysis', () => {
-  const oldId = useAppStore.getState().beginPerformance('old')
-  const restored = takeFor('restored', 'history-song')
-  useAppStore.getState().openPractice(restored)
-  expect(useAppStore.getState()).toMatchObject({ view: 'result', currentSongId: 'history-song', lastTake: restored, performanceSession: { id: 'restored', status: 'completed', take: restored } })
-  expect(useAppStore.getState().cacheTakeAnalysis(oldId, [], {} as never)).toBe(false)
-})

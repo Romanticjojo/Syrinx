@@ -338,9 +338,7 @@
     padding-right: 0;
   }
   .home-topbar {
-    padding: 14px 0;
-    gap: 12px;
-    flex-wrap: wrap;
+    padding: 14px 16px;
   }
   .home-hero {
     margin: 8px 16px 32px;
@@ -349,11 +347,7 @@
     padding: 0 16px 36px;
   }
   .home-nav {
-    gap: 2px;
-  }
-  .home-nav .nav-pill {
-    padding: 8px 9px;
-    min-height: 44px;
+    display: none;
   }
   .home-hero .hero-body {
     padding: 24px;

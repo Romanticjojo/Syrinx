@@ -1,5 +1,3 @@
-import type { PracticeMetadata } from './practice/model'
-
 /** 光标时间轴数据源（PlanB T2）：anchors = beats.json 伴奏锚点（缺省，现有行为）；
  * score = 谱面确定性时值换算（deterministic-adapter，不依赖音频对齐） */
 export type CursorMode = 'anchors' | 'score'
@@ -35,9 +33,6 @@ export interface Timeline {
 
 /** 一次演奏会话的产出（录音 + 音高分析） */
 export interface Take {
-  /** R2 原始录音和版本化练习上下文；旧会话可缺省。 */
-  audioBlob?: Blob
-  practice?: PracticeMetadata
   /** 创建本次演奏时生成的标识；异步保存/分析只能写回同一会话 */
   sessionId: string
   songId: string
