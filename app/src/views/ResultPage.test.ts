@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
 import type { PerformanceSession, Take } from '../types'
+import { songVersion } from '../practice/model'
+import { loadSong } from '../songs'
 
 const fakeSong = vi.hoisted(() => ({
   id: 'test-song',
@@ -12,6 +14,10 @@ const fakeSong = vi.hoisted(() => ({
 }))
 
 const mocked = vi.hoisted(() => ({
+  missingSong: false,
+  loadAccompaniment: vi.fn(),
+  listPractices: vi.fn(async () => []),
+  updatePracticeAnalysis: vi.fn(async () => {}),
   engine: {
     time: 0,
     duration: 20,
@@ -23,11 +29,12 @@ const mocked = vi.hoisted(() => ({
     pause: vi.fn(),
     seek: vi.fn(),
     decode: vi.fn(),
+    load: vi.fn(async () => {}),
   },
 }))
 
 vi.mock('../songs', () => ({
-  getSong: () => fakeSong,
+  getSong: () => mocked.missingSong ? undefined : fakeSong,
   SONGS: [fakeSong],
   loadSong: async () => ({
     xml: '<score-partwise/>',
@@ -40,10 +47,12 @@ vi.mock('../songs', () => ({
         { time: 4, duration: 1, midi: 69, measure: 2 },
         { time: 5, duration: 1, midi: 69, measure: 2 },
       ],
-      measureTimes: [],
+      measureTimes: [{ measure: 1, time: 0, quarters: 0 }, { measure: 2, time: 4, quarters: 8 }, { measure: 3, time: 6, quarters: 12 }],
     },
   }),
 }))
+vi.mock('../audio/accompaniment', () => ({ loadAccompaniment: mocked.loadAccompaniment }))
+vi.mock('../practice/history', () => ({ listPractices: mocked.listPractices, updatePracticeAnalysis: mocked.updatePracticeAnalysis }))
 vi.mock('../audio/AudioEngine', () => ({ audioEngine: mocked.engine }))
 vi.mock('../components/PlaybackDeck', () => ({
   default: ({ src, audioRef }: { src: string; audioRef: React.RefObject<HTMLAudioElement | null> }) =>
@@ -99,6 +108,10 @@ beforeEach(() => {
   vi.stubGlobal('requestAnimationFrame', vi.fn(() => 1))
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
   vi.clearAllMocks()
+  mocked.missingSong = false
+  mocked.updatePracticeAnalysis.mockReset().mockResolvedValue(undefined)
+  mocked.loadAccompaniment.mockReset().mockResolvedValue({ buffer: { duration: 20 }, synthesized: false })
+  useAppStore.setState({ storageError: null })
 })
 
 afterEach(async () => {
@@ -263,4 +276,138 @@ describe('录音与伴奏同步', () => {
     audio.dispatchEvent(new Event('pause'))
     expect(mocked.engine.pause).toHaveBeenCalledOnce()
   })
+})
+
+
+describe('历史版本安全', () => {
+  it.each([true, false])('changed song version blocks cached=%s analysis and comparison but retains audio', async (cached) => {
+    const take = takeFor()
+    take.practice = { songVersion: 'outdated', scoringVersion: 'pitch-v2-captured-notes', range: null, groupId: 'group', round: 1, rounds: 1 }
+    if (!cached) { take.stats = null; take.pitchTrack = null }
+    const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
+    await act(async () => new Promise(r => setTimeout(r, 80)))
+    expect(page.textContent).toContain('版本')
+    expect(page.textContent).not.toContain('已测音符音准率')
+    expect(page.querySelector('audio')?.getAttribute('src')).toBe('blob:take')
+    expect(mocked.engine.decode).not.toHaveBeenCalled()
+    expect([...page.querySelectorAll('button')].find(b => b.textContent?.includes('对照伴奏'))?.disabled).toBe(true)
+  })
+  it('removed catalog songs retain raw playback and export without scoring against another song', async () => {
+    mocked.missingSong = true
+    const take = takeFor()
+    const page = await renderWith({ id: take.sessionId, songId: 'removed', status: 'completed', take }, take)
+    expect(page.querySelector('audio')).not.toBeNull()
+    expect(page.textContent).toContain('不在当前曲库')
+    expect(page.textContent).not.toContain('已测音符音准率')
+    expect(mocked.engine.decode).not.toHaveBeenCalled()
+  })
+})
+
+
+async function storedTake() {
+  const take = takeFor()
+  const { xml, timeline } = await loadSong(fakeSong as never)
+  take.audioBlob = new Blob(['stored audio'], { type: 'audio/wav' })
+  take.practice = { songVersion: songVersion(xml, timeline), scoringVersion: 'pitch-v2-captured-notes', range: null, groupId: 'g', round: 1, rounds: 1 }
+  return take
+}
+it('restored history loads its own accompaniment before playback instead of using the retained buffer', async () => {
+  let resolve!: (value: { buffer: { duration: number }; synthesized: boolean }) => void
+  mocked.loadAccompaniment.mockReturnValueOnce(new Promise(r => { resolve = r }))
+  const take = await storedTake()
+  const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
+  expect(mocked.loadAccompaniment).not.toHaveBeenCalled()
+  await act(async () => [...page.querySelectorAll('button')].find(b => b.textContent?.includes('对照伴奏'))!.click())
+  expect(mocked.engine.play).not.toHaveBeenCalled()
+  expect(mocked.loadAccompaniment.mock.calls[0][0].id).toBe('test-song')
+  await act(async () => resolve({ buffer: { duration: 19 }, synthesized: false }))
+  expect(mocked.engine.load).toHaveBeenCalledWith({ duration: 19 })
+  expect(mocked.engine.play).toHaveBeenCalledWith(4)
+})
+it('switching records cancels a late accompaniment load before it can replace the next buffer', async () => {
+  let resolve!: (value: { buffer: { duration: number }; synthesized: boolean }) => void
+  mocked.loadAccompaniment.mockReturnValueOnce(new Promise(r => { resolve = r }))
+  const take = await storedTake()
+  const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
+  await act(async () => [...page.querySelectorAll('button')].find(b => b.textContent?.includes('对照伴奏'))!.click())
+  await act(async () => useAppStore.getState().openPractice({ ...take, sessionId: 'new-result', audioUrl: 'blob:new' }))
+  await act(async () => resolve({ buffer: { duration: 19 }, synthesized: false }))
+  expect(mocked.engine.load).not.toHaveBeenCalled()
+  expect(mocked.engine.play).not.toHaveBeenCalled()
+})
+it('pausing raw audio while accompaniment is loading permits a fresh comparison attempt', async () => {
+  let resolve!: (value: { buffer: { duration: number }; synthesized: boolean }) => void
+  mocked.loadAccompaniment.mockReturnValueOnce(new Promise(r => { resolve = r }))
+  const take = await storedTake()
+  const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
+  await act(async () => [...page.querySelectorAll('button')].find(b => b.textContent?.includes('对照伴奏'))!.click())
+  await act(async () => page.querySelector('audio')!.dispatchEvent(new Event('pause')))
+  await act(async () => resolve({ buffer: { duration: 19 }, synthesized: false }))
+  const button = [...page.querySelectorAll('button')].find(b => b.textContent?.includes('对照伴奏'))!
+  expect(button?.disabled).toBe(false)
+  expect(mocked.engine.load).not.toHaveBeenCalled()
+})
+it('worst-bar retry uses playback ordinal and three rounds while whole-song retry clears config', async () => {
+  const take = await storedTake()
+  const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
+  await act(async () => [...page.querySelectorAll('button')].find(b => b.textContent?.includes('重练此小节'))!.click())
+  expect(useAppStore.getState().practiceConfig).toMatchObject({ songId: 'test-song', rounds: 3, range: { startMeasure: 2, endMeasure: 2, startSec: 4, stopSec: 6 } })
+  await act(async () => [...page.querySelectorAll('button')].find(b => b.textContent?.includes('重新演奏'))!.click())
+  expect(useAppStore.getState().practiceConfig).toBeNull()
+})
+
+
+it('fresh analysis updates the matching persisted record and keeps playback on update failure', async () => {
+  const take = await storedTake()
+  take.pitchTrack = null; take.stats = null
+  mocked.engine.decode.mockResolvedValueOnce({ sampleRate: 8000, length: 16000, duration: 2, numberOfChannels: 1, getChannelData: () => new Float32Array(16000) })
+  mocked.updatePracticeAnalysis.mockRejectedValueOnce(new Error('analysis quota'))
+  const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
+  await act(async () => new Promise(r => setTimeout(r, 180)))
+  expect(useAppStore.getState().lastTake?.stats?.missedNoteCount).toBe(2)
+  expect(mocked.updatePracticeAnalysis).toHaveBeenCalledWith('session-1', [], expect.objectContaining({ missedNoteCount: 2, totalNoteCount: 2 }))
+  expect(page.textContent).toContain('analysis quota')
+  expect(page.querySelector('audio')).not.toBeNull()
+})
+it('raw download owns its URL until the browser can consume it, even after switching results', async () => {
+  const take = await storedTake()
+  const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
+  const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:download-only')
+  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  vi.useFakeTimers()
+  try {
+    await act(async () => [...page.querySelectorAll('button')].find(b => b.textContent?.includes('下载录音'))!.click())
+    expect(create).toHaveBeenCalledWith(take.audioBlob)
+    expect(click).toHaveBeenCalledOnce()
+    await act(async () => useAppStore.getState().openPractice({ ...take, sessionId: 'different', audioUrl: 'blob:different' }))
+    expect(revoke).toHaveBeenCalledWith('blob:take')
+    expect(revoke).not.toHaveBeenCalledWith('blob:download-only')
+    await act(async () => vi.advanceTimersByTime(30000))
+    expect(revoke).toHaveBeenCalledWith('blob:download-only')
+  } finally { vi.useRealTimers(); create.mockRestore(); revoke.mockRestore(); click.mockRestore() }
+})
+
+
+it.each(['seeking', 'ended'])('%s during deferred accompaniment loading cancels stale audio and allows retry from the selected playhead', async (event) => {
+  let resolveStale!: (value: { buffer: { duration: number }; synthesized: boolean }) => void
+  mocked.loadAccompaniment.mockReturnValueOnce(new Promise(r => { resolveStale = r }))
+  const take = await storedTake()
+  const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
+  const compare = page.querySelector<HTMLButtonElement>('button.sync')!
+  const audio = page.querySelector('audio')!
+  await act(async () => compare.click())
+  expect(compare.disabled).toBe(true)
+  audio.currentTime = event === 'ended' ? 2 : 1.25
+  await act(async () => audio.dispatchEvent(new Event(event)))
+  expect(compare.disabled).toBe(false)
+  await act(async () => compare.click())
+  expect(mocked.engine.load).toHaveBeenCalledOnce()
+  expect(mocked.engine.load).toHaveBeenCalledWith({ duration: 20 })
+  expect(mocked.engine.play).toHaveBeenCalledWith(event === 'ended' ? 4 : 5.25)
+  expect(audio.currentTime).toBe(event === 'ended' ? 0 : 1.25)
+  await act(async () => resolveStale({ buffer: { duration: 99 }, synthesized: false }))
+  expect(mocked.engine.load).toHaveBeenCalledOnce()
+  expect(mocked.engine.play).toHaveBeenCalledOnce()
+  expect(compare.textContent).toContain('停止对照')
 })

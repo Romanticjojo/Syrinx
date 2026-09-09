@@ -1,0 +1,11 @@
+.history-page { max-width: 1120px; margin: 0 auto; padding: 36px 24px 80px; min-height: 100vh; color: #e9f1ed; }
+.history-page header, .history-tools, .history-row-actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.history-page h1 { margin: 20px 0; } .history-note, .history-list p { color: #aab9b1; font-size: 14px; line-height: 1.6; }
+.history-tools { padding: 24px 0; } .history-tools select { margin-left: 10px; padding: 10px; color: #e9f1ed; background: #17241f; border-radius: 8px; }
+.history-list { display: grid; gap: 14px; } .history-list article { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 22px; border: 1px solid #ffffff20; border-radius: 16px; background: #14211baa; }
+.history-list h2 { font-size: 20px; margin: 0; } .history-list p { margin: 8px 0 0; }
+.history-empty { padding: 50px 0; color: #aab9b1; } .history-error { color: #ffd49e; line-height: 1.6; }
+.history-confirm { position: fixed; inset: 0; display: grid; place-items: center; background: #000a; z-index: 100; padding: 20px; }
+.history-confirm > div { max-width: 480px; padding: 28px; border-radius: 16px; background: #17241f; } .history-confirm button { margin: 8px 12px 0 0; }
+.history-page button:disabled { opacity: .5; }
+@media(max-width: 640px) { .history-list article { align-items: stretch; flex-direction: column; } .history-row-actions { gap: 8px; } .history-page { padding: 20px 16px 60px; } }

@@ -2,6 +2,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
+import type { Take } from '../types'
 
 /** 演奏页伴奏音量初值来源（t_5957a725）：audioEngine 是全局单例，回放页
  *  「对照伴奏」滑杆写的增益跨页留存——演奏页 UI 必须读引擎实际值起步，
@@ -20,7 +21,9 @@ const fakeSong = vi.hoisted(() => ({
 }))
 
 const mocked = vi.hoisted(() => ({
+  resetCursor: vi.fn(),
   openMic: vi.fn(),
+  savePractice: vi.fn(async (_take: Take, _blob: Blob) => {}),
   loadAccompaniment: vi.fn(async () => ({ buffer: { duration: 1 }, synthesized: false })),
   cancelPendingAccompaniment: vi.fn(),
   engine: {
@@ -59,7 +62,7 @@ vi.mock('../songs', () => ({
   SONGS: [fakeSong],
   loadSong: async () => ({
     xml: '<score-partwise/>',
-    timeline: { durationSec: 1, secPerQuarter: 0.5, tempo: 120, notes: [] },
+    timeline: { durationSec: 1, secPerQuarter: 0.5, tempo: 120, notes: [], measureTimes: [{ measure: 1, time: 0, quarters: 0 }, { measure: 2, time: 0.5, quarters: 1 }] },
     cursorMode: 'anchors' as const,
   }),
 }))
@@ -68,6 +71,7 @@ vi.mock('../audio/accompaniment', () => ({
   cancelPendingAccompaniment: mocked.cancelPendingAccompaniment,
 }))
 vi.mock('../audio/AudioEngine', () => ({ audioEngine: mocked.engine }))
+vi.mock('../practice/history', () => ({ savePractice: mocked.savePractice }))
 vi.mock('../audio/recorder', () => ({ openMic: mocked.openMic }))
 vi.mock('../background/LumiereScene', () => ({
   LumiereScene: class {
@@ -76,7 +80,7 @@ vi.mock('../background/LumiereScene', () => ({
     dispose() {}
   },
 }))
-vi.mock('../components/ScoreSheet', () => ({ default: () => null }))
+vi.mock('../components/ScoreSheet', () => ({ default: ({ scoreRef }: { scoreRef?: { current: unknown } }) => { if (scoreRef) scoreRef.current = { resetCursor: mocked.resetCursor, showCursor() {}, syncToTime() {}, scrollToMeasure() {} }; return null } }))
 vi.mock('../components/PitchMeter', () => ({ default: () => null }))
 
 let roots: Root[] = []
@@ -126,10 +130,13 @@ beforeEach(() => {
   mocked.engine.playing = false
   mocked.engine.onEnd = undefined
   mocked.engine.getVolume.mockReturnValue(1)
+  mocked.savePractice.mockReset().mockResolvedValue(undefined)
   mocked.openMic.mockReset()
   mocked.openMic.mockResolvedValue(makeMic())
   mocked.loadAccompaniment.mockReset().mockResolvedValue({ buffer: { duration: 1 }, synthesized: false })
   useAppStore.setState({
+    practiceConfig: null,
+    storageError: null,
     view: 'perform',
     currentSongId: 'test-song',
     lastTake: null,
@@ -401,4 +408,171 @@ describe('演奏录音会话', () => {
     await act(async () => resolveMic(mic))
     expect(mic.release).toHaveBeenCalledOnce()
   })
+})
+
+
+describe('分段练习轮次', () => {
+  function configureLoop() {
+    useAppStore.setState({ practiceConfig: { songId: 'test-song', range: { startMeasure: 2, endMeasure: 2, startSec: 0.5, stopSec: 1 }, rounds: 3 } })
+  }
+  it('persists three independent captures before each next countdown and ignores duplicate endings', async () => {
+    configureLoop()
+    const blobs = [1, 2, 3].map(n => new Blob([String(n)], { type: 'audio/wav' }))
+    blobs.forEach((blob, i) => mocked.openMic.mockResolvedValueOnce(makeMic(Promise.resolve({ blob, url: `blob:round-${i}`, mime: 'audio/wav', silent: false }))))
+    await mountPerformPage(1)
+    await beginPerformance(containers.at(-1)!)
+    for (let i = 0; i < 3; i++) {
+      expect(mocked.engine.time).toBe(0.5)
+      mocked.engine.time = 1.01
+      const end = mocked.engine.onEnd!
+      await act(async () => { end(); end() })
+      expect(mocked.savePractice).toHaveBeenCalledTimes(i + 1)
+      if (i < 2) {
+        expect(mocked.resetCursor).toHaveBeenCalledTimes(i + 2)
+        expect(useAppStore.getState().view).toBe('perform')
+        mocked.engine.ctxTime += 10
+        await flushRaf()
+        await act(async () => end()) // callback from preceding round
+        expect(mocked.savePractice).toHaveBeenCalledTimes(i + 1)
+      }
+    }
+    const takes = mocked.savePractice.mock.calls.map(([take]) => take)
+    expect(new Set(takes.map(t => t.sessionId)).size).toBe(3)
+    expect(takes.map(t => t.audioBlob)).toEqual(blobs)
+    expect(takes.map(t => [t.startSec, t.stopSec, t.practice?.round])).toEqual([[0.5, 1.01, 1], [0.5, 1.01, 2], [0.5, 1.01, 3]])
+    expect(takes.every(t => t.practice?.scoredNotesKey)).toBe(true)
+    expect(useAppStore.getState().view).toBe('result')
+  })
+  it('a storage failure stops loops and preserves the unsaved playable recording', async () => {
+    configureLoop()
+    mocked.savePractice.mockRejectedValueOnce(new Error('QuotaExceededError'))
+    mocked.openMic.mockResolvedValueOnce(makeMic(Promise.resolve({ blob: new Blob(['audio']), url: 'blob:unsaved', mime: 'audio/wav', silent: false })))
+    await mountPerformPage(1)
+    await beginPerformance(containers.at(-1)!)
+    mocked.engine.time = 1
+    await flushRaf()
+    expect(useAppStore.getState().view).toBe('result')
+    expect(useAppStore.getState().lastTake?.audioUrl).toBe('blob:unsaved')
+    expect(useAppStore.getState().storageError).toContain('QuotaExceededError')
+    expect(mocked.openMic).toHaveBeenCalledTimes(1)
+  })
+  it('recording disabled by the user remains disabled in later listening rounds', async () => {
+    configureLoop()
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await beginPerformance(page)
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="关闭录音"]')!.click())
+    mocked.engine.time = 1
+    await flushRaf()
+    mocked.engine.ctxTime += 10
+    await flushRaf()
+    expect(page.querySelector('[aria-label="开启录音"]')?.getAttribute('aria-pressed')).toBe('false')
+    expect(mocked.savePractice).not.toHaveBeenCalled()
+  })
+})
+
+
+it('leaving during persistence prevents a late save from navigating or starting another round', async () => {
+  let resolve!: () => void
+  mocked.savePractice.mockReturnValueOnce(new Promise<void>(r => { resolve = r }))
+  useAppStore.setState({ practiceConfig: { songId: 'test-song', range: { startMeasure: 1, endMeasure: 2, startSec: 0, stopSec: 1 }, rounds: 3 } })
+  mocked.openMic.mockResolvedValueOnce(makeMic(Promise.resolve({ blob: new Blob(['a']), url: 'blob:late', mime: 'audio/wav', silent: false })))
+  await mountPerformPage(1)
+  await beginPerformance(containers.at(-1)!)
+  mocked.engine.time = 1
+  await flushRaf()
+  expect(useAppStore.getState().performanceSession?.status).toBe('saving')
+  expect(mocked.engine.playing).toBe(false)
+  await act(async () => roots.pop()!.unmount())
+  useAppStore.getState().go('home')
+  await act(async () => resolve())
+  expect(useAppStore.getState().view).toBe('home')
+  expect(mocked.openMic).toHaveBeenCalledTimes(1)
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:late')
+})
+it('loop seek never lands on the buffer end that the engine wraps to zero', async () => {
+  useAppStore.setState({ practiceConfig: { songId: 'test-song', range: { startMeasure: 2, endMeasure: 2, startSec: 0.5, stopSec: 1 }, rounds: 3 } })
+  await mountPerformPage(1)
+  const page = containers.at(-1)!
+  await beginPerformance(page)
+  const rail = page.querySelector<HTMLElement>('.progress-rail')!
+  rail.setPointerCapture = () => {}
+  rail.getBoundingClientRect = () => ({ left: 0, width: 100 }) as DOMRect
+  await act(async () => rail.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: 100, pointerId: 1 })))
+  expect(mocked.engine.time).toBeLessThan(1)
+  expect(mocked.engine.time).toBeGreaterThanOrEqual(0.5)
+  await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="回开头"]')!.click())
+  expect(mocked.engine.time).toBe(0.5)
+})
+
+
+it('denied microphone keeps all three rounds visibly listening-only after transient messages expire', async () => {
+  useAppStore.setState({ practiceConfig: { songId: 'test-song', range: { startMeasure: 1, endMeasure: 2, startSec: 0, stopSec: 1 }, rounds: 3 } })
+  mocked.openMic.mockRejectedValue(new Error('Permission denied'))
+  await mountPerformPage(1)
+  const page = containers.at(-1)!
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  try {
+    await beginPerformance(page)
+    for (let round = 1; round <= 3; round++) {
+      await act(async () => vi.advanceTimersByTimeAsync(3500))
+      expect(page.querySelector('.perform-toast')).toBeNull()
+      expect(page.querySelector('.rec-badge')).toBeNull()
+      expect(page.querySelector('.ctl.rec')?.getAttribute('aria-pressed')).toBe('false')
+      expect(page.textContent).toContain('听练（无录音）')
+      expect(page.textContent).toContain('麦克风不可用')
+      mocked.engine.time = 1
+      await flushRaf()
+      if (round < 3) { mocked.engine.ctxTime += 10; await flushRaf() }
+    }
+    expect(mocked.savePractice).not.toHaveBeenCalled()
+    expect(useAppStore.getState().performanceSession?.status).toBe('no-recording')
+  } finally { vi.useRealTimers() }
+})
+it('pending microphone shows no REC until late permission starts capture at the actual time', async () => {
+  let resolve!: (mic: ReturnType<typeof makeMic>) => void
+  mocked.openMic.mockReturnValue(new Promise(r => { resolve = r }))
+  await mountPerformPage(1)
+  const page = containers.at(-1)!
+  await beginPerformance(page)
+  expect(page.querySelector('.rec-badge')).toBeNull()
+  expect(page.textContent).toContain('正在等待麦克风')
+  mocked.engine.time = 0.25
+  const mic = makeMic()
+  await act(async () => resolve(mic))
+  expect(page.querySelector('.rec-badge')).not.toBeNull()
+  expect(page.textContent).not.toContain('正在等待麦克风')
+  mocked.engine.time = 0.75
+  await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="停止演奏"]')!.click())
+  expect(useAppStore.getState().lastTake).toMatchObject({ startSec: 0.25, stopSec: 0.75 })
+})
+it('retrying an unavailable microphone starts only the current capture without changing recording preference', async () => {
+  mocked.openMic.mockRejectedValue(new Error('Permission denied'))
+  await mountPerformPage(1)
+  const page = containers.at(-1)!
+  await beginPerformance(page)
+  mocked.openMic.mockResolvedValue(makeMic())
+  mocked.engine.time = 0.4
+  const retry = [...page.querySelectorAll('button')].find(b => b.textContent?.includes('重试麦克风'))
+  expect(retry).toBeDefined()
+  await act(async () => retry!.click())
+  expect(page.querySelector('.rec-badge')).not.toBeNull()
+  mocked.engine.time = 0.8
+  await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="停止演奏"]')!.click())
+  expect(useAppStore.getState().lastTake).toMatchObject({ startSec: 0.4, stopSec: 0.8 })
+})
+
+it('canceling a pending recording request prevents late permission from recording', async () => {
+  let resolve!: (mic: ReturnType<typeof makeMic>) => void
+  mocked.openMic.mockReturnValue(new Promise(r => { resolve = r }))
+  await mountPerformPage(1)
+  const page = containers.at(-1)!
+  await beginPerformance(page)
+  await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="取消录音请求"]')!.click())
+  const mic = makeMic()
+  await act(async () => resolve(mic))
+  expect(mic.restartCapture).not.toHaveBeenCalled()
+  expect(page.querySelector('.rec-badge')).toBeNull()
+  expect(page.textContent).toContain('录音已关闭')
+  expect(page.querySelector('[aria-label="开启录音"]')).not.toBeNull()
 })

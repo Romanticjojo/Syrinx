@@ -1,10 +1,15 @@
+import type { PracticeConfig } from './practice/model'
 import { create } from 'zustand'
 import type { PerformanceSession, PerformanceStatus, PitchPoint, Take, TuneStats } from './types'
 
 /** 四个视图：曲库 → 预览 → 演奏 → 回放 */
-export type View = 'home' | 'preview' | 'perform' | 'result'
+export type View = 'home' | 'preview' | 'perform' | 'result' | 'history'
 
 interface AppState {
+  practiceConfig: PracticeConfig | null
+  storageError: string | null
+  setPracticeConfig: (config: PracticeConfig | null) => void
+  openPractice: (take: Take) => void
   view: View
   currentSongId: string | null
   favorites: string[]
@@ -29,9 +34,17 @@ interface AppState {
 }
 
 let sessionSeq = 0
-const nextSessionId = (): string => `performance-${Date.now()}-${++sessionSeq}`
+const nextSessionId = (): string => `performance-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}-${++sessionSeq}`}`
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
+  practiceConfig: null,
+  storageError: null,
+  setPracticeConfig: (practiceConfig) => set({ practiceConfig }),
+  openPractice: (take) => {
+    const previous = get().lastTake
+    if (previous?.audioUrl && previous.audioUrl !== take.audioUrl) URL.revokeObjectURL(previous.audioUrl)
+    set({ view: 'result', currentSongId: take.songId, lastTake: take, storageError: null, performanceSession: { id: take.sessionId, songId: take.songId, status: 'completed', take } })
+  },
   view: 'home',
   currentSongId: null,
   favorites: [],
@@ -49,9 +62,12 @@ export const useAppStore = create<AppState>((set) => ({
         : [...s.favorites, id],
     })),
   beginPerformance: (songId) => {
+    const previous = get().lastTake
+    if (previous?.audioUrl) URL.revokeObjectURL(previous.audioUrl)
     const id = nextSessionId()
     set({
       lastTake: null,
+      storageError: null,
       performanceSession: { id, songId, status: 'preparing', take: null },
     })
     return id
