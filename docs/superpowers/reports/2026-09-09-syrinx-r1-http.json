@@ -1,0 +1,244 @@
+{
+  "before": {
+    "base": "https://romanticjojo.com/",
+    "method": "five sequential fresh curl processes, same client and network path, compressed HTTP, no browser cache",
+    "targets": {
+      "entry_0": {
+        "url": "https://romanticjojo.com/assets/index-DHdzcByL.js",
+        "samples": [
+          {
+            "http_code": 200,
+            "size_download": 698695,
+            "time_starttransfer": 3.426313,
+            "time_total": 4.392681,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 698695,
+            "time_starttransfer": 3.30393,
+            "time_total": 4.271552,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 698695,
+            "time_starttransfer": 2.751466,
+            "time_total": 3.756275,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 698695,
+            "time_starttransfer": 2.594896,
+            "time_total": 3.646111,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 698695,
+            "time_starttransfer": 1.757614,
+            "time_total": 2.809193,
+            "content_type": "application/javascript"
+          }
+        ],
+        "median_total_sec": 3.756275,
+        "range_total_sec": [
+          2.809193,
+          4.392681
+        ],
+        "median_bytes": 698695
+      },
+      "audio": {
+        "url": "https://romanticjojo.com/songs/flower-dance/accompaniment.mp3",
+        "samples": [
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 2.463922,
+            "time_total": 9.908667,
+            "content_type": "audio/mp4"
+          },
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 5.919229,
+            "time_total": 12.843187,
+            "content_type": "audio/mp4"
+          },
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 1.737298,
+            "time_total": 8.66768,
+            "content_type": "audio/mp4"
+          },
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 1.690942,
+            "time_total": 8.521265,
+            "content_type": "audio/mp4"
+          },
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 1.934272,
+            "time_total": 9.043986,
+            "content_type": "audio/mp4"
+          }
+        ],
+        "median_total_sec": 9.043986,
+        "range_total_sec": [
+          8.521265,
+          12.843187
+        ],
+        "median_bytes": 3241699
+      }
+    }
+  },
+  "after": {
+    "base": "https://romanticjojo.com/",
+    "method": "five sequential fresh curl processes, same client and network path, compressed HTTP, no browser cache",
+    "targets": {
+      "entry_0": {
+        "url": "https://romanticjojo.com/releases/20260909T143557Z-bf1add9e-49b59e89/assets/index-2GlWjgxe.js",
+        "samples": [
+          {
+            "http_code": 200,
+            "size_download": 110078,
+            "time_starttransfer": 1.745314,
+            "time_total": 2.307082,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 110078,
+            "time_starttransfer": 1.767893,
+            "time_total": 2.297974,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 110078,
+            "time_starttransfer": 1.734202,
+            "time_total": 2.17005,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 110078,
+            "time_starttransfer": 2.456262,
+            "time_total": 2.94225,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 110078,
+            "time_starttransfer": 1.73405,
+            "time_total": 2.168612,
+            "content_type": "application/javascript"
+          }
+        ],
+        "median_total_sec": 2.297974,
+        "range_total_sec": [
+          2.168612,
+          2.94225
+        ],
+        "median_bytes": 110078
+      },
+      "entry_1": {
+        "url": "https://romanticjojo.com/releases/20260909T143557Z-bf1add9e-49b59e89/assets/rolldown-runtime-hePW80VL.js",
+        "samples": [
+          {
+            "http_code": 200,
+            "size_download": 716,
+            "time_starttransfer": 1.481857,
+            "time_total": 1.481926,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 716,
+            "time_starttransfer": 2.209901,
+            "time_total": 2.209965,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 716,
+            "time_starttransfer": 2.281726,
+            "time_total": 2.281798,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 716,
+            "time_starttransfer": 1.458247,
+            "time_total": 1.4583,
+            "content_type": "application/javascript"
+          },
+          {
+            "http_code": 200,
+            "size_download": 716,
+            "time_starttransfer": 1.997498,
+            "time_total": 1.997583,
+            "content_type": "application/javascript"
+          }
+        ],
+        "median_total_sec": 1.997583,
+        "range_total_sec": [
+          1.4583,
+          2.281798
+        ],
+        "median_bytes": 716
+      },
+      "audio": {
+        "url": "https://romanticjojo.com/releases/20260909T143557Z-bf1add9e-49b59e89/songs/flower-dance/accompaniment.m4a",
+        "samples": [
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 1.708994,
+            "time_total": 8.662333,
+            "content_type": "audio/mp4"
+          },
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 2.548974,
+            "time_total": 9.926401,
+            "content_type": "audio/mp4"
+          },
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 2.798792,
+            "time_total": 10.88354,
+            "content_type": "audio/mp4"
+          },
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 1.781793,
+            "time_total": 9.947406,
+            "content_type": "audio/mp4"
+          },
+          {
+            "http_code": 200,
+            "size_download": 3241699,
+            "time_starttransfer": 1.923682,
+            "time_total": 10.452376,
+            "content_type": "audio/mp4"
+          }
+        ],
+        "median_total_sec": 9.947406,
+        "range_total_sec": [
+          8.662333,
+          10.88354
+        ],
+        "median_bytes": 3241699
+      }
+    }
+  }
+}
