@@ -74,3 +74,9 @@ app/scripts/compare-scores.mjs
 docs/screenshots/verify-*
 docs/screenshots/t3b9-*
 docs/screenshots/t76c0cbff-*
+
+# 本地视觉验收中间产物（正式图片仍保留在 docs/img）
+app/scripts/_*/
+app/scripts/_*.png
+docs/img/*.visual-check.*
+claude-*-result.json
