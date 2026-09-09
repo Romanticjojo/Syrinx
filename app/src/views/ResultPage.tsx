@@ -55,6 +55,8 @@ export default function ResultPage() {
   const ignoreNextPlayRef = useRef(false)
   const mountedRef = useRef(true)
   const syncOperationRef = useRef(0)
+  const syncPreparingRef = useRef(false)
+  const retryAfterSeekRef = useRef(false)
 
   useEffect(() => {
     mountedRef.current = true
@@ -137,10 +139,15 @@ export default function ResultPage() {
     setSyncEnabled(false)
     setSyncLoading(false)
     setSyncError('')
+    syncPreparingRef.current = false
+    retryAfterSeekRef.current = false
     accompanimentForRef.current = null
     let alive = true
     const onEnded = () => {
+      syncPreparingRef.current = false
+      retryAfterSeekRef.current = false
       syncOperationRef.current += 1
+      setSyncLoading(false)
       audioEngine.pause()
       syncEnabledRef.current = false
       setSyncEnabled(false)
@@ -170,12 +177,16 @@ export default function ResultPage() {
       alignPlayback()
     }
     const onPause = () => {
+      syncPreparingRef.current = false
       syncOperationRef.current += 1
       setSyncLoading(false)
       if (syncEnabledRef.current) audioEngine.pause()
     }
     const onSeeking = () => {
+      if (syncPreparingRef.current) retryAfterSeekRef.current = true
+      syncPreparingRef.current = false
       syncOperationRef.current += 1
+      setSyncLoading(false)
       if (syncEnabledRef.current && takeStartSec !== undefined && el) {
         audioEngine.pause()
         audioEngine.seek(takeStartSec + el.currentTime)
@@ -223,6 +234,7 @@ export default function ResultPage() {
     const el = audioRef.current
     if (!el || !take || !song || compatibleRef.current !== take.sessionId || syncLoading) return
     const operation = ++syncOperationRef.current
+    const retryAfterSeek = retryAfterSeekRef.current
     if (syncEnabledRef.current) {
       syncEnabledRef.current = false
       el.pause()
@@ -234,6 +246,7 @@ export default function ResultPage() {
         if (!mountedRef.current || operation !== syncOperationRef.current) return
         // Restored records cannot inherit another song's retained engine buffer.
         if (take.practice && accompanimentForRef.current !== take.sessionId) {
+          syncPreparingRef.current = true
           setSyncLoading(true)
           const { xml, timeline } = await loadSong(song)
           if (!mountedRef.current || operation !== syncOperationRef.current) return
@@ -243,15 +256,18 @@ export default function ResultPage() {
           await audioEngine.load(buffer)
           if (!mountedRef.current || operation !== syncOperationRef.current) return
           accompanimentForRef.current = take.sessionId
+          syncPreparingRef.current = false
           setSyncLoading(false)
         }
       } catch (error) {
-        if (mountedRef.current && operation === syncOperationRef.current) { setSyncLoading(false); setSyncError(`伴奏无法载入：${error instanceof Error ? error.message : String(error)}`) }
+        if (mountedRef.current && operation === syncOperationRef.current) { syncPreparingRef.current = false; setSyncLoading(false); setSyncError(`伴奏无法载入：${error instanceof Error ? error.message : String(error)}`) }
         return
       }
       if (!mountedRef.current || operation !== syncOperationRef.current) return
-      el.currentTime = 0
-      const started = await audioEngine.play(take.startSec)
+      // A seek-canceled load retries from the selected position; ordinary compare starts at zero.
+      if (!retryAfterSeek || el.ended || el.currentTime >= take.durationSec) el.currentTime = 0
+      retryAfterSeekRef.current = false
+      const started = await audioEngine.play(take.startSec + el.currentTime)
       if (!mountedRef.current || operation !== syncOperationRef.current || !started) return
       syncEnabledRef.current = true
       setSyncEnabled(true)

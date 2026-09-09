@@ -387,3 +387,27 @@ it('raw download owns its URL until the browser can consume it, even after switc
     expect(revoke).toHaveBeenCalledWith('blob:download-only')
   } finally { vi.useRealTimers(); create.mockRestore(); revoke.mockRestore(); click.mockRestore() }
 })
+
+
+it.each(['seeking', 'ended'])('%s during deferred accompaniment loading cancels stale audio and allows retry from the selected playhead', async (event) => {
+  let resolveStale!: (value: { buffer: { duration: number }; synthesized: boolean }) => void
+  mocked.loadAccompaniment.mockReturnValueOnce(new Promise(r => { resolveStale = r }))
+  const take = await storedTake()
+  const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
+  const compare = page.querySelector<HTMLButtonElement>('button.sync')!
+  const audio = page.querySelector('audio')!
+  await act(async () => compare.click())
+  expect(compare.disabled).toBe(true)
+  audio.currentTime = event === 'ended' ? 2 : 1.25
+  await act(async () => audio.dispatchEvent(new Event(event)))
+  expect(compare.disabled).toBe(false)
+  await act(async () => compare.click())
+  expect(mocked.engine.load).toHaveBeenCalledOnce()
+  expect(mocked.engine.load).toHaveBeenCalledWith({ duration: 20 })
+  expect(mocked.engine.play).toHaveBeenCalledWith(event === 'ended' ? 4 : 5.25)
+  expect(audio.currentTime).toBe(event === 'ended' ? 0 : 1.25)
+  await act(async () => resolveStale({ buffer: { duration: 99 }, synthesized: false }))
+  expect(mocked.engine.load).toHaveBeenCalledOnce()
+  expect(mocked.engine.play).toHaveBeenCalledOnce()
+  expect(compare.textContent).toContain('停止对照')
+})
