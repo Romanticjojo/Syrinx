@@ -7,6 +7,8 @@ interface Props {
   active: boolean
   /** 录音采集开关状态（只控采集，实时音准反馈不受其影响） */
   recOn: boolean
+  /** 请求尚未获准时仍允许取消偏好；REC 只反映实际采集可用。 */
+  recRequested?: boolean
   volume: number
   onToggle: () => void
   onRecToggle: () => void
@@ -23,6 +25,7 @@ export default function ControlBar({
   ended,
   active,
   recOn,
+  recRequested = recOn,
   volume,
   onToggle,
   onRecToggle,
@@ -46,9 +49,9 @@ export default function ControlBar({
         className={`ctl rec${recOn ? ' on' : ''}`}
         onClick={onRecToggle}
         disabled={ended}
-        aria-label={recOn ? '关闭录音' : '开启录音'}
+        aria-label={recRequested ? recOn ? '关闭录音' : '取消录音请求' : '开启录音'}
         aria-pressed={recOn}
-        title={recOn ? '关闭录音（丢弃当前段，重新开启即重录）' : '开启录音（从头重录）'}
+        title={recRequested ? recOn ? '关闭录音（丢弃当前段，重新开启即重录）' : '取消录音请求（继续听练）' : '开启录音（从头重录）'}
       >
         <svg className="rec-mic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path

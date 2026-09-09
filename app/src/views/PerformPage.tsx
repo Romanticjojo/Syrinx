@@ -56,7 +56,9 @@ export default function PerformPage() {
 
   const [phase, setPhase] = useState<Phase>('loading')
   const [playing, setPlaying] = useState(false)
+  // Preference is independent from availability: late permission must retain the user's choice.
   const [recOn, setRecOn] = useState(false)
+  const [micStatus, setMicStatus] = useState<'idle' | 'pending' | 'available' | 'unavailable'>('idle')
   // 初值读引擎实际增益（t_5957a725）：audioEngine 全局单例，回放页「对照伴奏」
   // 拖过的音量跨页留存——写死 1 会显示假满格而实际 gain=0，背景伴奏无声
   const [volume, setVolume] = useState(() => audioEngine.getVolume())
@@ -141,13 +143,18 @@ export default function PerformPage() {
     if (micRef.current) return Promise.resolve(micRef.current)
     if (!micOpeningRef.current) {
       const sessionId = sessionIdRef.current
+      setMicStatus('pending')
       const opening = openMic(audioEngine.audioCtx).then((mic) => {
         if (!mountedRef.current || sessionId !== sessionIdRef.current || finishedRef.current) {
           mic.release()
           throw new Error('麦克风请求已取消')
         }
         micRef.current = mic
+        setMicStatus('available')
         return mic
+      }).catch((error: unknown) => {
+        if (mountedRef.current && sessionId === sessionIdRef.current && !finishedRef.current) setMicStatus('unavailable')
+        throw error
       }).finally(() => {
         if (micOpeningRef.current === opening) micOpeningRef.current = null
       })
@@ -165,6 +172,17 @@ export default function PerformPage() {
     recStartedRef.current = { t: tSec, wall: Date.now() }
     return true
   }, [])
+
+  const retryMic = useCallback(() => {
+    const sessionId = sessionIdRef.current
+    void ensureMic().then((mic) => {
+      if (mountedRef.current && sessionIdRef.current === sessionId &&
+          phaseRef.current === 'performing' && recOnRef.current &&
+          micRef.current === mic && !recStartedRef.current) {
+        if (startCapture(audioEngine.time, !playingRef.current)) showToast('🎙️ 录音已开启，结束后可在回放页查看')
+      }
+    }).catch(() => {}) // ensureMic retains a persistent unavailable state.
+  }, [ensureMic, showToast, startCapture])
 
   const finish = useCallback((automatic = false, expectedSession = sessionIdRef.current) => {
     const sessionId = sessionIdRef.current
@@ -438,17 +456,7 @@ export default function PerformPage() {
           if (sessionId) setPerformanceStatus(sessionId, 'recording')
           if (!recOnRef.current) return
           if (micRef.current && startCapture(audioEngine.time, false)) showToast(REC_ON_TOAST)
-          else void ensureMic().then((mic) => {
-            if (
-              mountedRef.current &&
-              sessionIdRef.current === sessionId &&
-              phaseRef.current === 'performing' &&
-              recOnRef.current &&
-              micRef.current === mic &&
-              !recStartedRef.current
-            )
-              if (startCapture(audioEngine.time, !playingRef.current)) showToast(REC_ON_TOAST)
-          }).catch(() => {})
+          else retryMic()
         })()
         return
       }
@@ -461,7 +469,7 @@ export default function PerformPage() {
       alive = false
       cancelAnimationFrame(raf)
     }
-  }, [phase, ensureMic, setPerformanceStatus, showToast, startCapture])
+  }, [phase, retryMic, setPerformanceStatus, showToast, startCapture])
 
   // 演奏主循环：唯一时间源 audioEngine.time → 光标推进 + HUD 直写 + 实时音准 + 结束判定
   useEffect(() => {
@@ -631,11 +639,9 @@ export default function PerformPage() {
       recStartedRef.current = null
       showToast('录音已关闭')
     } else if (!startCapture(audioEngine.time, !audioEngine.playing)) {
-      showToast('麦克风不可用，无法录音')
-      recOnRef.current = false
-      setRecOn(false)
+      retryMic()
     }
-  }, [startCapture, showToast])
+  }, [retryMic, startCapture, showToast])
 
   /** ✕/顶栏返回/Esc 共用出口（t_c10d648d）：演奏中（含倒数）用户以为 ✕ 是
    *  「停止」，直接回曲库会丢掉整段演奏——改与 ■ 同语义走 finish() 封存进回放；
@@ -670,6 +676,8 @@ export default function PerformPage() {
     setVolume(v)
     audioEngine.setVolume(v)
   }
+
+  const captureActive = recOn && micStatus === 'available' && recStartedRef.current !== null
 
   /** 停止演奏：封存本段 Take 并进入回放（光标数据源切换按钮已删，9/8） */
   return (
@@ -711,7 +719,7 @@ export default function PerformPage() {
           <div className="hud-song-text">
             <b>{song.title}</b>
             <span>{song.composer}</span>
-            {configRef.current && <span className="loop-progress" role="status">第 {round} / {configRef.current.rounds} 轮 · 第 {configRef.current.range.startMeasure}–{configRef.current.range.endMeasure} 小节{phase === 'performing' && !recOn && ' · 听练（无录音）'}</span>}
+            {configRef.current && <span className="loop-progress" role="status">第 {round} / {configRef.current.rounds} 轮 · 第 {configRef.current.range.startMeasure}–{configRef.current.range.endMeasure} 小节{phase === 'performing' && !captureActive && ' · 听练（无录音）'}</span>}
           </div>
         </div>
         <div className="hud-stats">
@@ -756,13 +764,18 @@ export default function PerformPage() {
       </div>
 
       <PitchMeter handleRef={pitchMeterRef} />
+      {phase === 'performing' && !captureActive && <div className="capture-status" role="status">
+        听练（无录音） · {!recOn ? '录音已关闭' : micStatus === 'pending' ? '正在等待麦克风' : '麦克风不可用'}
+        {micStatus === 'unavailable' && <button onClick={retryMic}>重试麦克风</button>}
+      </div>}
 
       <div className="perform-hud hud-bottom">
         <ControlBar
           playing={playing}
           ended={phase === 'ended'}
           active={phase === 'performing'}
-          recOn={recOn}
+          recOn={captureActive}
+          recRequested={recOn}
           volume={volume}
           onToggle={toggle}
           onRecToggle={toggleRec}

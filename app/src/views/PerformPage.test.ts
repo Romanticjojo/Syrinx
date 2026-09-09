@@ -504,3 +504,75 @@ it('loop seek never lands on the buffer end that the engine wraps to zero', asyn
   await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="回开头"]')!.click())
   expect(mocked.engine.time).toBe(0.5)
 })
+
+
+it('denied microphone keeps all three rounds visibly listening-only after transient messages expire', async () => {
+  useAppStore.setState({ practiceConfig: { songId: 'test-song', range: { startMeasure: 1, endMeasure: 2, startSec: 0, stopSec: 1 }, rounds: 3 } })
+  mocked.openMic.mockRejectedValue(new Error('Permission denied'))
+  await mountPerformPage(1)
+  const page = containers.at(-1)!
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  try {
+    await beginPerformance(page)
+    for (let round = 1; round <= 3; round++) {
+      await act(async () => vi.advanceTimersByTimeAsync(3500))
+      expect(page.querySelector('.perform-toast')).toBeNull()
+      expect(page.querySelector('.rec-badge')).toBeNull()
+      expect(page.querySelector('.ctl.rec')?.getAttribute('aria-pressed')).toBe('false')
+      expect(page.textContent).toContain('听练（无录音）')
+      expect(page.textContent).toContain('麦克风不可用')
+      mocked.engine.time = 1
+      await flushRaf()
+      if (round < 3) { mocked.engine.ctxTime += 10; await flushRaf() }
+    }
+    expect(mocked.savePractice).not.toHaveBeenCalled()
+    expect(useAppStore.getState().performanceSession?.status).toBe('no-recording')
+  } finally { vi.useRealTimers() }
+})
+it('pending microphone shows no REC until late permission starts capture at the actual time', async () => {
+  let resolve!: (mic: ReturnType<typeof makeMic>) => void
+  mocked.openMic.mockReturnValue(new Promise(r => { resolve = r }))
+  await mountPerformPage(1)
+  const page = containers.at(-1)!
+  await beginPerformance(page)
+  expect(page.querySelector('.rec-badge')).toBeNull()
+  expect(page.textContent).toContain('正在等待麦克风')
+  mocked.engine.time = 0.25
+  const mic = makeMic()
+  await act(async () => resolve(mic))
+  expect(page.querySelector('.rec-badge')).not.toBeNull()
+  expect(page.textContent).not.toContain('正在等待麦克风')
+  mocked.engine.time = 0.75
+  await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="停止演奏"]')!.click())
+  expect(useAppStore.getState().lastTake).toMatchObject({ startSec: 0.25, stopSec: 0.75 })
+})
+it('retrying an unavailable microphone starts only the current capture without changing recording preference', async () => {
+  mocked.openMic.mockRejectedValue(new Error('Permission denied'))
+  await mountPerformPage(1)
+  const page = containers.at(-1)!
+  await beginPerformance(page)
+  mocked.openMic.mockResolvedValue(makeMic())
+  mocked.engine.time = 0.4
+  const retry = [...page.querySelectorAll('button')].find(b => b.textContent?.includes('重试麦克风'))
+  expect(retry).toBeDefined()
+  await act(async () => retry!.click())
+  expect(page.querySelector('.rec-badge')).not.toBeNull()
+  mocked.engine.time = 0.8
+  await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="停止演奏"]')!.click())
+  expect(useAppStore.getState().lastTake).toMatchObject({ startSec: 0.4, stopSec: 0.8 })
+})
+
+it('canceling a pending recording request prevents late permission from recording', async () => {
+  let resolve!: (mic: ReturnType<typeof makeMic>) => void
+  mocked.openMic.mockReturnValue(new Promise(r => { resolve = r }))
+  await mountPerformPage(1)
+  const page = containers.at(-1)!
+  await beginPerformance(page)
+  await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="取消录音请求"]')!.click())
+  const mic = makeMic()
+  await act(async () => resolve(mic))
+  expect(mic.restartCapture).not.toHaveBeenCalled()
+  expect(page.querySelector('.rec-badge')).toBeNull()
+  expect(page.textContent).toContain('录音已关闭')
+  expect(page.querySelector('[aria-label="开启录音"]')).not.toBeNull()
+})
