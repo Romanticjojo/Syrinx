@@ -5,6 +5,7 @@ export const PRIVATE_SONG_ORDER = [
   'flower-dance',
   'river-flows-in-you',
   'expedition-33',
+  'alicia',
   'birds-poem',
   'interstellar',
 ] as const
