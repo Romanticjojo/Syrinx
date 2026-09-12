@@ -8,6 +8,7 @@ export const PRIVATE_SONG_ORDER = [
   'alicia',
   'birds-poem',
   'interstellar',
+  'weight-of-the-world',
 ] as const
 
 type ManifestModule = { default?: unknown } | unknown

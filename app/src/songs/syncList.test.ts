@@ -39,6 +39,7 @@ describe('syncSongList', () => {
         'interstellar',
         'luv-letter',
         'river-flows-in-you',
+        'weight-of-the-world',
       ].sort(),
     )
   })
