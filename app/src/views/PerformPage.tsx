@@ -600,7 +600,8 @@ export default function PerformPage() {
       if (e.code === 'Space') {
         e.preventDefault()
         toggle()
-      } else if (e.code === 'Escape') {
+      } else if (e.key === 'Escape' || e.code === 'Escape') {
+        e.preventDefault()
         exit()
       }
     }
@@ -608,11 +609,12 @@ export default function PerformPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [toggle, exit])
 
-  // 沉浸控件：任意交互唤醒，静置隐藏
+  // 键盘、辅助技术 click 与 pointer 事件不一定伴随 mouse/touch 兼容事件。
+  // 捕获阶段先唤醒控件，避免 idle 的 pointer-events:none 让第一下交互无反馈。
   useEffect(() => {
-    const events: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'touchstart', 'wheel']
-    events.forEach((e) => window.addEventListener(e, wake, { passive: true }))
-    return () => events.forEach((e) => window.removeEventListener(e, wake))
+    const events: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'touchstart', 'wheel', 'pointerdown', 'click', 'keydown', 'focusin']
+    events.forEach((e) => window.addEventListener(e, wake, { passive: true, capture: true }))
+    return () => events.forEach((e) => window.removeEventListener(e, wake, { capture: true }))
   }, [wake])
 
   const changeVolume = (v: number) => {

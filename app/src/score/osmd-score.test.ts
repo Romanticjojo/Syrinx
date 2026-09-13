@@ -593,6 +593,42 @@ describe('OSMDScore T3c 光标跨时值高亮（cursorSpan）', () => {
 
 // -- T3c：setTimeline 就地换时间轴（保存修改后播放即新节奏）--
 describe('OSMDScore T3c setTimeline', () => {
+  const variableTempo = {
+    ...MINI_TIMELINE,
+    durationSec: 3,
+    tempo: 60,
+    secPerQuarter: 1,
+    measureTimes: [{ measure: 1, quarters: 0, time: 0 }, { measure: 2, quarters: 4, time: 3, end: true as const }],
+    tempoSegments: [{ quarters: 0, time: 0, bpm: 60 }, { quarters: 2, time: 2, bpm: 120 }],
+  }
+
+  it('load consumes exact within-measure tempo boundaries for real cursor advancement', async () => {
+    const cursor = new FakeCursor([0, .5, .75, 1])
+    const score = new OSMDScore(document.createElement('div'), '#3ddfae', makeFakeOsmd(cursor))
+    await score.load('<score/>', variableTempo)
+    score.syncToTime(1.5)
+    expect(cursor.pos).toBe(0)
+    score.syncToTime(2)
+    expect(cursor.pos).toBe(1)
+    score.syncToTime(2.5)
+    expect(cursor.pos).toBe(2)
+    score.syncToTime(3)
+    expect(cursor.pos).toBe(3)
+  })
+
+  it('setTimeline adopts exact segments and clears them when returning to curated anchors', async () => {
+    const { score, cursor } = await makeScore([0, .5, .75, 1])
+    score.setTimeline(variableTempo)
+    score.syncToTime(1.5)
+    expect(cursor.pos).toBe(0)
+    const { tempoSegments: _unused, ...anchorsOnly } = variableTempo
+    score.setTimeline(anchorsOnly)
+    score.syncToTime(1.5)
+    expect(cursor.pos).toBe(1)
+    score.syncToTime(2.25)
+    expect(cursor.pos).toBe(2)
+  })
+
   it('换时间轴后 syncToTime 按新 measureTimes 推进（quarters 不变）', async () => {
     const { score, cursor } = await makeScore([0, 1])
     // 新时间轴：m1 0s、m2 10s（同 quarters 0/4）——90bpm 下原 m2 在 8/3s

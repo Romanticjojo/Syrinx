@@ -503,3 +503,24 @@ video.perform-bg-cover {
   }
 }
 
+.hud-bottom { flex-shrink: 0; padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.hud-top { padding-top: max(12px, env(safe-area-inset-top, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); flex-shrink: 0; }
+.back-ghost { min-width: 44px; min-height: 44px; }
+.perform-toast { white-space: normal; width: max-content; max-width: calc(100% - 32px); text-align: center; overflow-wrap: anywhere; }
+.perform-overlay { overflow-y: auto; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.ov-card { min-width: 0; max-width: 100%; max-height: 100%; overflow: auto; overflow-wrap: anywhere; }
+@media (max-width: 1050px), (any-pointer: coarse) {
+  .progress-rail { height: 44px; min-height: 44px; flex-shrink: 0; }
+}
+@media (max-width: 640px) {
+  .hud-top { flex-wrap: wrap; gap: 6px 12px; }
+  .hud-song { flex: 1 1 100%; }
+  .hud-stats { margin-left: 56px; }
+  .perform-toast { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-height: 500px) and (min-width: 641px) {
+  .hud-top { padding-top: max(6px, env(safe-area-inset-top, 0px)); padding-bottom: 6px; }
+  .hud-bottom { padding-top: 6px; padding-bottom: max(6px, env(safe-area-inset-bottom, 0px)); }
+  .ov-card { padding: 20px; }
+}
+

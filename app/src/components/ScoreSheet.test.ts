@@ -1,7 +1,8 @@
-import { act, createElement } from 'react'
+import { act, createElement, type RefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Timeline } from '../types'
+import type { OSMDScore } from '../score/OSMDScore'
 
 /** [t_1d124051] 谱面小屏混合适配组件测试：
  *  - fit（视口 ≥640px）：三层结构 .sheet-container > .sheet-scale > .sheet-virtual，
@@ -122,6 +123,9 @@ type SheetProps = {
   autoShowCursor?: boolean
   onMeasureChange?: (m: number, total: number) => void
   autoScroll?: boolean
+  zoom?: number
+  accent?: string
+  scoreRef?: RefObject<OSMDScore | null>
 }
 
 async function mountSheet(props: SheetProps = {}) {
@@ -148,6 +152,48 @@ async function mountSheet(props: SheetProps = {}) {
 }
 
 describe('ScoreSheet 小屏混合适配（t_1d124051）', () => {
+  it('loads the unchanged score into every replacement instance when zooming in and out', async () => {
+    stubMediaAtLeast640(true)
+    await mountSheet({ zoom: 1 })
+    const { default: ScoreSheet } = await import('./ScoreSheet')
+    for (const zoom of [1.2, .8]) {
+      const previous = registry.instances.at(-1)!
+      await act(async () => roots[0].render(createElement(ScoreSheet, { xml: '<score-partwise/>', timeline: MINI_TIMELINE, zoom })))
+      const current = registry.instances.at(-1)!
+      expect(current).not.toBe(previous)
+      expect(previous.dispose).toHaveBeenCalledOnce()
+      expect(current.load).toHaveBeenCalledExactlyOnceWith('<score-partwise/>', MINI_TIMELINE)
+    }
+  })
+
+  it.each([
+    ['accent', { accent: '#aabbcc' }],
+    ['autoScroll', { autoScroll: false }],
+    ['scoreRef', { scoreRef: { current: null } }],
+    ['onMeasureChange', { onMeasureChange: vi.fn() }],
+  ] as const)('reloads unchanged XML when %s rebuilds the instance', async (_, changed) => {
+    stubMediaAtLeast640(true)
+    await mountSheet()
+    const previous = registry.instances.at(-1)!
+    const { default: ScoreSheet } = await import('./ScoreSheet')
+    await act(async () => roots[0].render(createElement(ScoreSheet, { xml: '<score-partwise/>', timeline: MINI_TIMELINE, ...changed })))
+    const current = registry.instances.at(-1)!
+    expect(current).not.toBe(previous)
+    expect(previous.dispose).toHaveBeenCalledOnce()
+    expect(current.load).toHaveBeenCalledExactlyOnceWith('<score-partwise/>', MINI_TIMELINE)
+  })
+
+  it('does not rebuild or reload on autoShowCursor-only phase changes', async () => {
+    stubMediaAtLeast640(true)
+    await mountSheet()
+    const { default: ScoreSheet } = await import('./ScoreSheet')
+    for (const autoShowCursor of [true, false, true]) {
+      await act(async () => roots[0].render(createElement(ScoreSheet, { xml: '<score-partwise/>', timeline: MINI_TIMELINE, autoShowCursor })))
+    }
+    expect(registry.instances).toHaveLength(1)
+    expect(registry.instances[0].load).toHaveBeenCalledOnce()
+  })
+
   it('fit（视口 ≥640px）：三层结构，OSMD 容器为虚拟宽节点，autoResize 关闭', async () => {
     stubMediaAtLeast640(true)
     const host = await mountSheet({ autoScroll: false })

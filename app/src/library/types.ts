@@ -25,6 +25,23 @@ export interface PersonalScore {
   updatedAt: number
   lastOpenedAt: number | null
   settings: ScoreSettings
+  folderId?: string | null
+  coverImage?: string | null
+}
+
+export type PersonalScoreSummary = Omit<PersonalScore, 'originalXml' | 'coverImage'> & {
+  hasCover: boolean
+}
+
+export interface ScoreFolder {
+  id: string
+  name: string
+  createdAt: number
+}
+
+export interface LibrarySnapshot {
+  records: PersonalScore[]
+  folders: ScoreFolder[]
 }
 
 export interface ScorePart {

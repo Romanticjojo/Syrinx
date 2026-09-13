@@ -69,7 +69,7 @@ export default function ScoreSheet({
   // autoShowCursor 走 ref 镜像：作为 prop 进 load effect 依赖会让 phase 每次变化
   // （ready→countdown→performing）都重载谱面——只取挂载/重挂载当下的值即可
   const autoShowRef = useRef(autoShowCursor)
-  autoShowRef.current = autoShowCursor
+  useEffect(() => { autoShowRef.current = autoShowCursor }, [autoShowCursor])
 
   useEffect(() => {
     const mq = window.matchMedia(`(min-width: ${FIT_MIN_VIEWPORT}px)`)
@@ -105,7 +105,8 @@ export default function ScoreSheet({
     // accent 变化意味着换曲，需要重建
   }, [accent, scoreRef, onMeasureChange, zoom, autoScroll, mode])
 
-  // 加载曲谱（mode 变化 → 新实例上重新 load）
+  // 所有创建实例的依赖都必须同时触发 load，否则缩放等操作会留下空的新实例。
+  // autoShowCursor 仍只通过 ref 读取，演奏阶段变化不应重新加载乐谱。
   useEffect(() => {
     const osmd = osmdRef.current
     if (!osmd || !xml || !timeline) return
@@ -128,7 +129,7 @@ export default function ScoreSheet({
         }
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-  }, [xml, timeline, onMeasureChange, mode])
+  }, [xml, timeline, accent, scoreRef, onMeasureChange, zoom, autoScroll, mode])
 
   // fit 缩放：k = 容器实际宽 / 虚拟宽，直写 style（不经 React 状态，resize 高频
   // 也不重渲组件）；高度补偿防滚动区底部空白。rAF 合并同一帧内的多次 resize

@@ -1,4 +1,4 @@
-import { act, createElement } from 'react'
+import { act, createElement, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
@@ -149,7 +149,7 @@ afterEach(async () => {
 })
 
 /** 以引擎初始增益 gainValue 挂载演奏页，返回 ControlBar 伴奏音量滑杆 */
-async function mountPerformPage(gainValue: number): Promise<HTMLInputElement | null> {
+async function mountPerformPage(gainValue: number, strict = false): Promise<HTMLInputElement | null> {
   mocked.engine.getVolume.mockReturnValue(gainValue)
   const { default: PerformPage } = await import('./PerformPage')
   const container = document.createElement('div')
@@ -158,7 +158,7 @@ async function mountPerformPage(gainValue: number): Promise<HTMLInputElement | n
   await act(async () => {
     const root = createRoot(container)
     roots.push(root)
-    root.render(createElement(PerformPage))
+    root.render(strict ? createElement(StrictMode, null, createElement(PerformPage)) : createElement(PerformPage))
   })
   // 冲刷装载 effect 的异步链（loadSong → audioEngine.load → setPhase），让更新都落在 act 内
   await act(async () => {
@@ -173,6 +173,19 @@ async function beginPerformance(container: HTMLElement): Promise<void> {
   await act(async () => start!.click())
   mocked.engine.ctxTime = 10
   await flushRaf()
+}
+
+/** Capture and fire the inactivity timer without waiting 3.2 seconds. */
+async function hidePerformHud(container: HTMLElement): Promise<void> {
+  let expire!: () => void
+  const timer = vi.spyOn(window, 'setTimeout').mockImplementationOnce(callback => {
+    expire = callback as () => void
+    return 0 as unknown as ReturnType<typeof window.setTimeout>
+  })
+  await act(async () => window.dispatchEvent(new Event('mousemove')))
+  timer.mockRestore()
+  await act(async () => expire())
+  expect(container.querySelector('.perform')?.classList.contains('idle')).toBe(true)
 }
 
 describe('演奏页伴奏音量初值（t_5957a725）', () => {
@@ -229,6 +242,48 @@ describe('演奏页伴奏音量初值（t_5957a725）', () => {
 })
 
 describe('演奏录音会话', () => {
+  it.each(['focus', 'keyboard', 'accessible-click', 'pointer'] as const)('wakes idle controls for %s without interrupting playback, then allows keyboard pause', async interaction => {
+    await mountPerformPage(1, true)
+    const container = containers.at(-1)!
+    await beginPerformance(container)
+    await hidePerformHud(container)
+    const shell = container.querySelector<HTMLElement>('.perform')!
+    const pause = container.querySelector<HTMLButtonElement>('[aria-label="暂停"]')!
+    await act(async () => {
+      if (interaction === 'focus') pause.focus()
+      else if (interaction === 'keyboard') window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab' }))
+      else if (interaction === 'accessible-click') shell.click()
+      else shell.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    })
+    expect(shell.classList.contains('idle')).toBe(false)
+    expect(mocked.engine.playing).toBe(true)
+    await act(async () => window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space' })))
+    expect(mocked.engine.playing).toBe(false)
+    expect(shell.classList.contains('idle')).toBe(false)
+    expect(container.querySelector('[aria-label="播放"]')).not.toBeNull()
+  })
+
+  it.each(['button', 'Escape-code', 'Escape-key'] as const)('StrictMode: paused recording toggle and %s exit remain responsive', async exitMethod => {
+    const mic = makeMic()
+    mocked.openMic.mockResolvedValue(mic)
+    await mountPerformPage(1, true)
+    const container = containers.at(-1)!
+    await beginPerformance(container)
+    mocked.engine.time = .25
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="暂停"]')!.click())
+    expect(container.querySelector('[aria-label="播放"]')).not.toBeNull()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭录音"]')!.click())
+    expect(container.querySelector('[aria-label="开启录音"]')?.getAttribute('aria-pressed')).toBe('false')
+    expect(mic.discardCapture).toHaveBeenCalledOnce()
+    await act(async () => {
+      if (exitMethod === 'button') container.querySelector<HTMLButtonElement>('[aria-label="退出演奏"]')!.click()
+      else window.dispatchEvent(new KeyboardEvent('keydown', exitMethod === 'Escape-code' ? { code: 'Escape' } : { key: 'Escape' }))
+    })
+    expect(useAppStore.getState().view).toBe('result')
+    expect(useAppStore.getState().performanceSession?.status).toBe('no-recording')
+    expect(mic.stop).toHaveBeenCalledOnce()
+  })
+
   it('开始按钮连续点击只发起一次恢复和一组倒数节拍', async () => {
     let resolveResume!: () => void
     mocked.engine.resume.mockReturnValueOnce(new Promise<void>((resolve) => {

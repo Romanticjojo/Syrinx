@@ -6,6 +6,8 @@ export type View = 'home' | 'preview' | 'perform' | 'result'
 
 interface AppState {
   view: View
+  libraryTab: 'featured' | 'personal'
+  setLibraryTab: (tab: 'featured' | 'personal') => void
   currentSongId: string | null
   favorites: string[]
   /** 最近一次演奏会话的结果 */
@@ -33,6 +35,8 @@ const nextSessionId = (): string => `performance-${Date.now()}-${++sessionSeq}`
 
 export const useAppStore = create<AppState>((set) => ({
   view: 'home',
+  libraryTab: 'featured',
+  setLibraryTab: (libraryTab) => set({ libraryTab }),
   currentSongId: null,
   favorites: [],
   lastTake: null,

@@ -103,7 +103,7 @@
    9/8 二轮：断点由 max-width 改按输入方式判定——折叠屏展开（vivo X Fold3 /
    Find N6 ~910px）落不进 640px 宽度档，仍走桌面悬浮档盖谱（用户实测报障）；
    触屏判定不依赖宽度，折叠屏开合/旋转全态覆盖。窄桌面窗口保留宽度兜底。 */
-@media (max-width: 639.98px), (hover: none) and (pointer: coarse) {
+@media (max-width: 1050px), (any-pointer: coarse) {
   .pitch-meter {
     position: static;
     align-self: center;

@@ -4,8 +4,10 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode desktop",
+    "dev:web": "vite --mode web",
     "build": "tsc -b && vite build",
+    "build:desktop": "tsc -b && vite build --mode desktop --outDir dist-desktop",
     "test": "vitest run",
     "lint": "oxlint",
     "preview": "vite preview"

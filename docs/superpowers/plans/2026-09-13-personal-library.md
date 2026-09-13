@@ -2,61 +2,42 @@
 
 > Execute independent units with dispatching-parallel-agents, then review and integrate in this session. Use test-driven-development and verification-before-completion. User approval includes implementation and integration into dev; do not request another design gate.
 
-**Goal:** Deliver a local personal score library in the desktop edition and a formal-version notice in the web edition.
-**Architecture:** Existing React/OSMD/audio experience plus a local repository, independent MusicXML/piano engine, and a runtime song adapter. Web builds exclude personal modules at compile time.
-**Tech Stack:** Existing Vite/React/TypeScript/Vitest; IndexedDB; fflate for bounded MXL decoding; procedural piano synthesis.
-**Spec:** ../specs/2026-09-13-personal-library-design.md
+**Goal:** Deliver an offline personal score library in the desktop edition, with a formal-version notice in the web edition. User refinements supersede the original automatic-arrangement scope.
 
-## Global constraints
+**Specifications:** ../specs/2026-09-13-personal-library-design.md and ../specs/2026-09-13-personal-library-scope-update.md.
 
-- Preserve web-deploy and the cloud server. Preserve existing curated song and recording behavior.
-- No account, upload endpoint, cloud generation, or dependency on remote runtime fonts/sounds.
-- Binding visual tokens: app/src/index.css. Development defaults to desktop mode; build defaults to web mode.
-- Runtime sources contain no persistent Blob URLs. Store originals and settings; cache only active audio.
-- Reviewers inspect behavior, lifecycle, import validation, musical timing, edition isolation and mobile layout.
+## Constraints
 
-## Task 1: Local records and backup (independent)
+- Preserve web-deploy and the cloud server. Keep the frozen baseline tag and external media snapshot.
+- No account, upload endpoint or remote generation. Preserve original MusicXML and keep only active audio in memory.
+- Use the current visual tokens. Develop in desktop mode; ordinary production build remains web.
+- Finish through in-app-browser Computer Use. Preserve the main workspace's unrelated designs directory.
 
-**Files:** app/src/library/types.ts (shared contract); repository.ts; backup.ts; repository.test.ts; backup.test.ts.
-**Interface:** PersonalScore and ScoreSettings in types.ts. repository exports createScoreRepository(name?), scoreRepository; list(), get(id), add(record) -> {record, duplicate}, update(id, patch) -> record, remove(id), restore(records) -> {added, skipped}. backup exports encodeBackup(records):string and decodeBackup(text):PersonalScore[].
-- [ ] Write tests using fake-indexeddb for reopen persistence, duplicate hash, missing update, transaction failure, atomic restore and version/record validation.
-- [ ] Run focused tests before implementation and record expected missing behavior.
-- [ ] Implement bounded validation and transaction-completion promises. Dedupe by fingerprint, never overwrite existing metadata on duplicate restore.
-- [ ] Verify focused tests and submit file-scoped review; no package or shared UI edits.
+## Completed implementation
 
-## Task 2: MusicXML and piano engine (independent)
+- [x] Freeze and push the existing dev version and annotated baseline tag; verify the external Git bundle and media manifest.
+- [x] Install and apply development, design, planning, review and verification skills; use the requested Computer Use skill for real UI testing.
+- [x] Build IndexedDB repository with deduplication, transaction completion, v1 upgrade, folders, covers and versioned backup/restore.
+- [x] Parse bounded MusicXML/MXL with explicit handling of simultaneous notes, voices, staff, ties, pickup, tempo changes and common repeats.
+- [x] Preserve pure melody as a static electronic sheet, without audio preparation or performance controls.
+- [x] Select exactly one existing piano part and synthesize its accompaniment locally; remove user-facing automatic-arrangement controls.
+- [x] Integrate the active personal score with existing score rendering and performance entry. Keep the curated catalog intact.
+- [x] Exclude personal modules from web builds; show a formal-version notice on the personal tab.
+- [x] Implement cards, recent shelf, compact list, pagination, search, favorites, sorting and metadata editing.
+- [x] Implement local cover selection, resizing, replacement/removal, book-cover display and list thumbnails.
+- [x] Implement flat folder creation, rename, batch moves and safe folder removal to Unfiled.
+- [x] Adapt phone/tablet/foldable widths, portrait/landscape and short-height dialogs, with preserved drafts and reading state.
+- [x] Review storage, music engine and combined UI; fix editor response races, missing rendering XML declaration and zoom reload lifecycle.
 
-**Files:** app/src/library/score.ts; files.ts; piano.ts; corresponding tests and fixtures.
-**Interface:** inspectScore(xml):ScoreInspection; prepareScore(xml, settings):PreparedScore; readScoreFile(file):Promise<string>; synthesizePiano(timeline, signal?):Promise<AudioBuffer> (all contracts in types.ts).
-- [ ] Hand-write small fixtures: melody+two-staff piano, simultaneous chord notes, backup voice, tied notes, tempo boundary, weak pickup, repeats, harmony, invalid XML, mismatched settings.
-- [ ] Assert literal onset/duration/pitch values, validate duration of silent mode and separation of melody from piano. Observe failures before implementation.
-- [ ] Implement bounded multi-part analysis and a shared beat/tempo representation. Preserve original XML and build playback-order melody XML separately.
-- [ ] Implement original piano notes, deterministic generated piano and silent accompaniment, plus cancellable offline synthesis. Do not change legacy parsers.
-- [ ] Test compressed container discovery/path/size bounds using fflate fixtures, malformed files and unsupported notation messages.
-- [ ] Run focused tests, report exact support limits and review all owned files.
+## Verification and handoff
 
-## Task 3: Edition and source integration (controller)
+- [x] Functional Computer Use walkthrough: user MXL import, reading, metadata, cover, folders, duplicate/invalid handling, v1/v2 restore and one-piano performance.
+- [x] Restore 120 isolated QA scores to verify 24/50-per-page card/list browsing and cross-page search.
+- [x] Resize the current test tab through phone, iPad and foldable dimensions; inspect DOM bounds and visible screenshots, without using hidden state mutations.
+- [x] Run full tests, lint and both production builds; see ../reports/2026-09-13-personal-library-validation.md for final counts and limits.
+- [x] Document that in-app backup download completion is unconfirmed; do not claim a completed download/restore round trip.
+- [x] Document that physical mobile devices, hinge posture, OS keyboard, airplane-mode cold start, audio listening and native installers are not covered by viewport simulation.
 
-**Files:** app/package.json; app/vite.config.ts; src/App.tsx; src/store.ts; src/songs/runtime.ts; src/songs/index.ts; src/audio/accompaniment.ts; src/library/bridge.ts; app views as necessary.
-- [ ] Add behavioral tests for web-tab notice and desktop tab selection; verify failure.
-- [ ] Add compile-time desktop mode, preserving ordinary production as web.
-- [ ] Introduce a single active runtime song (manifest/XML/timeline/audio provider) and resolve it before curated catalog lookups. Personal library prepares and registers it before go('perform').
-- [ ] Ensure cancel, repeated entry, result analysis and accompaniment comparison work for runtime songs. Preserve existing curated loader tests.
-- [ ] Build both modes; inspect web assets for excluded private modules and exercise web notice.
+## Integration procedure
 
-## Task 4: Personal library UI (controller)
-
-**Files:** src/library/PersonalLibrary.tsx; LibraryImport.tsx; LibraryDetail.tsx; library.css; src/components/Dialog.tsx; src/views/HomePage.tsx/css; UI tests.
-- [ ] Implement confirmed visual direction directly in the actual app using existing tokens, avoiding a separate throwaway prototype.
-- [ ] Empty state with import/restore, Netflix-inspired recent shelf and score cards, filters/search/sort, metadata edit/favorite/delete.
-- [ ] Import configuration selects melody/piano/mode/style/key and saves only valid confirmed records. Progress, cancellation and per-file errors are visible.
-- [ ] Detail renders XML through ScoreSheet, switches full/melody/piano and handles zoom, exports original, saves settings and launches existing performance flow.
-- [ ] Dialog lifecycle, error dismissal, duplicate handling and backup restore receive behavior tests plus real-browser validation.
-
-## Task 5: Review, verification and integration
-
-- [ ] Full tests, lint and web/desktop production builds. Check all new failures; document existing warnings.
-- [ ] Browser functional walkthrough including reopen/backup/restore and offline requests; 390/768/1440 viewport and both themes.
-- [ ] Independent review of local storage and music engine, followed by whole-change review; fix important findings and verify scoped regressions.
-- [ ] Save docs/superpowers/reports/2026-09-13-personal-library-validation.md with evidence and limitations.
-- [ ] Commit file-scoped changes, fast-forward dev, verify main workspace and remote web-deploy unchanged. Push dev if requested scope includes final integration backup; never deploy.
+Commit only the scoped application and documentation changes, fast-forward the primary dev checkout, verify the merged checkout, then push dev to the existing GitHub repository. Confirm the remote baseline tag and web-deploy SHA remain unchanged. Keep the external worktree and localhost preview for user review.

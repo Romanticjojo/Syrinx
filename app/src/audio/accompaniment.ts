@@ -1,5 +1,6 @@
 import type { SongManifest, Timeline } from '../types'
 import { assetUrl } from '../lib/assetUrl'
+import { getRuntimeSong } from '../songs/runtime'
 
 export interface LoadedAccompaniment {
   buffer: AudioBuffer
@@ -118,12 +119,24 @@ const sharedLoader = createAccompanimentLoader({
 })
 
 /** Download/decode the selected song without mutating the playback engine. */
-export const loadAccompaniment = (song: SongManifest, timeline?: Timeline) =>
-  sharedLoader.load(song, timeline)
+export const loadAccompaniment = async (song: SongManifest, timeline?: Timeline): Promise<LoadedAccompaniment> => {
+  if (song.source === 'personal') {
+    const local = getRuntimeSong(song.id)
+    if (!local) throw new Error('请回到个人仓库重新打开这份乐谱')
+    return { buffer: await local.loadAudio(), synthesized: false }
+  }
+  return sharedLoader.load(song, timeline)
+}
 
 /** Preview uses the same shared work as the perform page. */
 export const preloadAccompaniment = loadAccompaniment
 
-export const cancelAccompaniment = (songId?: string) => sharedLoader.cancel(songId)
+export const cancelAccompaniment = (songId?: string) => {
+  getRuntimeSong(songId)?.cancelAudio()
+  sharedLoader.cancel(songId)
+}
 
-export const cancelPendingAccompaniment = (songId?: string) => sharedLoader.cancelPending(songId)
+export const cancelPendingAccompaniment = (songId?: string) => {
+  getRuntimeSong(songId)?.cancelAudio()
+  sharedLoader.cancelPending(songId)
+}

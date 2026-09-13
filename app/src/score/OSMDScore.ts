@@ -61,6 +61,7 @@ export class OSMDScore {
   private containerEl: HTMLElement
   private secPerQuarter = 0.5
   private measureTimes: { measure: number; time: number; quarters: number; end?: true }[] = []
+  private tempoSegments: Timeline['tempoSegments']
   private lastMeasure = 0
   private totalMeasures = 0
   private accent: string
@@ -210,6 +211,7 @@ export class OSMDScore {
     this.markerLayer = null
     this.secPerQuarter = timeline.secPerQuarter
     this.measureTimes = timeline.measureTimes
+    this.tempoSegments = timeline.tempoSegments
     // 终点标记不是真实小节
     this.totalMeasures = timeline.measureTimes.filter((e) => !e.end).length
     this.lastMeasure = 0
@@ -228,6 +230,7 @@ export class OSMDScore {
   setTimeline(timeline: Timeline): void {
     this.secPerQuarter = timeline.secPerQuarter
     this.measureTimes = timeline.measureTimes
+    this.tempoSegments = timeline.tempoSegments
     this.totalMeasures = timeline.measureTimes.filter((e) => !e.end).length
   }
 
@@ -335,11 +338,23 @@ export class OSMDScore {
     return cs[best].x
   }
 
-  /** 四分音符位置 → 曲目时间（秒）：按 measureTimes（含伴奏锚点，t_3b9cfc25）分段线性插值。
+  /** 全音符位置 → 曲目时间（秒）：优先精确速度段；缺省时按 measureTimes
+   *  （含伴奏锚点，t_3b9cfc25）分段线性插值。
    *  注意 OSMD iterator 的 RealValue 单位是全音符（实测 62 小节 4/4 全谱 0→61.75，
    *  t_b22f5467 项 5 联调定位），×4 换算成四分音符数后再对锚点表插值 */
   private timeAtQuarters(rvWhole: number): number {
     const rv = rvWhole * 4
+    const segments = this.tempoSegments
+    if (segments?.length) {
+      let lo = 0, hi = segments.length - 1
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2)
+        if (segments[mid].quarters <= rv) lo = mid
+        else hi = mid - 1
+      }
+      const segment = segments[lo]
+      return segment.time + (rv - segment.quarters) * 60 / segment.bpm
+    }
     const mt = this.measureTimes
     if (mt.length === 0) return rv * this.secPerQuarter
     let k = 0

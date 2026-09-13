@@ -129,6 +129,19 @@
 }
 
 /* 动画弱化：crossfade 退化为瞬切（离场张直接透明，避免两张全叠文字重影） */
+@media (max-width: 720px) {
+  .home-hero[role='button'] { display: grid; }
+  .home-hero .hero-slide { position: relative; inset: auto; grid-area: 1 / 1; min-width: 0; }
+  .home-hero .hero-slide .hero-body { padding: 28px 24px 78px; min-width: 0; overflow-wrap: anywhere; }
+  .home-hero .hero-arrow { top: auto; bottom: 14px; transform: none; width: 44px; height: 44px; }
+  .home-hero .hero-arrow:hover { transform: scale(1.06); }
+  .home-hero .hero-arrow.prev { left: 16px; }
+  .home-hero .hero-arrow.next { right: 16px; }
+  .home-hero .hero-dots { bottom: 14px; right: 50%; transform: translateX(50%); gap: 0; }
+  .home-hero .hero-dot { width: 44px; height: 44px; }
+  .home-hero .hero-dot::after { inset: 18px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .home-hero .hero-slide,
   .home-hero .hero-slide.is-active {
