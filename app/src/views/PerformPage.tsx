@@ -3,7 +3,7 @@ import { audioEngine } from '../audio/AudioEngine'
 import { openMic, type MicSession } from '../audio/recorder'
 import { loadAccompaniment, cancelPendingAccompaniment } from '../audio/accompaniment'
 import { LumiereScene } from '../background/LumiereScene'
-import ControlBar from '../components/ControlBar'
+import ControlBar, { type CaptureIndicator } from '../components/ControlBar'
 import PitchMeter, { type PitchMeterHandle } from '../components/PitchMeter'
 import { noteAt } from '../pitch/compare'
 import { LivePitchTracker } from '../pitch/live'
@@ -34,6 +34,7 @@ const fmt = (sec: number): string =>
 interface CaptureStart {
   t: number
   wall: number
+  rate: number
 }
 
 interface CaptureRequest {
@@ -69,6 +70,7 @@ export default function PerformPage() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [playing, setPlaying] = useState(false)
   const [recOn, setRecOn] = useState(false)
+  const [captureIndicator, setCaptureIndicator] = useState<CaptureIndicator>('idle')
   // 初值读引擎实际增益（t_5957a725）：audioEngine 全局单例，回放页「对照伴奏」
   // 拖过的音量跨页留存——写死 1 会显示假满格而实际 gain=0，背景伴奏无声
   const [volume, setVolume] = useState(() => audioEngine.getVolume())
@@ -77,6 +79,10 @@ export default function PerformPage() {
   const [timeline, setTimeline] = useState<Timeline | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [synthesizedAccompaniment, setSynthesizedAccompaniment] = useState(false)
+  const [tempoRatio, setTempoRatio] = useState(1)
+  const [tempoPending, setTempoPending] = useState(false)
+  const tempoPendingRef = useRef(false)
+  const requestedRateRef = useRef(1)
 
   // rAF 循环用的 ref 镜像（避开闭包过期）
   const timelineRef = useRef<Timeline | null>(null)
@@ -149,7 +155,7 @@ export default function PerformPage() {
     shellRef.current?.classList.remove('idle')
     clearTimeout(idleTimer.current)
     idleTimer.current = window.setTimeout(() => {
-      if (playingRef.current && shellRef.current) shellRef.current.classList.add('idle')
+      if (playingRef.current && shellRef.current && !document.querySelector('[role="dialog"][aria-modal="true"]')) shellRef.current.classList.add('idle')
     }, IDLE_MS)
   }, [])
 
@@ -160,10 +166,18 @@ export default function PerformPage() {
     toastTimer.current = window.setTimeout(() => setToast(null), 3000)
   }, [])
 
+  const reportCaptureError = useCallback((error: unknown) => {
+    if (!mountedRef.current || finishedRef.current) return
+    setCaptureIndicator('error')
+    showToast(`录音不可用：${error instanceof Error ? error.message : String(error)}`)
+  }, [showToast])
+
   /** 确保麦克风会话存在（只开一次；实时音准反馈不受录音开关影响） */
   const ensureMic = useCallback((): Promise<MicSession> => {
     if (micRef.current) return Promise.resolve(micRef.current)
     if (!micOpeningRef.current) {
+      setCaptureIndicator('waiting')
+      showToast('等待麦克风授权，暂未录音')
       micOpeningRef.current = openMic(audioEngine.audioCtx)
         .then((mic) => {
           if (!mountedRef.current || finishedRef.current) {
@@ -173,15 +187,17 @@ export default function PerformPage() {
           }
           micRef.current = mic
           micOpeningRef.current = null
+          setCaptureIndicator('idle')
           return mic
         })
         .catch((e: unknown) => {
           micOpeningRef.current = null
+          reportCaptureError(e)
           throw e
         })
     }
     return micOpeningRef.current
-  }, [])
+  }, [reportCaptureError, showToast])
 
   const captureRequestIsCurrent = useCallback((request: CaptureRequest): boolean => (
     mountedRef.current
@@ -208,11 +224,13 @@ export default function PerformPage() {
     const task = captureGateQueueRef.current.then(async () => {
       await sealQueueRef.current
       if (!captureRequestIsCurrent(request)) return false
+      setCaptureIndicator('preparing')
       try {
         await mic.restartCapture()
         if (paused) await mic.pauseCapture()
       } catch (error) {
         if (!captureRequestIsCurrent(request)) return false
+        reportCaptureError(error)
         throw error
       }
       if (!captureRequestIsCurrent(request)) {
@@ -223,12 +241,14 @@ export default function PerformPage() {
         }
         return false
       }
-      recStartedRef.current = { t: audioEngine.time, wall: Date.now() }
+      recStartedRef.current = { t: audioEngine.time, wall: Date.now(), rate: audioEngine.rate }
+      setCaptureIndicator('ready')
+      setPerformanceStatus(request.sessionId, 'recording')
       return true
     })
     captureGateQueueRef.current = task.then(() => {}, () => {})
     return task
-  }, [captureRequestIsCurrent])
+  }, [captureRequestIsCurrent, reportCaptureError, setPerformanceStatus])
 
   /** 恢复已有采集也受同一 gate 队列和请求代次保护。 */
   const resumeCapture = useCallback((): Promise<boolean> => {
@@ -244,22 +264,27 @@ export default function PerformPage() {
     }
     const task = captureGateQueueRef.current.then(async () => {
       if (!captureRequestIsCurrent(request) || !recStartedRef.current) return false
+      setCaptureIndicator('preparing')
       try {
         await mic.resumeCapture()
       } catch (error) {
         if (!captureRequestIsCurrent(request)) return false
+        reportCaptureError(error)
         throw error
       }
-      return captureRequestIsCurrent(request) && !!recStartedRef.current
+      const resumed = captureRequestIsCurrent(request) && !!recStartedRef.current
+      if (resumed) setCaptureIndicator('ready')
+      return resumed
     })
     captureGateQueueRef.current = task.then(() => {}, () => {})
     return task
-  }, [captureRequestIsCurrent])
+  }, [captureRequestIsCurrent, reportCaptureError])
 
   const sealCurrentCapture = useCallback((stopSec: number): Promise<boolean> => {
     const started = recStartedRef.current
     recStartedRef.current = null
     if (!started) return sealQueueRef.current
+    setCaptureIndicator('idle')
     const mic = micRef.current
     const sessionId = sessionIdRef.current
     const captureBarrier = captureGateQueueRef.current
@@ -277,11 +302,12 @@ export default function PerformPage() {
         sessionId,
         songId: song.id,
         startedAt: started.wall,
-        durationSec: Math.max(0, stopSec - started.t),
+        durationSec: Math.max(0, (stopSec - started.t) / started.rate),
         audioUrl: recording.url,
         mimeType: recording.mime,
         startSec: started.t,
         stopSec,
+        playbackRate: started.rate,
         pitchTrack: null,
         stats: null,
       }
@@ -337,6 +363,7 @@ export default function PerformPage() {
     const recordingRequested = recOnRef.current
     recOnRef.current = false
     setRecOn(false)
+    setCaptureIndicator('idle')
     const sessionId = sessionIdRef.current
     if (!sessionId) return
     setPerformanceStatus(sessionId, 'saving')
@@ -397,6 +424,8 @@ export default function PerformPage() {
         if (!alive) return
         await audioEngine.load(buffer)
         if (!alive) return
+        requestedRateRef.current = 1
+        setTempoRatio(1)
         setSynthesizedAccompaniment(synthesized)
         setPhase('ready')
       } catch (e: unknown) {
@@ -498,7 +527,7 @@ export default function PerformPage() {
     if (!tl) return
     cancelCountIn()
     const generation = transitionGenerationRef.current
-    const beat = 60 / tempoAtTime(tl, target)
+    const beat = 60 / (tempoAtTime(tl, target) * audioEngine.rate)
     const t0 = audioEngine.ctxTime + 0.12
     const cancels: (() => void)[] = []
     for (let k = 0; k < COUNT_BEATS; k++) {
@@ -518,10 +547,11 @@ export default function PerformPage() {
   }, [cancelCountIn])
 
   const start = useCallback(async () => {
-    if (phaseRef.current !== 'ready' || startPendingRef.current) return
+    if (phaseRef.current !== 'ready' || startPendingRef.current || tempoPendingRef.current) return
     const tl = timelineRef.current
     if (!tl) return
     startPendingRef.current = true
+    const generation = transitionGenerationRef.current
     try {
       await audioEngine.resume()
     } catch {
@@ -529,15 +559,13 @@ export default function PerformPage() {
       if (mountedRef.current) showToast('音频无法启动，请重试')
       return
     }
-    if (!mountedRef.current || phaseRef.current !== 'ready') {
+    if (!mountedRef.current || phaseRef.current !== 'ready' || generation !== transitionGenerationRef.current || tempoPendingRef.current) {
       startPendingRef.current = false
       return
     }
     startPendingRef.current = false
     // 麦克风在倒数期间申请（权限弹窗时间被倒数盖住）；失败不阻断演奏
-    ensureMic().catch(() => {
-      if (mountedRef.current) showToast('麦克风不可用，实时音准与录音不可用')
-    })
+    void ensureMic().catch(() => {}) // ensureMic reports its current request failure.
     scoreRef.current?.showCursor()
     beginCountIn(audioEngine.time, true)
   }, [beginCountIn, ensureMic, showToast])
@@ -549,6 +577,7 @@ export default function PerformPage() {
     let alive = true
     const step = () => {
       const { t0, beat, target, initial, generation } = countdownRef.current
+      if (!alive || finishedRef.current || phaseRef.current !== 'countdown' || generation !== transitionGenerationRef.current) return
       const remain = t0 + beat * COUNT_BEATS - audioEngine.ctxTime
       if (remain <= 0) {
         void (async () => {
@@ -611,8 +640,6 @@ export default function PerformPage() {
           setPhase('performing')
           // 默认开录；麦克风没就绪时等它就绪后补开。
           const REC_ON_TOAST = '🎙️ 录音已开启，结束后可在回放页查看'
-          const sessionId = sessionIdRef.current
-          if (sessionId) setPerformanceStatus(sessionId, 'recording')
           if (recStartedRef.current) showToast(REC_ON_TOAST)
           else void ensureMic().then((mic) => {
             if (
@@ -678,6 +705,7 @@ export default function PerformPage() {
   }, [phase, finish])
 
   const toggle = useCallback(() => {
+    if (tempoPendingRef.current) return
     if (phaseRef.current === 'ready') {
       void start()
       return
@@ -792,13 +820,16 @@ export default function PerformPage() {
   }, [])
 
   /** 单次跳转事务：播放中先封段，再定位、倒数并续录；暂停/就绪只定位。 */
-  const seekTo = useCallback((t: number, measure?: number) => {
+  const seekTo = useCallback((t: number, measure?: number, nextRate?: number) => {
       const currentPhase = phaseRef.current
       if (!['ready', 'performing', 'countdown'].includes(currentPhase)) return
       const tl = timelineRef.current
       if (!tl) return
+      if (nextRate !== undefined) requestedRateRef.current = nextRate
+      const prepareRate = nextRate !== undefined || tempoPendingRef.current
+      const desiredRate = requestedRateRef.current
       const clamped = Math.max(0, Math.min(t, tl.durationSec))
-      if (currentPhase === 'ready') {
+      if (currentPhase === 'ready' && !prepareRate) {
         positionTransport(clamped, measure)
         playingRef.current = false
         setPlaying(false)
@@ -815,26 +846,49 @@ export default function PerformPage() {
       const generation = transitionGenerationRef.current
       playIntentRef.current = false
       audioEngine.pause()
+      const captureStop = audioEngine.time
       playingRef.current = false
       setPlaying(false)
       shellRef.current?.classList.remove('idle')
+      if (prepareRate) {
+        tempoPendingRef.current = true
+        setTempoPending(true)
+      }
       void (async () => {
         try {
-          if (recOnRef.current) await sealCurrentCapture(audioEngine.time)
+          if (recOnRef.current) await sealCurrentCapture(captureStop)
           else await sealQueueRef.current
+          if (!mountedRef.current || finishedRef.current || generation !== transitionGenerationRef.current) return
+          if (prepareRate) {
+            const changed = await audioEngine.setRate(desiredRate)
+            if (!mountedRef.current || finishedRef.current || generation !== transitionGenerationRef.current) return
+            if (!changed) throw new Error('当前浏览器无法完成保调变速，请重试或还原推荐速度')
+            setTempoRatio(audioEngine.rate)
+            tempoPendingRef.current = false
+            setTempoPending(false)
+          }
         } catch (error) {
           if (mountedRef.current && generation === transitionGenerationRef.current) {
             recOnRef.current = false
             setRecOn(false)
-            phaseRef.current = 'performing'
-            setPhase('performing')
-            showToast(`录音分段保存失败：${error instanceof Error ? error.message : String(error)}`)
+            requestedRateRef.current = audioEngine.rate
+            setTempoRatio(audioEngine.rate)
+            tempoPendingRef.current = false
+            setTempoPending(false)
+            transitionShouldResumeRef.current = false
+            const stoppedPhase = currentPhase === 'ready' ? 'ready' : 'performing'
+            phaseRef.current = stoppedPhase
+            setPhase(stoppedPhase)
+            showToast(`未能继续：${error instanceof Error ? error.message : String(error)}`)
           }
           return
         }
         if (!mountedRef.current || finishedRef.current || generation !== transitionGenerationRef.current) return
         positionTransport(clamped, measure)
-        if (resumeAfter || initialCountdown) beginCountIn(clamped, initialCountdown)
+        if (currentPhase === 'ready') {
+          phaseRef.current = 'ready'
+          setPhase('ready')
+        } else if (resumeAfter || initialCountdown) beginCountIn(clamped, initialCountdown)
         else {
           transitionShouldResumeRef.current = false
           phaseRef.current = 'performing'
@@ -844,6 +898,14 @@ export default function PerformPage() {
         wake()
       })()
     }, [beginCountIn, cancelCountIn, positionTransport, sealCurrentCapture, showToast, wake])
+
+  const changeTempo = useCallback((bpm: number) => {
+    const recommended = timelineRef.current?.tempo
+    if (!recommended || !Number.isInteger(bpm)) return
+    const rate = bpm === Math.round(recommended) ? 1 : bpm / recommended
+    if (rate < 0.5 || rate > 1.5 || rate === audioEngine.rate) return
+    seekTo(audioEngine.time, undefined, rate)
+  }, [seekTo])
 
   const restart = useCallback(() => {
     const first = timelineRef.current?.measureTimes.find((item) => !item.end)
@@ -914,6 +976,7 @@ export default function PerformPage() {
 
   /** 录音开关：关闭时封存当前段；再次开启从当前谱面时间建立新段。 */
   const toggleRec = useCallback(() => {
+    if (tempoPendingRef.current) return
     if (phaseRef.current !== 'performing') return
     const next = !recOnRef.current
     const captureGeneration = ++captureGenerationRef.current
@@ -964,7 +1027,9 @@ export default function PerformPage() {
   // 键盘：空格 播放/暂停，Esc 退出
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || document.querySelector('[role="dialog"][aria-modal="true"]')) return
       if (e.code === 'Space') {
+        if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select, button, [contenteditable="true"]')) return
         e.preventDefault()
         toggle()
       } else if (e.key === 'Escape' || e.code === 'Escape') {
@@ -1098,7 +1163,13 @@ export default function PerformPage() {
           ended={phase === 'ended'}
           active={phase === 'performing' || phase === 'countdown'}
           recOn={recOn}
+          captureIndicator={captureIndicator}
           volume={volume}
+          bpm={Math.round((timeline?.tempo ?? song.bpm) * tempoRatio)}
+          recommendedBpm={timeline?.tempo ?? song.bpm}
+          tempoDisabled={phase === 'loading' || phase === 'error' || phase === 'ended'}
+          tempoPending={tempoPending}
+          onTempo={changeTempo}
           onToggle={toggle}
           onRecToggle={toggleRec}
           onRestart={restart}

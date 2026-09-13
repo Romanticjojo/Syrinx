@@ -21,11 +21,11 @@ const modules = (...songs: SongManifest[]) =>
   Object.fromEntries(songs.map((value) => [`/public/songs/${value.id}/manifest.json`, { default: value }]))
 
 describe('buildSongCatalog', () => {
-  it('does not reintroduce retired score fixtures as playable songs', () => {
-    const fixtures = modules(song('lumiere'), song('aurora-scale'))
+  it('does not reintroduce retired fixtures or removed featured scores', () => {
+    const fixtures = modules(song('lumiere'), song('aurora-scale'), song('birds-poem'), song('river-flows-in-you'))
     expect(buildSongCatalog(fixtures, song('syrinx-sample'), undefined))
       .toEqual([song('syrinx-sample')])
-    expect(buildSongCatalog(fixtures, song('syrinx-sample'), 'lumiere,aurora-scale'))
+    expect(buildSongCatalog(fixtures, song('syrinx-sample'), 'lumiere,aurora-scale,birds-poem,river-flows-in-you'))
       .toEqual([])
     expect(buildSongCatalog({ ...fixtures, ...modules(song('new-song')) }, song('syrinx-sample'), undefined))
       .toEqual([song('new-song')])
@@ -39,15 +39,17 @@ describe('buildSongCatalog', () => {
       song('expedition-33'),
       song('river-flows-in-you'),
       song('flower-dance'),
+      song('alicia'),
+      song('weight-of-the-world'),
     )
 
     expect(buildSongCatalog(shuffled, song('syrinx-sample'), undefined).map((item) => item.id)).toEqual([
       'luv-letter',
       'flower-dance',
-      'river-flows-in-you',
       'expedition-33',
-      'birds-poem',
+      'alicia',
       'interstellar',
+      'weight-of-the-world',
     ])
   })
 

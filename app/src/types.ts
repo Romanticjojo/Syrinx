@@ -48,6 +48,8 @@ export interface Take {
   startSec: number
   /** 录音停止对应的伴奏时间（秒） */
   stopSec: number
+  /** Fixed accompaniment speed for this segment; absent in older takes means 1. */
+  playbackRate?: number
   /** 演奏时长内实测的音高轨迹（时间 → 频率/音分偏移） */
   pitchTrack: PitchPoint[] | null
   /** 音准统计（无法分析时为 null） */

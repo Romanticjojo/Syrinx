@@ -1,195 +1,146 @@
 <div align="center">
 
-<img src="docs/img/logo.jpg" alt="Syrinx Logo" width="200"/>
+<img src="app/public/brand/favicon-256.png" alt="Syrinx" width="80" />
 
-# 🎶 Syrinx · 长笛流光
+# Syrinx · 长笛流光
 
-**吹响你的长笛，曲谱认得你的呼吸。**
+**把喜欢的乐谱留在身边，让每一次练习从容开始。**
 
-[English](README.en.md) · [快速开始](#-快速开始) · [功能](#-功能总览) · [路线图](#-路线图) · [FAQ](#-faq--已知问题)
+个人乐谱仓库 · 电子阅谱 · 长笛伴奏练习
 
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![Node](https://img.shields.io/badge/node-%3E%3D20.19-339933?style=flat-square&logo=node.js&logoColor=white)
-![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)
+[English](README.en.md) · [在线体验](https://romanticjojo.com) · [快速开始](#快速开始) · [版本说明](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/releases/v0.3.0.md)
 
-**智能乐谱** × **音乐游戏**
-
-为真实长笛演奏而生的辅助应用
+![Local first](https://img.shields.io/badge/local-first-77B7AC?style=flat-square)
+![React](https://img.shields.io/badge/React-19-202827?style=flat-square&logo=react&logoColor=77B7AC)
+[![License](https://img.shields.io/badge/license-Apache--2.0-202827?style=flat-square)](LICENSE)
 
 </div>
 
+> **从 `dev` 开始。** 本文介绍 `dev` 分支上的 v0.3.0 更新。GitHub 默认分支 `master` 同步说明文档；获取这里的功能，请使用下方带 `--branch dev` 的启动步骤。
+
 <p align="center">
-  <img src="docs/img/overview.png" alt="Syrinx 入场画面：女神吹笛徽记、品牌字标与进入按钮" width="100%"/>
+  <img src="docs/img/readme/library-desktop.png" alt="Syrinx 个人仓库桌面实拍：深色书架、原创示例乐谱、搜索与视图切换" width="100%" />
+  <br /><sub>真实应用截图 · 个人仓库桌面视图 · 图中为项目原创示例练习</sub>
 </p>
 
-## ✅ 功能总览
+## 为日常练习，留一方自己的曲库
 
-上面这一屏是打开 Syrinx 的第一眼：深色舞台上女神吹笛徽记与品牌字标，点击「进入应用」直达曲库。进入后的核心体验则是：顶部 HUD 实时显示小节与时间，谱面上光标逐音符跟随伴奏前进，three.js 动态背景随音乐呼吸，底部控制条把暂停 / 录音 / 缩放 / 退出收在一处。围绕这条演奏主线，各子系统能力如下：
+**收藏与整理。** 导入 MusicXML、XML 或 MXL，把曲名、作曲 / 编曲、标签和封面整理好。用文件夹、收藏与搜索找到下一首；卡片和列表都支持分页。
 
-| 状态 | 功能 |
-|:---:|---|
-| ✅ | MusicXML 曲谱渲染（OpenSheetMusicDisplay），光标逐音符跟随伴奏时间轴，自动滚动翻页 |
-| ✅ | Web Audio 唯一主时钟：谱 / 音 / 背景三方同步，误差听感 <50ms |
-| ✅ | 程序化伴奏合成：无伴奏音频时用 OfflineAudioContext 合成夜曲风格伴奏 |
-| ✅ | 自研纯 TS **YIN 音高检测**（TDD），演奏结束生成音高对比曲线与音准统计（±50 音分） |
-| ✅ | 演奏录音与回放，回放时可同时播放伴奏对照 |
-| ✅ | three.js 动态沉浸背景，低频能量驱动光晕与粒子呼吸（audio-reactive） |
-| ✅ | 3D 长笛模型入场动画 + 预览页展示，可跳过 |
-| ✅ | 深浅双主题 + 每曲独立强调色（Song Pack 定义） |
-| ✅ | Vitest 单元测试覆盖曲谱时间轴 / YIN / 音高统计 |
-| ❌ | 移动端 / PWA（规划中） |
-| ❌ | CREPE 深度学习音高检测增强（规划中） |
-| ❌ | 循环小节练习、速度调节（规划中） |
+**翻开就能读。** 在电脑、平板和手机宽度下阅读乐谱、翻页与缩放。单长笛谱以电子阅谱方式打开，不生成音频；信息编辑保留导入的原始谱面。
 
-## ✨ 亮点
+**按自己的速度练。** 原谱含钢琴时，可选一个钢琴声部在本机合成伴奏，同一声部的左右手一起播放。跟随谱面光标演奏，调整 BPM、从指定小节起奏，再回听录音并查看音高对比。
 
-功能表之下，是几个贯穿全项目的设计决策——它们决定了 Syrinx 在「实时演奏」这个场景下的工程性格：
+## 选择适合你的版本
 
-> 🎼 **时间即谱面**
-> `AudioContext.currentTime` 是唯一时间源 → rAF 每帧换算 → 直写 DOM 驱动光标，不进响应式 store，避免重渲染抖动。
+| | 正式版功能 · 本地运行 | 网页体验版 |
+|---|---|---|
+| 用途 | 收藏自己的乐谱，阅读与练习 | 快速体验精选曲目的演奏流程 |
+| 个人仓库 | 导入、编辑信息、封面、文件夹、收藏、备份 | 保留入口，点击后显示正式版本说明 |
+| 曲目 | 自己导入的乐谱；精选曲目取决于本地素材 | 四首精选：Luv Letter、Flower Dance、Lumière、Interstellar |
+| 运行入口 | `dev` · `npm run dev` | [在线体验](https://romanticjojo.com) · `npm run dev:web` |
+| 版本对应 | `dev` → `v0.3.0` | `web-deploy` → `v0.3.0-web` |
 
-> 🎹 **零素材也能伴奏**
-> 没有 mp3 也能跑：按 MusicXML 音符事件程序化合成「旋律 + 低音 pad + 气声 + 混响」的夜曲风格伴奏。
+当前通过浏览器运行。Windows、Android、macOS 和 iOS 原生安装包仍在规划中。在线站点运行已部署的版本，可能落后于分支更新；推送源码不会自动更新站点。
 
-> 🎤 **听得见你的音准**
-> 自研 YIN 算法（差分函数 + 累积均值归一化 + 抛物线插值），纯 TypeScript 实现、TDD 全绿，接口化设计可替换为 CREPE。
+## 三步，开始自己的练习
 
-> 🌌 **演奏也要有氛围**
-> three.js 晨光主题场景随音乐呼吸，谱面区域受保护；3.2 秒无操作控件自动隐入，沉浸演奏。
+### 1. 导入一份乐谱
 
-## 🚀 快速开始
+本地启动后进入「个人仓库」，点击「导入乐谱」或拖入文件，确认名称与声部后保存。可以先试试仓库提供的两份原创小练习：
 
-**环境要求**：Node.js **≥ 20.19**（或 ≥ 22.12，Vite 8 要求）；npm ≥ 10。
+| 示例 | 内容 | 用法 |
+|---|---|---|
+| [晨光练习 · Morning Light](https://raw.githubusercontent.com/Romanticjojo/Syrinx/dev/docs/examples/morning-light.musicxml) | 长笛 + 一个双谱表钢琴声部 | 选择「钢琴伴奏」，阅读、试听并演奏 |
+| [长音与呼吸 · Breath Study](https://raw.githubusercontent.com/Romanticjojo/Syrinx/dev/docs/examples/breath-study.musicxml) | 单长笛 | 直接保存为「仅阅谱」 |
+
+将链接另存为 `.musicxml` 后导入；也可在克隆目录的 `docs/examples/` 中找到文件。[示例说明](docs/examples/README.md)
+
+### 2. 整理成自己的书架
+
+在乐谱菜单中编辑名称、作者、标签与 PNG / JPEG / WebP 封面；创建文件夹，批量移动乐谱，或收藏常练曲目。移除文件夹时，里面的乐谱会回到「未分类」。
+
+<table>
+  <tr>
+    <td width="76%"><img src="docs/img/readme/library-list.png" alt="个人仓库列表视图，集中浏览曲名、作者与乐谱信息" width="100%" /></td>
+    <td width="24%"><img src="docs/img/readme/library-mobile.png" alt="个人仓库在 390 像素手机宽度下的双列乐谱书架" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>列表，适合快速查找</sub></td>
+    <td align="center"><sub>窄屏，依然好翻阅</sub></td>
+  </tr>
+</table>
+
+### 3. 翻开乐谱，开始练习
+
+仅有旋律的乐谱可直接翻页阅读。带原谱钢琴声部的乐谱可先试听，再点「开始演奏」：四拍倒数后，伴奏与谱面光标一起前进。
+
+点击谱面小节选择起点，或打开底部 BPM 控件慢练。演奏中跳转小节或应用新速度，会先保留当前录音，再倒数四拍开始新段；就绪与暂停状态下操作会保持停止。
+
+<p align="center">
+  <img src="docs/img/readme/practice-tempo.png" alt="晨光练习演奏页实拍：选中的第五小节与设为 60 BPM 的速度控件" width="100%" />
+  <br /><sub>真实应用截图 · 使用原创 Morning Light 乐谱调整练习速度</sub>
+</p>
+
+| 想做什么 | 操作 |
+|---|---|
+| 开始 / 暂停 / 继续 | 底部播放按钮，或空格键 |
+| 从某个小节开始 | 点击谱面中的小节；播放中跳转会重新倒数 |
+| 调整速度 | 点击 BPM，输入数值或拖动滑块，再点「应用速度」 |
+| 回到谱面推荐速度 | 在速度面板点击「还原推荐」 |
+| 录音与回听 | 打开录音；结束后选择录音分段、回放并对照伴奏 |
+| 调整阅读大小 | 使用谱面的缩放按钮；个人阅谱器支持上一页 / 下一页 |
+
+速度范围为初始谱面速度的 **0.5–1.5 倍**，原谱中的速度变化按比例保留。变速使用浏览器的原调保持能力；每段录音保留当时的速度，回放与音高分析对齐对应谱面区间。录音需允许麦克风访问；戴耳机可减少伴奏串入录音。
+
+## 快速开始
+
+需要 **Node.js 20.19+ 或 22.12+**，以及 npm。运行以下命令：
 
 ```bash
-git clone https://github.com/Romanticjojo/Syrinx.git
+git clone --branch dev https://github.com/Romanticjojo/Syrinx.git
 cd Syrinx/app
 npm install
-
-npm run dev        # 启动开发服务器 → http://localhost:5173
-npm run build      # 生产构建
-npm run preview    # 预览生产构建
+npm run dev
 ```
 
-打开后：入场动画（可跳过）→ 曲库选曲 → 详情预览 → **开始演奏**：
-4 拍倒数起奏 · 空格 暂停/继续 · ⏺ 录音开关 · 缩放 +/- · Esc 退出。
+打开终端显示的本地地址，通常是 `http://localhost:5173`。此命令启用个人仓库；`desktop` 是当前的功能模式名称。
 
-> ⚠️ **曲目素材不随仓库分发**：`app/public/songs/` 下的谱面 / 伴奏 / 封面（版权媒体）不包含在仓库中，克隆后曲库为空。请按下方 [Song Pack](#-曲目接入song-pack) 规格自行放入曲目，或放入一份任意 MusicXML 快速体验。
-
-> 🎧 建议佩戴耳机演奏：伴奏外放会被麦克风录进演奏录音。
-
-## 📁 项目结构
-
-```
-Syrinx/
-├── app/                        # 前端工程（Vite + React + TS）
-│   ├── public/
-│   │   └── songs/              # 曲目素材（Song Pack，不入库）
-│   ├── src/
-│   │   ├── views/              # 四视图：Home / Preview / Perform / Result / SyncTune
-│   │   ├── score/              # MusicXML → 时间轴解析（TDD）、OSMD 封装
-│   │   ├── audio/              # 主时钟引擎、伴奏合成、录音、PCM/WAV
-│   │   ├── pitch/              # YIN 音高检测、对比统计（TDD）
-│   │   ├── synctune/           # 对 tune 模式逻辑与状态（TDD）
-│   │   ├── background/         # three.js 主题场景、3D 长笛
-│   │   ├── components/         # 谱面容器、控制条、音高图表、入场动画
-│   │   └── store.ts            # zustand 全局状态
-│   └── scripts/                # 渲染 / 截图 / 校验辅助脚本
-├── docs/                       # 设计定稿、技术选型、截图
-├── plans/                      # 实施计划
-└── resources/                  # 素材源（本地私有，不入库）
+```bash
+npm run dev:web        # 网页体验模式
+npm run build          # 网页体验构建 → app/dist
+npm run build:desktop  # 正式版功能构建 → app/dist-desktop
+npm run preview        # 预览默认的 app/dist 构建
 ```
 
-## 🌊 演奏数据流
+仓库包含四小节公开回退示例和上方两份可导入练习。精选曲目的私有谱面、伴奏、封面与视频不随源码分发，因此克隆结果与在线站点的精选曲库可能不同。
 
-从 Song Pack 素材到音准反馈，一条链路看懂全应用（交互版见 [syrinx-dataflow-zh.html](docs/img/syrinx-dataflow-zh.html)，暗色主题可加 `?theme=dark`）：
+## 数据留在你的设备
 
-<p align="center">
-  <img src="docs/img/syrinx-dataflow-zh.png" alt="Syrinx 演奏数据流：Song Pack → 解析 → 演奏主循环 → 采集 → 反馈" width="100%"/>
-</p>
+个人仓库无需账号；导入解析、封面处理与原谱钢琴合成都在本机完成。乐谱、编辑信息、封面和文件夹保存在当前浏览器的 IndexedDB 中。
 
-## 🏗️ 整体架构
+不同浏览器、用户配置或站点地址拥有各自的仓库；更换域名或本地端口不会自动迁移数据。清除站点数据会删除仓库。请从仓库菜单定期**导出备份**，迁移时再导入恢复；多卷备份需要逐卷保存与恢复。
 
-纯前端 SPA，浏览器内闭环、零后端 API：静态站点装载 React 五视图，谱面 / 音频 / 录音 / 音准四大引擎与 Song Pack 素材层各就各位（交互版见 [syrinx-architecture-zh.html](docs/img/syrinx-architecture-zh.html)，暗色主题可加 `?theme=dark`）：
+本地运行时可离线阅读已导入乐谱并使用原谱钢琴伴奏，需保持本地应用服务可用。当前未提供网站离线缓存或云端同步。这里的「编辑」指乐谱信息编辑；伴奏使用原谱已有的一个钢琴声部，不提供音符编辑或自动编配。
 
-<p align="center">
-  <img src="docs/img/syrinx-architecture-zh.png" alt="Syrinx 整体架构：静态站点 → 视图层 → 四大引擎 → 全局状态，Song Pack 与锚点工作台供给" width="100%"/>
-</p>
+## 参与开发
 
-## 🎵 曲目接入（Song Pack）
+Syrinx 使用 React、TypeScript、Vite、OpenSheetMusicDisplay、Web Audio 和 three.js。阅读与演奏在浏览器内完成；个人仓库与精选 Song Pack 是两条独立的曲目来源。
 
-每首曲子一个素材包，放入 `app/public/songs/<song-id>/`：
-
-```
-app/public/songs/<song-id>/
-├── manifest.json       # 元数据（见下）
-├── score.musicxml      # 曲谱（MusicXML）
-├── accompaniment.mp3   # 伴奏音频（可选，缺失则程序化合成）
-├── background.mp4      # 动态背景视频（可选，缺失则 three.js 主题场景）
-└── cover.jpg           # 封面（可选）
+```bash
+cd app                # 已在 app 目录时跳过
+npm test              # 单元与组件测试
+npm run lint          # 静态检查
+npm run build
+npm run build:desktop
 ```
 
-```jsonc
-{
-  "id": "my-song",
-  "title": "My Song",
-  "composer": "…",
-  "difficulty": 2,                  // 1-3
-  "durationLabel": "3:45",
-  "keyLabel": "C 大调",
-  "scoreUrl": "/songs/my-song/score.musicxml",
-  "accompanimentUrl": "/songs/my-song/accompaniment.mp3",
-  "accent": "#5fb8a8",              // 曲目主题色
-  "backgroundTheme": "lumiere",
-  "bpm": 90
-}
-```
+- [v0.3.0 更新说明](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/releases/v0.3.0.md) · [个人仓库范围](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/superpowers/specs/2026-09-13-personal-library-scope-update.md)
+- [速度与录音分段设计](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/superpowers/specs/2026-09-13-tempo-feedback-design.md) · [网页部署](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/DEPLOY-WEB.md)
+- [提交问题或建议](https://github.com/Romanticjojo/Syrinx/issues) · [查看开发源码](https://github.com/Romanticjojo/Syrinx/tree/dev/app/src)
 
-图片谱可通过 OMR 管线转成 MusicXML 后按上述规格接入。
+后续方向：原生安装包、小节循环练习，以及更多真实设备上的阅读与演奏体验验证。
 
-## 🗺 路线图
+## 致谢与许可
 
-核心演奏闭环已经落地，接下来的重心是曲库生态与进阶练习功能：
-
-| 阶段 | 内容 | 状态 |
-|:---:|---|:---:|
-| M1 | 预览 + 渲染：曲库 → 预览 → OSMD 谱面渲染 | ✅ |
-| M2 | 同步演奏：时间轴 TDD、谱/音/光标同步、动态背景、沉浸控件 | ✅ |
-| M3 | 录音 + 反馈：录音回放、YIN 音准检测、对比图表、3D 入场 | ✅ |
-| P1 | 更多曲目 Song Pack、速度调节、循环小节 | 🚧 |
-| P2 | CREPE 音高检测增强、混音回放 | 📅 |
-| P3 | 多端（PWA / 移动端）、macOS / Linux 打包 | 📅 |
-
-## ❓ FAQ / 已知问题
-
-**Q：克隆后曲库是空的？**
-A：正常——谱面 / 伴奏 / 封面属于版权媒体，不随仓库分发。按 [Song Pack](#-曲目接入song-pack) 规格放入 `app/public/songs/` 即可。
-
-**Q：录音导出的 WAV 是静音？**
-A：旧版本存在分析支路与录音支路不同源的问题，已改为 AudioWorklet 直采（与分析支路同源）。若仍遇静音，请检查系统麦克风权限与输入设备选择。
-
-**Q：伴奏和光标对不齐？**
-A：同步以 `AudioContext.currentTime` 为唯一时钟；若使用外部伴奏音频，请确保 manifest 中的节拍锚点（beats）与该音频对齐。
-
-**已知问题**：① 入场 3D 动画在部分集显设备帧率偏低（可跳过）；② 曲库为空时首屏视觉较单薄（放一首歌即恢复）。
-
-## 🤝 致谢
-
-- [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) — 浏览器 MusicXML 曲谱渲染引擎
-- [three.js](https://threejs.org/) — 3D 背景与长笛模型
-
-> 谱面 / 伴奏 / 封面等曲目素材（版权媒体）不随仓库分发，各曲目版权归其权利人所有。
-
----
-
-## 📄 License
-
-本项目以 **Apache License 2.0** 开源发布，完整许可证文本见根目录 [LICENSE](LICENSE)。
-
-Apache License 2.0 © 2026 Syrinx contributors——可自由使用、修改、分发（含商用），唯须保留版权与许可证声明；附带明确专利授权，衍生作品需显著标注修改。
-
-<div align="center">
-<sub>吹奏愉快 🎶 — S Y R I N X · 长笛流光</sub>
-</div>
+感谢 [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) 与 [three.js](https://github.com/mrdoob/three.js) 等开源项目。项目采用 [Apache License 2.0](LICENSE)；曲目媒体归各自权利人所有。

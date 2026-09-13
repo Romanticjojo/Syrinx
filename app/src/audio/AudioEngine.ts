@@ -1,9 +1,12 @@
-/**
- * Web Audio 唯一主时钟：
- * - AudioContext.currentTime 推导曲目时间 t，rAF 只做渲染回调
- * - play/pause/seek/setRate 均以 ctx.currentTime 为基准，不做 setInterval 计时
- * - analyser 暴露给 three.js 背景做 audio-reactive
- */
+import { bufferToWav } from './bufferToWav'
+
+interface MediaTransport {
+  element: HTMLAudioElement
+  node: MediaElementAudioSourceNode
+  url: string
+}
+
+/** 原速使用 Web Audio 时钟；变速使用保调媒体的真实 currentTime。 */
 class AudioEngine {
   private ctx: AudioContext
   private src: AudioBufferSourceNode | null = null
@@ -12,9 +15,11 @@ class AudioEngine {
   private startCtxTime = 0
   private startOffset = 0
   private endRaf = 0
-  private playGeneration = 0
+  private operation = new AbortController()
+  private media: MediaTransport | null = null
+  private mediaPlayOperation: AbortSignal | null = null
+  private playbackRate = 1
 
-  rate = 1
   playing = false
   onEnd?: () => void
 
@@ -31,11 +36,12 @@ class AudioEngine {
   }
 
   async load(buffer: AudioBuffer): Promise<void> {
-    this.playGeneration++
-    this.stopSource()
+    this.pause()
+    if (this.media) this.releaseMedia(this.media)
+    this.media = null
     this.buffer = buffer
     this.startOffset = 0
-    this.playing = false
+    this.playbackRate = 1
   }
 
   /** 播放（可选起点秒）。
@@ -44,29 +50,58 @@ class AudioEngine {
    *  resume 失败（仍 suspended）返回 false 且不置 playing，调用方据此提示。
    *  等待恢复期间 pause/load/seek 或新的 play 会撤销旧请求。 */
   async play(offsetSec?: number): Promise<boolean> {
-    const generation = ++this.playGeneration
+    const offset = this.clampTime(offsetSec ?? this.time)
+    const signal = this.beginOperation()
+    this.stopSource()
+    this.playing = false
+    this.startOffset = offset >= this.duration ? 0 : offset
+    return this.startPlayback(signal)
+  }
+
+  private async startPlayback(signal: AbortSignal): Promise<boolean> {
     const buffer = this.buffer
-    if (!buffer) return false
+    if (!buffer || signal.aborted) return false
     if (this.ctx.state === 'suspended') {
       try {
-        await this.ctx.resume()
+        await this.awaitActive(this.ctx.resume(), signal)
       } catch (e: unknown) {
-        console.warn(`[audio] AudioContext resume 失败（保持 suspended）：${e instanceof Error ? e.message : e}`)
+        if (!signal.aborted) console.warn(`[audio] AudioContext resume 失败（保持 suspended）：${e instanceof Error ? e.message : e}`)
         return false
       }
     }
-    if (generation !== this.playGeneration || this.ctx.state !== 'running') return false
-    if (offsetSec !== undefined) this.startOffset = offsetSec
-    if (this.startOffset >= buffer.duration) this.startOffset = 0
-    this.stopSource()
+    if (signal.aborted || this.ctx.state !== 'running') return false
 
-    const src = this.ctx.createBufferSource()
-    src.buffer = buffer
-    src.playbackRate.value = this.rate
-    src.connect(this.gain)
-    src.start(0, this.startOffset)
-    this.src = src
-    this.startCtxTime = this.ctx.currentTime
+    if (this.media) {
+      const media = this.media
+      this.mediaPlayOperation = signal
+      const cancelPlay = () => media.element.pause()
+      signal.addEventListener('abort', cancelPlay, { once: true })
+      try {
+        this.configureRate(media.element, this.rate)
+        media.element.currentTime = this.startOffset
+        // pause() normally rejects a pending browser play. Also guard a late
+        // resolution, without stopping a newer play using the same element.
+        const started = media.element.play().then(() => {
+          if (signal.aborted && (this.media !== media || this.mediaPlayOperation === signal)) media.element.pause()
+        })
+        await this.awaitActive(started, signal)
+      } catch {
+        if (!signal.aborted) media.element.pause()
+        return false
+      } finally {
+        signal.removeEventListener('abort', cancelPlay)
+      }
+      if (signal.aborted) return false
+    } else {
+      const src = this.ctx.createBufferSource()
+      src.buffer = buffer
+      // Never change BufferSource rate: that transposes the accompaniment.
+      src.connect(this.gain)
+      src.start(0, this.startOffset)
+      this.src = src
+      this.startCtxTime = this.ctx.currentTime
+    }
+
     this.playing = true
     this.watchEnd()
     return true
@@ -78,38 +113,68 @@ class AudioEngine {
   }
 
   pause(): void {
-    this.playGeneration++
-    if (!this.playing) return
-    this.startOffset = this.time
+    const offset = this.time
+    this.beginOperation()
+    this.startOffset = offset
     this.stopSource()
     this.playing = false
   }
 
   seek(t: number): void {
-    const clamped = Math.max(0, Math.min(t, this.buffer?.duration ?? 0))
-    if (this.playing) {
-      this.play(clamped)
+    const clamped = this.clampTime(t)
+    if (this.playing && clamped < this.duration) {
+      if (this.media) {
+        // Replay alignment must not restart an already-running media decoder.
+        this.beginOperation()
+        this.startOffset = clamped
+        this.media.element.currentTime = clamped
+      } else {
+        void this.play(clamped)
+      }
     } else {
-      this.playGeneration++
+      this.pause()
       this.startOffset = clamped
+      if (this.media) this.media.element.currentTime = clamped
     }
   }
 
-  /** 变速：重启 src 保住当前位置 */
-  setRate(r: number): void {
-    if (r <= 0 || r > 3) return
-    const cur = this.time
-    this.rate = r
-    if (this.playing) {
-      this.startOffset = cur
-      this.play(cur)
+  /** 保持音高与原曲时间；准备失败或被新操作取消时返回 false。 */
+  async setRate(r: number): Promise<boolean> {
+    const signal = this.beginOperation()
+    if (!Number.isFinite(r) || r < 0.5 || r > 1.5 || !this.buffer) return false
+    if (r === this.rate) return true
+    const offset = this.time
+    const wasPlaying = this.playing
+    this.stopSource()
+    this.playing = false
+    this.startOffset = offset
+    let prepared: MediaTransport | null = null
+    try {
+      const media = this.media ?? (prepared = await this.prepareMedia(this.buffer, signal))
+      signal.throwIfAborted()
+      this.configureRate(media.element, r)
+      media.element.currentTime = offset
+      this.media = media
+      this.playbackRate = r
+      return wasPlaying ? await this.startPlayback(signal) : true
+    } catch (error: unknown) {
+      if (prepared && this.media !== prepared) this.releaseMedia(prepared)
+      if (!signal.aborted) console.warn(`[audio] 保调变速失败：${error instanceof Error ? error.message : error}`)
+      return false
     }
   }
 
-  /** 当前曲目时间（秒）。playing 时由 ctx.currentTime 推导 */
+  get rate(): number {
+    return this.playbackRate
+  }
+
+  /** 原曲秒数。暂停保留精确定位；播放跟随真实时钟，不用墙上时间估算。 */
   get time(): number {
     if (!this.playing) return this.startOffset
-    return this.startOffset + (this.ctx.currentTime - this.startCtxTime) * this.rate
+    // Native seek times may round below the requested boundary. That must not
+    // move the score or a new capture into the previous measure, even on play.
+    if (this.media) return Math.max(this.startOffset, this.clampTime(this.media.element.currentTime))
+    return this.clampTime(this.startOffset + (this.ctx.currentTime - this.startCtxTime))
   }
 
   get duration(): number {
@@ -170,6 +235,7 @@ class AudioEngine {
   }
 
   private stopSource(): void {
+    this.media?.element.pause()
     if (this.endRaf) {
       cancelAnimationFrame(this.endRaf)
       this.endRaf = 0
@@ -190,7 +256,8 @@ class AudioEngine {
   private watchEnd(): void {
     const check = () => {
       if (!this.playing) return
-      if (this.buffer && this.time >= this.buffer.duration) {
+      if (this.buffer && (this.media?.element.ended || this.time >= this.buffer.duration)) {
+        this.stopSource()
         this.playing = false
         this.startOffset = this.buffer.duration
         this.onEnd?.()
@@ -199,6 +266,88 @@ class AudioEngine {
       this.endRaf = requestAnimationFrame(check)
     }
     this.endRaf = requestAnimationFrame(check)
+  }
+
+  private clampTime(time: number): number {
+    return Number.isFinite(time) ? Math.max(0, Math.min(time, this.duration)) : 0
+  }
+
+  private configureRate(element: HTMLAudioElement, rate: number): void {
+    element.preservesPitch = true
+    element.playbackRate = rate
+    if (!element.preservesPitch || element.playbackRate !== rate) throw new Error('Pitch-preserving playback is unsupported')
+  }
+
+  private beginOperation(): AbortSignal {
+    this.operation.abort()
+    this.operation = new AbortController()
+    return this.operation.signal
+  }
+
+  private awaitActive<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const abort = () => reject(signal.reason)
+      signal.addEventListener('abort', abort, { once: true })
+      promise.then(
+        (value) => { signal.removeEventListener('abort', abort); resolve(value) },
+        (error: unknown) => { signal.removeEventListener('abort', abort); reject(error) },
+      )
+      if (signal.aborted) abort()
+    })
+  }
+
+  private async prepareMedia(buffer: AudioBuffer, signal: AbortSignal): Promise<MediaTransport> {
+    const element = new Audio()
+    if (!('preservesPitch' in element) || typeof this.ctx.createMediaElementSource !== 'function') {
+      throw new Error('Pitch-preserving playback is unsupported')
+    }
+    element.preservesPitch = true
+    if (!element.preservesPitch) throw new Error('Pitch-preserving playback is unsupported')
+    const blob = await bufferToWav(buffer, signal)
+    signal.throwIfAborted()
+    const url = URL.createObjectURL(blob)
+    let node: MediaElementAudioSourceNode | undefined
+    try {
+      element.preload = 'auto'
+      await new Promise<void>((resolve, reject) => {
+        const cleanup = () => {
+          clearTimeout(timeout)
+          element.removeEventListener('loadedmetadata', loaded)
+          element.removeEventListener('error', failed)
+          signal.removeEventListener('abort', aborted)
+        }
+        const loaded = () => { cleanup(); resolve() }
+        const failed = () => { cleanup(); reject(new Error('Unable to load the local accompaniment WAV')) }
+        const aborted = () => { cleanup(); reject(signal.reason) }
+        const timeout = setTimeout(failed, 15000)
+        element.addEventListener('loadedmetadata', loaded)
+        element.addEventListener('error', failed)
+        signal.addEventListener('abort', aborted, { once: true })
+        element.src = url
+        element.load()
+        if (element.readyState >= 1) loaded()
+        if (signal.aborted) aborted()
+      })
+      signal.throwIfAborted()
+      node = this.ctx.createMediaElementSource(element)
+      node.connect(this.gain)
+      return { element, node, url }
+    } catch (error: unknown) {
+      element.pause()
+      element.removeAttribute('src')
+      element.load()
+      node?.disconnect()
+      URL.revokeObjectURL(url)
+      throw error
+    }
+  }
+
+  private releaseMedia(media: MediaTransport): void {
+    media.element.pause()
+    media.node.disconnect()
+    media.element.removeAttribute('src')
+    media.element.load()
+    URL.revokeObjectURL(media.url)
   }
 }
 

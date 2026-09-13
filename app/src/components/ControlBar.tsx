@@ -1,4 +1,7 @@
 import './ControlBar.css'
+import TempoControl from './TempoControl'
+
+export type CaptureIndicator = 'idle' | 'waiting' | 'preparing' | 'ready' | 'error'
 
 interface Props {
   playing: boolean
@@ -7,7 +10,13 @@ interface Props {
   active: boolean
   /** 录音采集开关状态（只控采集，实时音准反馈不受其影响） */
   recOn: boolean
+  captureIndicator: CaptureIndicator
   volume: number
+  bpm: number
+  recommendedBpm: number
+  tempoDisabled: boolean
+  tempoPending: boolean
+  onTempo: (bpm: number) => void
   onToggle: () => void
   onRecToggle: () => void
   onRestart: () => void
@@ -23,7 +32,13 @@ export default function ControlBar({
   ended,
   active,
   recOn,
+  captureIndicator,
   volume,
+  bpm,
+  recommendedBpm,
+  tempoDisabled,
+  tempoPending,
+  onTempo,
   onToggle,
   onRecToggle,
   onRestart,
@@ -31,24 +46,30 @@ export default function ControlBar({
   onVolume,
   onExit,
 }: Props) {
+  const recording = recOn && captureIndicator === 'ready' && playing
+  const recAction = recOn ? '关闭录音' : '开启录音'
+  const recStatus = captureIndicator === 'error' ? '录音不可用'
+    : recOn && captureIndicator === 'waiting' ? '等待麦克风授权'
+    : recOn && captureIndicator === 'preparing' ? '正在准备录音'
+    : ''
   return (
     <div className="control-bar" role="toolbar" aria-label="演奏控制">
       <button
         className={`ctl main${playing ? ' pause' : ''}`}
         onClick={onToggle}
-        disabled={ended}
+        disabled={ended || tempoPending}
         aria-label={playing ? '暂停' : '播放'}
         title={playing ? '暂停（空格）' : '播放（空格）'}
       >
         {playing ? '❚❚' : '▶'}
       </button>
       <button
-        className={`ctl rec${recOn ? ' on' : ''}`}
+        className={`ctl rec${recording ? ' on' : ''}`}
         onClick={onRecToggle}
-        disabled={ended}
-        aria-label={recOn ? '关闭录音' : '开启录音'}
+        disabled={ended || tempoPending}
+        aria-label={recStatus ? `${recStatus}，${recAction}` : recAction}
         aria-pressed={recOn}
-        title={recOn ? '关闭录音并保留当前段' : '开启录音，从当前位置录制新段'}
+        title={recStatus ? `${recStatus}，尚未录音；${recAction}` : recOn ? (recording ? '正在录音，关闭后保留当前段' : '录音已开启，播放后继续采集') : '开启录音，从当前位置录制新段'}
       >
         <svg className="rec-mic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path
@@ -66,7 +87,7 @@ export default function ControlBar({
             strokeLinecap="round"
           />
         </svg>
-        {recOn && <span className="rec-badge">REC</span>}
+        {recording && <span className="rec-badge">REC</span>}
       </button>
       <button className="ctl" onClick={onRestart} aria-label="回开头" title="回开头">
         ↺
@@ -83,6 +104,8 @@ export default function ControlBar({
 
       {/* 运输组（▶/rec/↺/■）与音量+✕ 分组：分隔线防 ✕ 被误认成停止（t_c10d648d） */}
       <span className="ctl-sep" aria-hidden="true" />
+
+      <TempoControl bpm={bpm} recommended={recommendedBpm} disabled={tempoDisabled} pending={tempoPending} onChange={onTempo} />
 
       <label className="ctl-volume" aria-label="伴奏音量">
         <span className="vol-icon">♪</span>

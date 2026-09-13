@@ -156,6 +156,29 @@ describe('OSMDScore 音值感知光标推进', () => {
     ])
   })
 
+  it('fractional measure boundaries remain exact without advancing a nearby earlier time', async () => {
+    const { score, cursor } = await makeScore([0, 1])
+    const boundary = 11.428571428571
+    score.setTimeline({
+      ...MINI_TIMELINE,
+      durationSec: 20,
+      measureTimes: [
+        { measure: 4, time: 0, quarters: 0 },
+        { measure: 5, time: boundary, quarters: 4 },
+        { measure: 6, time: 20, quarters: 5, end: true },
+      ],
+    })
+    const measureChanged = vi.fn()
+    score.onMeasureChange = measureChanged
+    score.syncToTime(11.428570747375488)
+    score.syncToTime(boundary - 1e-9)
+    expect(cursor.pos).toBe(0)
+    expect(measureChanged.mock.calls.map(([measure]) => measure)).toEqual([4])
+    score.syncToTime(boundary)
+    expect(cursor.pos).toBe(1)
+    expect(measureChanged.mock.calls.map(([measure]) => measure)).toEqual([4, 5])
+  })
+
   it('预扫结果为空：回退旧推进逻辑，不崩溃', async () => {
     const { score, cursor } = await makeScore([])
     expect((score as unknown as { useStopTable: boolean }).useStopTable).toBe(false)

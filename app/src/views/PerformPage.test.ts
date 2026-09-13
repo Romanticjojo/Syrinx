@@ -28,6 +28,7 @@ const mocked = vi.hoisted(() => ({
     ctxTime: 0,
     duration: 1,
     playing: false,
+    rate: 1,
     onEnd: undefined as (() => void) | undefined,
     analyser: {},
     audioCtx: {},
@@ -51,6 +52,7 @@ const mocked = vi.hoisted(() => ({
     scheduleTick: vi.fn(),
     getVolume: vi.fn(() => 1),
     setVolume: vi.fn(),
+    setRate: vi.fn(async (rate: number) => { mocked.engine.rate = rate; return true }),
   },
 }))
 
@@ -150,6 +152,8 @@ beforeEach(() => {
   mocked.engine.ctxTime = 0
   mocked.engine.duration = 1
   mocked.engine.playing = false
+  mocked.engine.rate = 1
+  mocked.engine.setRate.mockReset().mockImplementation(async (rate: number) => { mocked.engine.rate = rate; return true })
   mocked.engine.onEnd = undefined
   mocked.engine.getVolume.mockReturnValue(1)
   mocked.openMic.mockReset()
@@ -214,7 +218,222 @@ async function hidePerformHud(container: HTMLElement): Promise<void> {
   expect(container.querySelector('.perform')?.classList.contains('idle')).toBe(true)
 }
 
+describe('录音指示反映实际采集', () => {
+  it('keeps REC dark through microphone permission and capture-gate preparation', async () => {
+    let grant!: (mic: ReturnType<typeof makeMic>) => void
+    let captureReady!: () => void
+    mocked.openMic.mockReturnValue(new Promise(resolve => { grant = resolve }))
+    const mic = makeMic()
+    mic.restartCapture.mockReturnValueOnce(new Promise<void>(resolve => { captureReady = resolve }))
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await beginPerformance(page)
+    const rec = page.querySelector<HTMLButtonElement>('.ctl.rec')!
+    expect(rec.getAttribute('aria-pressed')).toBe('true')
+    expect(rec.classList.contains('on')).toBe(false)
+    expect(rec.querySelector('.rec-badge')).toBeNull()
+    expect(rec.getAttribute('aria-label')).toContain('等待麦克风')
+    expect(useAppStore.getState().performanceSession?.status).not.toBe('recording')
+
+    await act(async () => grant(mic))
+    expect(rec.classList.contains('on')).toBe(false)
+    expect(rec.getAttribute('aria-label')).toContain('准备录音')
+    await act(async () => captureReady())
+    expect(rec.classList.contains('on')).toBe(true)
+    expect(rec.querySelector('.rec-badge')?.textContent).toBe('REC')
+    expect(useAppStore.getState().performanceSession?.status).toBe('recording')
+  })
+
+  it('shows rejected permission without claiming an active recording', async () => {
+    let refuse!: (error: Error) => void
+    mocked.openMic.mockReturnValue(new Promise((_resolve, reject) => { refuse = reject }))
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await beginPerformance(page)
+    await act(async () => refuse(new Error('麦克风权限被拒绝')))
+    const rec = page.querySelector<HTMLButtonElement>('.ctl.rec')!
+    expect(rec.classList.contains('on')).toBe(false)
+    expect(rec.querySelector('.rec-badge')).toBeNull()
+    expect(rec.getAttribute('aria-label')).toContain('录音不可用')
+    expect(page.querySelector('[role="status"]')?.textContent).toContain('权限被拒绝')
+    expect(useAppStore.getState().performanceSession?.status).not.toBe('recording')
+  })
+
+  it('reports a capture-gate failure after late microphone permission', async () => {
+    let grant!: (mic: ReturnType<typeof makeMic>) => void
+    mocked.openMic.mockReturnValue(new Promise(resolve => { grant = resolve }))
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await beginPerformance(page)
+    const mic = makeMic()
+    mic.restartCapture.mockRejectedValueOnce(new Error('录音写入确认超时'))
+    await act(async () => grant(mic))
+    const rec = page.querySelector<HTMLButtonElement>('.ctl.rec')!
+    expect(rec.classList.contains('on')).toBe(false)
+    expect(rec.getAttribute('aria-label')).toContain('录音不可用')
+    expect(page.querySelector('[role="status"]')?.textContent).toContain('写入确认超时')
+    expect(useAppStore.getState().performanceSession?.status).not.toBe('recording')
+  })
+
+  it('keeps the recording intent while paused without showing active REC', async () => {
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await beginPerformance(page)
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="暂停"]')!.click())
+    const rec = page.querySelector<HTMLButtonElement>('.ctl.rec')!
+    expect(rec.getAttribute('aria-pressed')).toBe('true')
+    expect(rec.classList.contains('on')).toBe(false)
+    expect(rec.querySelector('.rec-badge')).toBeNull()
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="播放"]')!.click())
+    expect(rec.classList.contains('on')).toBe(true)
+  })
+})
+
 describe('演奏页伴奏音量初值（t_5957a725）', () => {
+  it('offers the score tempo and applies a new BPM while staying ready', async () => {
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    const tempo = page.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')
+    expect(tempo).not.toBeNull()
+    expect(tempo!.textContent).toContain('120')
+    await act(async () => tempo!.click())
+    const slower = document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!
+    await act(async () => slower.click())
+    expect(mocked.engine.setRate).not.toHaveBeenCalled()
+    const apply = document.querySelector<HTMLButtonElement>('.tempo-apply')!
+    await act(async () => apply.click())
+    expect(mocked.engine.setRate).toHaveBeenCalledWith(119 / 120)
+    expect(mocked.engine.playing).toBe(false)
+    expect(page.querySelector('.ov-start')).not.toBeNull()
+    expect(tempo!.textContent).toContain('119')
+  })
+
+  it('seals the old speed before changing BPM and counts in at the new tempo', async () => {
+    const mic = makeMic()
+    mocked.openMic.mockResolvedValue(mic)
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await beginPerformance(page)
+    mocked.engine.time = 0.25
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    mocked.engine.scheduleTick.mockClear()
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    expect(mic.finishCapture).toHaveBeenCalledOnce()
+    expect(useAppStore.getState().performanceSession?.segments[0]?.playbackRate).toBe(1)
+    expect(mocked.engine.rate).toBeCloseTo(119 / 120)
+    const ticks = mocked.engine.scheduleTick.mock.calls
+    expect(ticks[1]![0] - ticks[0]![0]).toBeCloseTo(60 / 119)
+    expect(mocked.engine.playing).toBe(false)
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.playing).toBe(true)
+    expect(mocked.engine.time).toBe(0.25)
+    mocked.engine.time = 0.75
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="停止演奏"]')!.click())
+    const newSegment = useAppStore.getState().performanceSession!.segments[1]
+    expect(newSegment.playbackRate).toBeCloseTo(119 / 120)
+    expect(newSegment.durationSec).toBeCloseTo(0.5 / (119 / 120))
+  })
+
+  it('a measure click during tempo preparation keeps only the newest target and one resumed capture', async () => {
+    const mic = makeMic()
+    mocked.openMic.mockResolvedValue(mic)
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await beginPerformance(page)
+    mocked.engine.time = 0.25
+    let prepared!: (value: boolean) => void
+    mocked.engine.setRate.mockReturnValueOnce(new Promise<boolean>(resolve => { prepared = resolve }))
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="选择第2小节"]')!.click())
+    await act(async () => prepared(true))
+    expect(mocked.engine.time).toBe(0.5)
+    expect(mocked.engine.rate).toBeCloseTo(119 / 120)
+    expect(mocked.engine.playing).toBe(false)
+    expect(useAppStore.getState().performanceSession?.segments).toHaveLength(1)
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.playing).toBe(true)
+    expect(mocked.engine.time).toBe(0.5)
+    expect(mic.restartCapture).toHaveBeenCalledTimes(2)
+  })
+
+  it('stopping while tempo is preparing never restarts music when preparation resolves', async () => {
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await beginPerformance(page)
+    let prepared!: (value: boolean) => void
+    mocked.engine.setRate.mockReturnValueOnce(new Promise<boolean>(resolve => { prepared = resolve }))
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="停止演奏"]')!.click())
+    mocked.engine.play.mockClear()
+    await act(async () => prepared(true))
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.play).not.toHaveBeenCalled()
+    expect(useAppStore.getState().view).toBe('result')
+  })
+
+  it('Escape closes the tempo panel without exiting the performance', async () => {
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true })))
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(useAppStore.getState().view).toBe('perform')
+  })
+
+  it('Escape still exits when a transport button has focus', async () => {
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    const play = page.querySelector<HTMLButtonElement>('[aria-label="播放"]')!
+    play.focus()
+    await act(async () => play.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true })))
+    expect(useAppStore.getState().view).toBe('home')
+  })
+
+  it('an invalidated countdown never starts old audio while the new rate is preparing', async () => {
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    await act(async () => page.querySelector<HTMLButtonElement>('.ov-start')!.click())
+    let prepared!: (value: boolean) => void
+    mocked.engine.setRate.mockReturnValueOnce(new Promise<boolean>(resolve => { prepared = resolve }))
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    mocked.engine.ctxTime = 10
+    mocked.engine.play.mockClear()
+    await flushRaf()
+    expect(mocked.engine.play).not.toHaveBeenCalled()
+    await act(async () => prepared(true))
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.play).toHaveBeenCalledOnce()
+  })
+
+  it('a stale initial audio resume cannot replace an in-flight tempo change', async () => {
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    let resumed!: () => void
+    let prepared!: (value: boolean) => void
+    mocked.engine.resume.mockReturnValueOnce(new Promise<void>(resolve => { resumed = resolve }))
+    mocked.engine.setRate.mockReturnValueOnce(new Promise<boolean>(resolve => { prepared = resolve }))
+    await act(async () => page.querySelector<HTMLButtonElement>('.ov-start')!.click())
+    await act(async () => page.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    mocked.engine.scheduleTick.mockClear()
+    await act(async () => resumed())
+    expect(mocked.engine.scheduleTick).not.toHaveBeenCalled()
+    await act(async () => prepared(true))
+    expect(page.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.getAttribute('aria-disabled')).toBe('false')
+    expect(page.querySelector('.ov-start')).not.toBeNull()
+  })
   it('waits for the shared preload before becoming ready', async () => {
     let complete!: (value: { buffer: { duration: number }; synthesized: boolean }) => void
     mocked.loadAccompaniment.mockReturnValueOnce(new Promise((resolve) => { complete = resolve }))
@@ -839,7 +1058,7 @@ describe('演奏录音会话', () => {
     mic.restartCapture.mockReturnValueOnce(new Promise<void>((resolve) => { release = resolve }))
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="播放"]')!.click())
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭录音"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label$="关闭录音"]')!.click())
     await act(async () => release())
 
     expect(mic.discardCapture).toHaveBeenCalled()
@@ -859,7 +1078,7 @@ describe('演奏录音会话', () => {
     mic.restartCapture.mockReturnValueOnce(new Promise<void>((resolve) => { release = resolve }))
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="开启录音"]')!.click())
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="关闭录音"]')!.click())
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label$="关闭录音"]')!.click())
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="开启录音"]')!.click())
     await act(async () => release())
 
