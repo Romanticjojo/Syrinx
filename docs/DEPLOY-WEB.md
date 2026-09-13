@@ -113,3 +113,13 @@ curl --fail --show-error --silent --connect-timeout 10 --max-time 45 \
 ## 发布记录
 
 每次记录新旧版本号、切换时间、命令输出的 `previousIndex`、候选校验结果、8090 与 HTTPS 检查、四首曲目的业务冒烟测试，以及未覆盖的设备/实吹项目。上传完成不等于部署验收通过。
+
+## 公网域名与 ESA 缓存检查
+
+源站探测通过后，必须从公网分别请求 `https://romanticjojo.com/` 和 `https://www.romanticjojo.com/`，确认 HTML 中 `/releases/<release-id>/` 都指向本次发布。HTTP 入口跳转后的最终页面也要一致；不能用其中一个域名的结果代替另一个。
+
+如果源站是新版而某个公网入口仍是旧版，记录该入口的 `Age`、`x-site-cache-status` 和版本号，检查阿里云 ESA 缓存。2026-09-13 曾出现 www 入口命中旧页，尽管响应含 `no-cache`；浏览器强刷和添加查询参数均未改变命中结果。
+
+在 ESA 控制台核对首页与 `/index.html` 的缓存规则，让这些入口绕过缓存；保留 `/releases/` 下不可变资源的缓存。修改规则后刷新受影响的入口 URL，再重新核对两个公网域名的版本。缺少控制台登录态时，应明确记录尚未修复的域名，不能宣称全部入口已更新。
+
+参考：[阿里云 ESA 缓存资格与排查说明](https://help.aliyun.com/zh/edge-security-acceleration/esa/user-guide/cache-bypass/)。
