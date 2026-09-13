@@ -93,6 +93,75 @@ A first-use hint introduces measure selection and BPM; dismissing it or starting
 
 Tempo spans **0.5–1.5×** the score's initial tempo, keeping written tempo changes in proportion. Speed changes use the browser's pitch-preservation support. Each recording segment retains its practice speed so replay and pitch analysis align with the corresponding score interval. Recording needs microphone permission; headphones help keep accompaniment out of the recording.
 
+## Featured songs: an immersive performance flow
+
+Alongside the personal library, Syrinx ships a featured-song performance line built for the **online demo**: hero carousel → song preview → perform → recording playback with pitch feedback. No account, no importing.
+
+<p align="center">
+  <img src="docs/img/readme/song-hero.png" alt="Featured songs home: hero carousel and catalog entry" width="100%" />
+  <br /><sub>The hero carousel rotates featured songs; hovering a cover starts its animated cover video</sub>
+</p>
+
+### The catalog
+
+Six piano-accompanied pieces are featured — Luv Letter, Flower Dance, Lumière, Alicia, Interstellar and Weight of the World. Each ships with a real-sampled piano accompaniment (Salamander Grand V3), a flute part aligned note-for-note with the accompaniment, a cover and a looping background video.
+
+- Library cards play a square animated cover on hover; entering a song swaps the background to its HD loop.
+- Performance backgrounds use **fixed-camera, cover-sourced** motion with a pad color sampled from the video's first frame, so the scene blends seamlessly with the cover.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/img/readme/song-library.png" alt="Featured catalog: six song cards" width="100%" /></td>
+    <td width="50%"><img src="docs/img/readme/song-preview.png" alt="Song preview: animated background, flute score and song details" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Catalog: hover a card to play its animated cover</sub></td>
+    <td align="center"><sub>Preview: read the score and listen before performing</sub></td>
+  </tr>
+</table>
+
+### Performing, with live feedback
+
+On the perform page, choose “开始演奏” (Start performing). After a four-beat count-in, accompaniment and score cursor advance together:
+
+| Feedback | What you get |
+|---|---|
+| Score cursor | Follows the live accompaniment position; auto-scrolls to keep the current line centered, yields to manual scrolling |
+| Measure HUD | Top-right live measure and elapsed time, e.g. `01 / 97` |
+| Live pitch | Real-time intonation while you play — drift is visible the moment it happens |
+
+<p align="center">
+  <img src="docs/img/readme/song-perform.png" alt="Perform page: animated background, score cursor and live HUD" width="100%" />
+  <br /><sub>Mid-performance: the background video comes from the song cover; the cursor tracks the accompaniment note by note</sub>
+</p>
+
+### Playback and pitch analysis
+
+When a take ends, the playback page opens. Recording and accompaniment have separate volume sliders for A/B listening:
+
+| Legend | Meaning |
+|---|---|
+| Bold highlighted trace | Hit notes (intonation within tolerance) |
+| Thin red trace | Off-pitch notes (cents deviation beyond tolerance) |
+| Hatched blocks | Missed notes (no pitch detected in that window) |
+
+The pitch chart's x-axis is score time, with target notes and your measured trace overlaid — hits, drifts and missed notes at a glance. Summary cards report overall in-tune ratio and average cents deviation. Pitch analysis runs in a background Worker, so long pieces never block the UI.
+
+<p align="center">
+  <img src="docs/img/readme/song-result.png" alt="Playback page: pitch comparison chart, legend and dual-volume player" width="88%" />
+  <br /><sub>Playback: dual sliders for recording and accompaniment; the pitch chart compares note by note against score targets</sub>
+</p>
+
+### The same immersion on mobile
+
+The performance flow adapts to touch layouts: floating pitch meter, line-following score and background video identical to desktop.
+
+<p align="center">
+  <img src="docs/img/readme/song-perform-mobile.png" alt="Mobile perform page: touch layout and background video" width="32%" />
+</p>
+
+> Featured-song scores, accompaniments, covers and videos are private assets and are not distributed with the source; running `npm run dev:web` after cloning needs your own song assets. Try the flow directly online: [romanticjojo.com](https://romanticjojo.com).
+
 ## Quick start
 
 You need **Node.js 20.19+ or 22.12+** and npm. Run:
