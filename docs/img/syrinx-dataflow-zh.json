@@ -5,7 +5,7 @@
     "title": "Syrinx 演奏数据流",
     "locale": "zh-CN",
     "subtitle": "从 Song Pack 素材到音准反馈的完整数据链路",
-    "output": "docs/img/syrinx-dataflow-zh.html",
+    "output": "syrinx-dataflow-zh.html",
     "quality_profile": "showcase",
     "viewBox": [
       1068,
@@ -34,7 +34,7 @@
           "rec",
           "yin"
         ],
-        "note": "以 AudioContext 为主时钟的谱 / 音 / 背景三方同步。"
+        "note": "伴奏的实际播放位置驱动光标，并对齐录音分段。"
       },
       {
         "id": "feedback-loop",
@@ -99,7 +99,7 @@
       "id": "timeline",
       "type": "backend",
       "label": "演奏时间轴",
-      "sublabel": "恒速 + beats 重映射",
+      "sublabel": "谱面速度 + beats 映射",
       "stage": 1,
       "row": 2,
       "tag": "anchors.ts"
@@ -117,10 +117,10 @@
       "id": "engine",
       "type": "backend",
       "label": "主时钟引擎",
-      "sublabel": "AudioContext 唯一时钟",
+      "sublabel": "实际伴奏播放时钟",
       "stage": 2,
       "row": 2,
-      "tag": "<50ms 同步"
+      "tag": "BPM · 小节起奏"
     },
     {
       "id": "rec",
@@ -135,7 +135,7 @@
       "id": "yin",
       "type": "backend",
       "label": "YIN 音高检测",
-      "sublabel": "累积均值 + 抛物线插值",
+      "sublabel": "实时反馈 · 后台分析",
       "stage": 3,
       "row": 2,
       "tag": "纯 TS · TDD"
@@ -238,7 +238,7 @@
       "id": "manifest-to-engine",
       "from": "manifest",
       "to": "engine",
-      "label": "accompaniment.mp3",
+      "label": "accompaniment.m4a / mp3",
       "classification": "音频资产",
       "fromSide": "bottom",
       "toSide": "bottom",
@@ -327,11 +327,11 @@
       "toSide": "right",
       "via": [
         [
-          1100,
+          1040,
           157
         ],
         [
-          1100,
+          1040,
           613
         ]
       ]
@@ -344,16 +344,16 @@
       "items": [
         "Song Pack 五件套是一切数据源头，manifest 声明资产与主题色",
         "谱面与伴奏锚点在解析阶段汇成同一条演奏时间轴",
-        "演奏期所有消费方共享 AudioContext 唯一时钟"
+        "音频引擎输出实际播放位置，光标与录音共享谱面时间"
       ]
     },
     {
       "dot": "rose",
-      "title": "性能红线",
+      "title": "演奏与分析",
       "items": [
         "光标驱动走 rAF 直写 DOM，不进响应式 store，避免重渲染抖动",
         "录音与分析同源（AudioWorklet 直采），保证音准统计可信",
-        "谱 / 音 / 背景三方同步误差听感 < 50ms"
+        "录后音高分析在 Worker 中运行；支持进度反馈与取消"
       ]
     },
     {
@@ -362,7 +362,7 @@
       "items": [
         "YIN 实测音高 × 谱面目标音高 → 命中 / 偏音 / 漏音三态图表",
         "录音 WAV 与伴奏可在回放页混音对照，双音量独立调节",
-        "每轮演奏结束即生成完整反馈，无需任何服务器"
+        "每段保留起点与速度，回放和图表按对应谱面区间对齐"
       ]
     }
   ]

@@ -6,7 +6,6 @@ import { DIFFICULTY_LABEL, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import type { SongManifest } from '../types'
 import { useAppStore } from '../store'
-import { syncTunePath } from '../synctune/route'
 import './HomePage.css'
 
 const PersonalLibrary = import.meta.env.MODE === 'desktop' ? lazy(() => import('../library/PersonalLibrary')) : null
@@ -180,10 +179,6 @@ export default function HomePage() {
   const libraryTab = useAppStore((s) => s.libraryTab)
   const setLibraryTab = useAppStore((s) => s.setLibraryTab)
   const personalOpen = !!PersonalLibrary && libraryTab === 'personal'
-  // 同步调试页入口：仅 DEV 或 ?debug=1 可见（不进曲库导航）
-  const showSyncTune =
-    import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')
-
 
   return (
     <div className="home">
@@ -202,8 +197,8 @@ export default function HomePage() {
 
       <div className="catalog-tabs-bar"><div className="catalog-tabs" role="tablist" aria-label="乐谱分类">
         <button role="tab" aria-selected={!personalOpen} className={!personalOpen ? 'selected' : ''} onClick={() => setLibraryTab('featured')}>精选乐谱</button>
-        <button role="tab" aria-selected={personalOpen} className={personalOpen ? 'selected' : ''} onClick={() => { if (PersonalLibrary) setLibraryTab('personal'); else setEditionNotice(true) }}>个人仓库{!PersonalLibrary && <span className="edition-tab-mark">正式版</span>}</button>
-      </div><span className="catalog-caption">{personalOpen ? '每一页，都是你的旋律' : '为真实演奏而精选'}</span></div>
+        <button role="tab" aria-selected={personalOpen} className={personalOpen ? 'selected' : ''} onClick={() => { if (PersonalLibrary) setLibraryTab('personal'); else setEditionNotice(true) }}>个人仓库{!PersonalLibrary && <span className="edition-tab-mark">开发中</span>}</button>
+      </div></div>
 
       {personalOpen && PersonalLibrary ? <Suspense fallback={<div className="route-loading" role="status">正在打开个人仓库…</div>}><PersonalLibrary /></Suspense> : <>
       {/* 首发英雄位：三曲 Netflix 式轮播，点击任意广告页进入预览 */}
@@ -225,13 +220,8 @@ export default function HomePage() {
         )}
       </section>
       </>}
-      {editionNotice && <Dialog title="把喜欢的乐谱，留在身边" onClose={() => setEditionNotice(false)}><div className="edition-emblem">SYRINX · 个人仓库</div><p>个人仓库是 Syrinx 正式版本的功能。你可以导入自己的 MusicXML 乐谱，离线阅读，并使用原谱中的钢琴伴奏。</p><div className="edition-features"><span>自己的乐谱，自己的收藏</span><span>无需账号，保存在你的设备</span><span>随时翻开，随时演奏</span></div><div className="dialog-actions"><button className="btn-pill" onClick={() => setEditionNotice(false)}>继续体验精选乐谱</button></div></Dialog>}
+      {editionNotice && <Dialog title="个人仓库" onClose={() => setEditionNotice(false)}><p>这个功能还在开发中，网页体验版暂不支持导入个人乐谱。</p><div className="dialog-actions"><button className="btn-pill" onClick={() => setEditionNotice(false)}>知道了</button></div></Dialog>}
       {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
-      {showSyncTune && featured && !personalOpen && (
-        <a className="debug-link" href={syncTunePath(featured.id)}>
-          同步调试（beats 微调）
-        </a>
-      )}
     </div>
   )
 }

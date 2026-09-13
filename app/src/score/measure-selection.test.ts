@@ -19,7 +19,7 @@ function setup(numberOffset = 0) {
       getYForLine: (line: number) => y + line * 10, getNumLines: () => 5,
       getContext: () => ({ svg }) }),
   })
-  const fake = { GraphicSheet: { MeasureList: [
+  const fake = { cursor: { iterator: { EndReached: true }, next: () => {} }, GraphicSheet: { MeasureList: [
     [stave(1, 50, 100)], [stave(2, 150, 100)],
     [stave(3, 50, 300), stave(3, 50, 380)], [stave(4, 150, 300)],
   ] } } as unknown as OpenSheetMusicDisplay
@@ -33,6 +33,29 @@ function setup(numberOffset = 0) {
 }
 
 describe('rendered measure selection', () => {
+  it('keeps the start box through its measure, then clears it at the next accompaniment anchor', () => {
+    const { score, svg } = setup()
+    score.selectMeasure(2)
+    score.syncToTime(5.49, true)
+    expect(svg.querySelector('[data-selected-measure="2"]')).not.toBeNull()
+    score.syncToTime(5.5, true)
+    expect(svg.querySelector('[data-selected-measure]')).toBeNull()
+    expect(score.getSelectedMeasure()).toBeNull()
+    score.dispose()
+  })
+
+  it('keeps a paused selection and clears a last-measure selection at the end sentinel', () => {
+    const { score, svg } = setup()
+    score.selectMeasure(3)
+    score.syncToTime(9)
+    expect(svg.querySelector('[data-selected-measure="3"]')).not.toBeNull()
+    score.syncToTime(8.99, true)
+    expect(score.getSelectedMeasure()).toBe(3)
+    score.syncToTime(9, true)
+    expect(svg.querySelector('[data-selected-measure]')).toBeNull()
+    score.dispose()
+  })
+
   it.each([-1, 20])('maps source order when OSMD numbers differ by %i (pickup or excerpt)', (offset) => {
     const { score } = setup(offset)
     expect(score.measureAtPoint(70, 28)).toEqual({ measure: 1, time: 0 })

@@ -81,6 +81,15 @@ export default function PerformPage() {
   const [synthesizedAccompaniment, setSynthesizedAccompaniment] = useState(false)
   const [tempoRatio, setTempoRatio] = useState(1)
   const [tempoPending, setTempoPending] = useState(false)
+  const [practiceHint, setPracticeHint] = useState(() => {
+    try { return localStorage.getItem('syrinx.practice-hint.v1') !== 'seen' }
+    catch { return true }
+  })
+  const dismissPracticeHint = useCallback(() => {
+    setPracticeHint(false)
+    try { localStorage.setItem('syrinx.practice-hint.v1', 'seen') }
+    catch { /* Storage restrictions must never prevent practice. */ }
+  }, [])
   const tempoPendingRef = useRef(false)
   const requestedRateRef = useRef(1)
 
@@ -567,8 +576,9 @@ export default function PerformPage() {
     // 麦克风在倒数期间申请（权限弹窗时间被倒数盖住）；失败不阻断演奏
     void ensureMic().catch(() => {}) // ensureMic reports its current request failure.
     scoreRef.current?.showCursor()
+    dismissPracticeHint()
     beginCountIn(audioEngine.time, true)
-  }, [beginCountIn, ensureMic, showToast])
+  }, [beginCountIn, dismissPracticeHint, ensureMic, showToast])
 
   // 倒数：以 ctx.currentTime 为准（与节拍音同源），归零瞬间 play(0)
   useEffect(() => {
@@ -675,7 +685,7 @@ export default function PerformPage() {
       const tl = timelineRef.current
       if (tl) {
         const t = audioEngine.time
-        scoreRef.current?.syncToTime(t)
+        scoreRef.current?.syncToTime(t, playingRef.current)
         if (timeEl.current) timeEl.current.textContent = `${fmt(t)} / ${fmt(tl.durationSec)}`
         if (playedEl.current)
           playedEl.current.style.width = `${Math.min(100, (t / tl.durationSec) * 100)}%`
@@ -786,7 +796,6 @@ export default function PerformPage() {
           pauseOwnedPlay(playOperation)
           return
         }
-        scoreRef.current?.selectMeasure(null)
         playingRef.current = true
         setPlaying(true)
         wake()
@@ -1114,12 +1123,16 @@ export default function PerformPage() {
 
       {phase === 'ready' && (
         <div className="perform-ready">
-          <div>
-            <span>点击小节选择起点，准备好后开始</span>
-            {synthesizedAccompaniment && <small role="status">
-              {song.accompanimentUrl ? '原始伴奏暂不可用，已准备合成伴奏。' : '已准备合成伴奏。'}
-            </small>}
-          </div>
+          {practiceHint && <aside className="practice-hint" aria-label="演奏小提示">
+            <div className="practice-hint-steps">
+              <span><svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><rect x="2" y="3" width="16" height="14" rx="3" /><path d="M6 7h8M6 10h8M6 13h8M9 3v14" /></svg>点小节选起点</span>
+              <span><span className="practice-hint-bpm" aria-hidden="true">BPM</span>点 BPM 调速度</span>
+            </div>
+            <button type="button" onClick={dismissPracticeHint}>知道了</button>
+          </aside>}
+          {synthesizedAccompaniment && <small role="status">
+            {song.accompanimentUrl ? '原始伴奏暂不可用，已准备合成伴奏。' : '已准备合成伴奏。'}
+          </small>}
           <button className="ov-start" onClick={() => void start()}>▶ 开始演奏</button>
         </div>
       )}

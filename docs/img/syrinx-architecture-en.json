@@ -5,7 +5,7 @@
     "title": "Syrinx Architecture",
     "locale": "en",
     "subtitle": "Vite + React 19 · browser-only closed loop · zero backend API",
-    "output": "D:/LLM_work/syrinx-architecture/syrinx-architecture-en.html",
+    "output": "syrinx-architecture-en.html",
     "quality_profile": "showcase",
     "viewBox": [
       1050,
@@ -115,8 +115,8 @@
       "id": "audio",
       "type": "backend",
       "label": "Audio Engine",
-      "sublabel": "AudioContext clock",
-      "tag": "<50ms",
+      "sublabel": "Live playback clock",
+      "tag": "BPM · seek",
       "pos": [
         460,
         240
@@ -144,7 +144,7 @@
       "id": "pitch",
       "type": "backend",
       "label": "YIN Pitch Analysis",
-      "sublabel": "diff fn · interpolation",
+      "sublabel": "Background Worker",
       "tag": "pure TS · TDD",
       "pos": [
         880,
@@ -305,11 +305,11 @@
     },
     {
       "dot": "cyan",
-      "title": "One clock",
+      "title": "Playback & Recording",
       "items": [
-        "AudioContext.currentTime is the app's single time source",
-        "Score / audio / background stay in sync within < 50 ms perception",
-        "Cursor runs on rAF writing DOM directly — never through reactive store"
+        "Live audio position aligns the score cursor and recording",
+        "Tempo changes and seeks save the take, then count in a new segment",
+        "Segments retain start and speed; rAF updates the cursor"
       ]
     },
     {

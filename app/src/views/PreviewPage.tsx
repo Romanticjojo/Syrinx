@@ -347,9 +347,6 @@ export default function PreviewPage() {
         </div>
       </section>
 
-      <footer className="preview-footer">
-        曲谱与伴奏素材由用户自备自用，应用不分发。正式伴奏/封面/预览视频按 Song Pack 格式放入 public/songs/{song.id}/。
-      </footer>
     </div>
   )
 }
