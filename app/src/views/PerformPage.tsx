@@ -934,6 +934,7 @@ export default function PerformPage() {
             pendingReplayCountInRef.current = null
             phaseRef.current = 'ready'
             setPhase('ready')
+            showToast(SEEK_TOAST)
           } else {
             // 续录倒数被打断：落暂停态记住定位点，按播放先倒数再续录
             pendingReplayCountInRef.current = clamped
