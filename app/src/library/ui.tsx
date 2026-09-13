@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 
 const paths: Record<string, ReactNode> = {
+  more: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+  sort: <><path d="M4 6h16M4 12h11M4 18h6" /><path d="m16 16 3 3 3-3M19 11v8" /></>,
   folder: <path d="M3 6h7l2 2h9v12H3zM3 6V4h7l2 2h9v2" />,
   grid: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
   list: <path d="M8 5h13M8 12h13M8 19h13M3 5h1M3 12h1M3 19h1" />,

@@ -48,7 +48,7 @@ export default function ControlBar({
         disabled={ended}
         aria-label={recOn ? '关闭录音' : '开启录音'}
         aria-pressed={recOn}
-        title={recOn ? '关闭录音（丢弃当前段，重新开启即重录）' : '开启录音（从头重录）'}
+        title={recOn ? '关闭录音并保留当前段' : '开启录音，从当前位置录制新段'}
       >
         <svg className="rec-mic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path

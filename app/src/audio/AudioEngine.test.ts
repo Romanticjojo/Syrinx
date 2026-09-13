@@ -18,6 +18,7 @@ function makeCtx(opts: { resumeDelayMs?: number; resumeFails?: boolean } = {}) {
     disconnect: ReturnType<typeof vi.fn>
     onended: unknown
   }[] = []
+  const oscillators: { stop: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }[] = []
   const ctx = {
     state: 'suspended' as AudioContextState,
     currentTime: 0,
@@ -29,6 +30,7 @@ function makeCtx(opts: { resumeDelayMs?: number; resumeFails?: boolean } = {}) {
     createGain: () => ({
       gain: { value: 1, setValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
       connect: vi.fn(),
+      disconnect: vi.fn(),
     }),
     createAnalyser: () => ({ fftSize: 0, connect: vi.fn() }),
     createBufferSource: () => {
@@ -44,17 +46,22 @@ function makeCtx(opts: { resumeDelayMs?: number; resumeFails?: boolean } = {}) {
       sources.push(s)
       return s
     },
-    createOscillator: () => ({
-      type: '',
-      frequency: { value: 0 },
-      connect: vi.fn(),
-      start: vi.fn(),
-      stop: vi.fn(),
-    }),
+    createOscillator: () => {
+      const oscillator = {
+        type: '',
+        frequency: { value: 0 },
+        connect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+        disconnect: vi.fn(),
+      }
+      oscillators.push(oscillator)
+      return oscillator
+    },
     decodeAudioData: vi.fn(),
     destination: {},
   }
-  return { ctx, sources }
+  return { ctx, sources, oscillators }
 }
 
 /** 挂 mock 并重建单例模块（new Ctor() 返回 ctx 对象，覆盖 this） */
@@ -229,5 +236,18 @@ describe('pending playback lifecycle', () => {
     await engine.load(BUF)
     expect(await engine.play()).toBe(false)
     expect(sources).toHaveLength(0)
+  })
+})
+
+describe('count-in tick lifecycle', () => {
+  it('returns a disposer that cancels an interrupted scheduled tick', async () => {
+    const { ctx, oscillators } = makeCtx()
+    const engine = await freshEngine(ctx)
+    const cancel = engine.scheduleTick(4)
+
+    expect(cancel).toBeTypeOf('function')
+    cancel()
+    expect(oscillators[0].stop).toHaveBeenLastCalledWith(0)
+    expect(oscillators[0].disconnect).toHaveBeenCalledOnce()
   })
 })

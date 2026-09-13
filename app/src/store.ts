@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PerformanceSession, PerformanceStatus, PitchPoint, Take, TuneStats } from './types'
+import type { PerformanceSegment, PerformanceSession, PerformanceStatus, PitchPoint, Take, TuneStats } from './types'
 
 /** 四个视图：曲库 → 预览 → 演奏 → 回放 */
 export type View = 'home' | 'preview' | 'perform' | 'result'
@@ -23,6 +23,14 @@ interface AppState {
     message?: string,
   ) => boolean
   completePerformance: (sessionId: string, take: Take) => boolean
+  appendPerformanceSegment: (sessionId: string, segment: PerformanceSegment) => boolean
+  finishPerformance: (sessionId: string, message?: string) => boolean
+  cacheSegmentAnalysis: (
+    sessionId: string,
+    segmentId: string,
+    pitchTrack: PitchPoint[],
+    stats: TuneStats,
+  ) => boolean
   cacheTakeAnalysis: (
     sessionId: string,
     pitchTrack: PitchPoint[],
@@ -56,7 +64,7 @@ export const useAppStore = create<AppState>((set) => ({
     const id = nextSessionId()
     set({
       lastTake: null,
-      performanceSession: { id, songId, status: 'preparing', take: null },
+      performanceSession: { id, songId, status: 'preparing', take: null, segments: [] },
     })
     return id
   },
@@ -82,14 +90,90 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => {
       if (s.performanceSession?.id !== sessionId || take.sessionId !== sessionId) return s
       accepted = true
+      const segment: PerformanceSegment = {
+        ...take,
+        id: `legacy-${sessionId}`,
+      }
       return {
         lastTake: take,
         performanceSession: {
           ...s.performanceSession,
           status: 'completed',
           take,
+          segments: [segment],
           message: undefined,
         },
+      }
+    })
+    return accepted
+  },
+  appendPerformanceSegment: (sessionId, segment) => {
+    let accepted = false
+    set((s) => {
+      const session = s.performanceSession
+      if (
+        session?.id !== sessionId
+        || segment.sessionId !== sessionId
+        || segment.songId !== session.songId
+        || session.segments.some((item) => item.id === segment.id)
+      ) return s
+      accepted = true
+      return {
+        performanceSession: {
+          ...session,
+          segments: [...session.segments, segment],
+        },
+      }
+    })
+    return accepted
+  },
+  finishPerformance: (sessionId, message) => {
+    let accepted = false
+    set((s) => {
+      const session = s.performanceSession
+      if (session?.id !== sessionId) return s
+      accepted = true
+      const take = session.segments.at(-1) ?? null
+      if (!take) {
+        return {
+          lastTake: null,
+          performanceSession: {
+            ...session,
+            status: 'no-recording',
+            take: null,
+            message: message ?? '本次演奏没有可回放的录音段。',
+          },
+        }
+      }
+      return {
+        lastTake: take,
+        performanceSession: {
+          ...session,
+          status: 'completed',
+          take,
+          ...(message ? { message } : { message: undefined }),
+        },
+      }
+    })
+    return accepted
+  },
+  cacheSegmentAnalysis: (sessionId, segmentId, pitchTrack, stats) => {
+    let accepted = false
+    set((s) => {
+      const session = s.performanceSession
+      if (session?.id !== sessionId || session.status !== 'completed') return s
+      const index = session.segments.findIndex((segment) => segment.id === segmentId)
+      if (index < 0) return s
+      accepted = true
+      const segments = session.segments.map((segment, position) =>
+        position === index ? { ...segment, pitchTrack, stats } : segment,
+      )
+      const take = session.take && 'id' in session.take && session.take.id === segmentId
+        ? segments[index]
+        : session.take
+      return {
+        lastTake: take ?? s.lastTake,
+        performanceSession: { ...session, segments, take },
       }
     })
     return accepted
@@ -101,9 +185,13 @@ export const useAppStore = create<AppState>((set) => ({
       if (session?.id !== sessionId || session.status !== 'completed' || !session.take) return s
       accepted = true
       const take = { ...session.take, pitchTrack, stats }
+      const existingSegments = session.segments ?? []
+      const segments = existingSegments.map((segment, index) =>
+        index === existingSegments.length - 1 ? { ...segment, pitchTrack, stats } : segment,
+      )
       return {
         lastTake: take,
-        performanceSession: { ...session, take },
+        performanceSession: { ...session, take, segments },
       }
     })
     return accepted

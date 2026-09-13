@@ -46,6 +46,12 @@ type HitDomNote = {
 /** DOM rect 最小面（含 right/bottom 的计算字段） */
 type ClientRectLike = { left: number; right: number; top: number; bottom: number; width: number; height: number }
 
+type RenderedMeasure = { measure: number; time: number; svg: SVGSVGElement; x: number; y: number; w: number; h: number }
+type RenderedStave = {
+  getX(): number; getWidth(): number; getYForLine(line: number): number; getNumLines(): number
+  getContext(): { svg?: SVGSVGElement }
+}
+
 /**
  * OSMD 曲谱渲染封装：
  * - 暗色谱面（白色音符、透明背景，融入暗色界面）
@@ -113,6 +119,9 @@ export class OSMDScore {
    *  实测 rect（视觉值 = 未缩放 × k）÷ viewScale 归一；使用时滚动目标 ×
    *  viewScale、点击换算 ÷ viewScale——旋转/缩窗只更新 k，缓存不作废 */
   private viewScale = 1
+  private selectedMeasure: number | null = null
+  private measureSelection: SVGRectElement | null = null
+  private selectionObserver: MutationObserver | null = null
 
   constructor(
     container: HTMLElement,
@@ -199,6 +208,7 @@ export class OSMDScore {
   }
 
   async load(xml: string, timeline: Timeline): Promise<void> {
+    this.clearMeasureSelection()
     await this.osmd.load(xml)
     if (this.disposed) return
     // zoom 在 load 后、render 前设置才真正生效（构造期设置被 OSMD 忽略，见构造注释）；
@@ -232,6 +242,101 @@ export class OSMDScore {
     this.measureTimes = timeline.measureTimes
     this.tempoSegments = timeline.tempoSegments
     this.totalMeasures = timeline.measureTimes.filter((e) => !e.end).length
+  }
+
+  /** Actual VexFlow staves, in their own SVG coordinate system. Unlike note-head
+   *  hit testing this includes empty/rest measures and the full piano grand staff.
+   *  Re-read after every layout; OSMD autoResize replaces the graphical measures. */
+  private renderedMeasures(): RenderedMeasure[] {
+    const anchors = this.measureTimes.filter(m => !m.end)
+    const result: RenderedMeasure[] = []
+    const measures = this.osmd.GraphicSheet?.MeasureList ?? []
+    for (const [index, staves] of measures.entries()) {
+      // OSMD numbers pickup bars from zero and may renumber excerpts. Source
+      // order is stable and matches the supplied timeline, unlike printed IDs.
+      const anchor = anchors[index]
+      if (!anchor) continue
+      const groups: RenderedMeasure[] = []
+      for (const graphical of staves ?? []) {
+        if (!graphical) continue
+        const stave = (graphical as unknown as { getVFStave?: () => RenderedStave }).getVFStave?.()
+        const svg = stave?.getContext()?.svg
+        if (!stave || !svg || !this.containerEl.contains(svg)) continue
+        const x = stave.getX(), w = stave.getWidth()
+        const y = stave.getYForLine(0) - 10
+        const bottom = stave.getYForLine(Math.max(0, stave.getNumLines() - 1)) + 10
+        if (![x, w, y, bottom].every(Number.isFinite) || w <= 0 || bottom <= y) continue
+        const previous = groups.find(m => m.measure === anchor.measure && m.svg === svg)
+        if (previous) {
+          const right = Math.max(previous.x + previous.w, x + w)
+          const low = Math.max(previous.y + previous.h, bottom)
+          previous.x = Math.min(previous.x, x); previous.y = Math.min(previous.y, y)
+          previous.w = right - previous.x; previous.h = low - previous.y
+        } else groups.push({ measure: anchor.measure, time: anchor.time, svg, x, y, w, h: bottom - y })
+      }
+      result.push(...groups)
+    }
+    return result
+  }
+
+  /** Client coordinates include scroll and all CSS/OSMD zooms through the current
+   *  SVG screen matrix. Whitespace and the timeline end marker are never selected. */
+  measureAtPoint(clientX: number, clientY: number): { measure: number; time: number } | null {
+    const points = new Map<SVGSVGElement, { x: number; y: number } | null>()
+    for (const measure of this.renderedMeasures()) {
+      if (!points.has(measure.svg)) {
+        const matrix = measure.svg.getScreenCTM?.()
+        const det = matrix ? matrix.a * matrix.d - matrix.b * matrix.c : 0
+        points.set(measure.svg, matrix && det ? {
+          x: (matrix.d * (clientX - matrix.e) - matrix.c * (clientY - matrix.f)) / det,
+          y: (-matrix.b * (clientX - matrix.e) + matrix.a * (clientY - matrix.f)) / det,
+        } : null)
+      }
+      const point = points.get(measure.svg)
+      if (point && point.x >= measure.x && point.x < measure.x + measure.w &&
+        point.y >= measure.y && point.y <= measure.y + measure.h) return { measure: measure.measure, time: measure.time }
+    }
+    return null
+  }
+
+  selectMeasureAtPoint(clientX: number, clientY: number): { measure: number; time: number } | null {
+    const hit = this.measureAtPoint(clientX, clientY)
+    if (hit) this.selectMeasure(hit.measure)
+    return hit
+  }
+
+  getSelectedMeasure(): number | null { return this.selectedMeasure }
+
+  /** Independent visual selection: remains visible while paused, with no audio or
+   *  playback-cursor side effects. Call null to clear when leaving selection. */
+  selectMeasure(measure: number | null): void {
+    this.measureSelection?.remove()
+    this.measureSelection = null
+    this.selectedMeasure = measure
+    if (measure === null || this.disposed) return
+    const bounds = this.renderedMeasures().find(m => m.measure === measure)
+    if (!bounds) return
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    const attrs = { x: bounds.x, y: bounds.y, width: bounds.w, height: bounds.h,
+      fill: this.accent, 'fill-opacity': .12, stroke: this.accent, 'stroke-width': 2,
+      'pointer-events': 'none', 'data-selected-measure': measure, 'aria-hidden': 'true' }
+    for (const [name, value] of Object.entries(attrs)) rect.setAttribute(name, String(value))
+    bounds.svg.append(rect)
+    this.measureSelection = rect
+    if (!this.selectionObserver) {
+      this.selectionObserver = new MutationObserver(() => {
+        if (this.selectedMeasure !== null && !this.containerEl.contains(this.measureSelection)) this.selectMeasure(this.selectedMeasure)
+      })
+      this.selectionObserver.observe(this.containerEl, { childList: true, subtree: true })
+    }
+  }
+
+  private clearMeasureSelection(): void {
+    this.selectionObserver?.disconnect()
+    this.selectionObserver = null
+    this.measureSelection?.remove()
+    this.measureSelection = null
+    this.selectedMeasure = null
   }
 
   /**
@@ -884,6 +989,7 @@ export class OSMDScore {
 
   dispose(): void {
     this.disposed = true
+    this.clearMeasureSelection()
     // OSMD 无 dispose API；清空容器释放 DOM
     this.stopScrollAnim()
     this.markerGeom = null

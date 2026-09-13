@@ -125,7 +125,7 @@ class AudioEngine {
   }
 
   /** 调度倒数节拍音（短促 sine tick），与主时钟同源 */
-  scheduleTick(atCtxTime: number, freq = 880, dur = 0.08, vol = 0.3): void {
+  scheduleTick(atCtxTime: number, freq = 880, dur = 0.08, vol = 0.3): () => void {
     const osc = this.ctx.createOscillator()
     osc.type = 'sine'
     osc.frequency.value = freq
@@ -136,6 +136,18 @@ class AudioEngine {
     g.connect(this.ctx.destination)
     osc.start(atCtxTime)
     osc.stop(atCtxTime + dur + 0.02)
+    let cancelled = false
+    return () => {
+      if (cancelled) return
+      cancelled = true
+      try {
+        osc.stop(this.ctx.currentTime)
+      } catch {
+        // The scheduled oscillator may already have ended.
+      }
+      osc.disconnect()
+      g.disconnect()
+    }
   }
 
   get ctxTime(): number {

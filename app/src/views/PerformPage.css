@@ -350,6 +350,7 @@ video.perform-bg-cover {
 
 /* 倒数：轻遮罩 + 大数字（与节拍音同源计时） */
 .perform-overlay.countdown {
+  pointer-events: none;
   background: rgba(8, 10, 12, 0.3);
   backdrop-filter: none;
   grid-template-rows: 1fr auto 1fr;
@@ -509,6 +510,28 @@ video.perform-bg-cover {
 .perform-toast { white-space: normal; width: max-content; max-width: calc(100% - 32px); text-align: center; overflow-wrap: anywhere; }
 .perform-overlay { overflow-y: auto; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
 .ov-card { min-width: 0; max-width: 100%; max-height: 100%; overflow: auto; overflow-wrap: anywhere; }
+.perform-ready {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 16px;
+  margin: 0 max(16px, env(safe-area-inset-left, 0px)) 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink-dim);
+  font-size: 13px;
+}
+.perform-ready small { display: block; margin-top: 4px; color: var(--ink-faint); }
+.perform-ready .ov-start { flex-shrink: 0; margin: 0; min-height: 44px; padding: 10px 20px; font-size: 14px; }
+@media (max-width: 640px) {
+  .perform-ready { gap: 10px; padding: 8px 10px; font-size: 12px; }
+  .perform-ready .ov-start { padding: 10px 14px; }
+}
 @media (max-width: 1050px), (any-pointer: coarse) {
   .progress-rail { height: 44px; min-height: 44px; flex-shrink: 0; }
 }

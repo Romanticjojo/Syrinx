@@ -54,6 +54,12 @@ export interface Take {
   stats: TuneStats | null
 }
 
+/** 一次演奏会话中可独立回放、分析的连续录音段。 */
+export interface PerformanceSegment extends Take {
+  /** 会话内单调生成的唯一段编号，异步结果必须凭此写回。 */
+  id: string
+}
+
 export interface PitchPoint {
   time: number
   hz: number
@@ -89,6 +95,8 @@ export interface PerformanceSession {
   songId: string
   status: PerformanceStatus
   take: Take | null
+  /** 已完成封存的全部录音段；take 始终兼容地指向最后一段。 */
+  segments: PerformanceSegment[]
   message?: string
 }
 

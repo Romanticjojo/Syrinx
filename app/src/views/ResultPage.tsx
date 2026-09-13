@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
 import { encodeWav } from '../audio/wav'
 import PlaybackDeck from '../components/PlaybackDeck'
@@ -7,6 +7,7 @@ import { extractPitchTrackAsync, scoreAgainst, timelineInRange, type ScoreResult
 import { getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import { useAppStore } from '../store'
+import type { PerformanceSegment, Timeline } from '../types'
 import './ResultPage.css'
 
 type Analysis =
@@ -18,21 +19,43 @@ type Analysis =
 const fmt = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
+function segmentRangeLabel(timeline: Timeline, segment: PerformanceSegment): string {
+  const anchors = timeline.measureTimes.filter((item) => !item.end)
+  const start = [...anchors].reverse().find((item) => item.time <= segment.startSec)
+  const endTime = Math.max(segment.startSec, segment.stopSec - 0.000_001)
+  const end = [...anchors].reverse().find((item) => item.time <= endTime)
+  if (!start || !end) return `${fmt(segment.startSec)}–${fmt(segment.stopSec)}`
+  return start.measure === end.measure
+    ? `第 ${start.measure} 小节`
+    : `第 ${start.measure}–${end.measure} 小节`
+}
+
 export default function ResultPage() {
   const session = useAppStore((s) => s.performanceSession)
-  const take = session?.status === 'completed' ? session.take : null
-  const takeSessionId = take?.sessionId
+  const segments = useMemo<PerformanceSegment[]>(() => {
+    if (session?.status !== 'completed') return []
+    if (session.segments?.length) return session.segments
+    return session.take ? [{ ...session.take, id: `legacy-${session.take.sessionId}` }] : []
+  }, [session])
+  const [selectedSegmentId, setSelectedSegmentId] = useState('')
+  const take = segments.find((segment) => segment.id === selectedSegmentId) ?? segments.at(-1) ?? null
+  const takeSessionId = take ? `${take.sessionId}:${take.id}` : undefined
   const takeAudioUrl = take?.audioUrl
   const takeStartSec = take?.startSec
   const currentSongId = useAppStore((s) => s.currentSongId)
   const songId = session?.songId ?? currentSongId
   const go = useAppStore((s) => s.go)
   const cacheTakeAnalysis = useAppStore((s) => s.cacheTakeAnalysis)
+  const cacheSegmentAnalysis = useAppStore((s) => s.cacheSegmentAnalysis)
   const song = getSong(songId) ?? SONGS[0]
 
-  const [analysis, setAnalysis] = useState<Analysis>({ status: 'analyzing' })
+  const [storedAnalysis, setStoredAnalysis] = useState<{ key?: string; value: Analysis }>({ value: { status: 'analyzing' } })
+  const analysis: Analysis = storedAnalysis.key === takeSessionId ? storedAnalysis.value : { status: 'analyzing' }
   const [syncEnabled, setSyncEnabled] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [rangeTimeline, setRangeTimeline] = useState<{ songId: string; timeline: Timeline } | null>(null)
+  const rangeFor = (segment: PerformanceSegment) => rangeTimeline?.songId === segment.songId ? segmentRangeLabel(rangeTimeline.timeline, segment) : `${fmt(segment.startSec)}–${fmt(segment.stopSec)}`
+  const rangeLabel = take ? rangeFor(take) : ''
   const audioRef = useRef<HTMLAudioElement>(null)
   const syncEnabledRef = useRef(false)
   const ignoreNextPlayRef = useRef(false)
@@ -50,6 +73,8 @@ export default function ResultPage() {
   // 音高分析：解码录音 → 逐帧 YIN → 与目标时间轴对比（不支持解码的浏览器保留纯回放）
   useEffect(() => {
     if (!take) return
+    const setAnalysis = (value: Analysis) => setStoredAnalysis({ key: takeSessionId, value })
+    setAnalysis({ status: 'analyzing' })
     // 只分析完整落在实际采集起止位置内的目标音；延迟开麦和中途关录前后的
     // 音符不进入漏音分母。
     const scoreTimeline = (timeline: Awaited<ReturnType<typeof loadSong>>['timeline']) =>
@@ -61,8 +86,9 @@ export default function ResultPage() {
       void (async () => {
         const { timeline } = await loadSong(song)
         if (!alive) return
+        setRangeTimeline({ songId: take.songId, timeline })
         setAnalysis({ status: 'done', result: scoreAgainst(cachedTrack, scoreTimeline(timeline)) })
-      })()
+      })().catch((error: unknown) => { if (alive) setAnalysis({ status: 'error', message: error instanceof Error ? error.message : String(error) }) })
       return () => {
         alive = false
       }
@@ -72,6 +98,8 @@ export default function ResultPage() {
         // 先让「分析中」状态渲染出来，再进入重计算
         await new Promise((r) => setTimeout(r, 60))
         const { timeline } = await loadSong(song)
+        if (!alive) return
+        setRangeTimeline({ songId: take.songId, timeline })
         const res = await fetch(take.audioUrl)
         const ab = await res.arrayBuffer()
         const buffer = await audioEngine.decode(ab)
@@ -86,7 +114,11 @@ export default function ResultPage() {
         if (!alive || track === null) return
         const result = scoreAgainst(track, scoreTimeline(timeline))
         setAnalysis({ status: 'done', result })
-        cacheTakeAnalysis(take.sessionId, result.annotatedTrack, result.stats)
+        if (session?.segments?.some((segment) => segment.id === take.id)) {
+          cacheSegmentAnalysis(take.sessionId, take.id, result.annotatedTrack, result.stats)
+        } else {
+          cacheTakeAnalysis(take.sessionId, result.annotatedTrack, result.stats)
+        }
       } catch (e) {
         if (!alive) return
         setAnalysis({
@@ -99,7 +131,18 @@ export default function ResultPage() {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [take, cacheTakeAnalysis])
+  }, [take, takeSessionId, song, cacheSegmentAnalysis, cacheTakeAnalysis])
+
+  const selectSegment = useCallback((id: string) => {
+    if (id === take?.id) return
+    syncOperationRef.current += 1
+    ignoreNextPlayRef.current = false
+    syncEnabledRef.current = false
+    setSyncEnabled(false)
+    audioRef.current?.pause()
+    audioEngine.pause()
+    setSelectedSegmentId(id)
+  }, [take?.id])
 
   // 对照播放：录音文件使用局部时间，伴奏使用 startSec + 录音局部时间。
   useEffect(() => {
@@ -230,7 +273,7 @@ export default function ResultPage() {
     const saveAs = (href: string, ext: string) => {
       const a = document.createElement('a')
       a.href = href
-      a.download = `syrinx-${song.id}-${stamp}.${ext}`
+      a.download = `syrinx-${song.id}-${stamp}-part${segments.findIndex((segment) => segment.id === take.id) + 1}.${ext}`
       a.click()
     }
     try {
@@ -286,15 +329,8 @@ export default function ResultPage() {
   }
 
   const stats = analysis.status === 'done' ? analysis.result.stats : null
-  // 图表时间域：演奏录音与目标时间轴取大（保险起见至少 1s）
-  const chartDuration =
-    analysis.status === 'done'
-      ? Math.max(
-          take.stopSec,
-          1,
-          ...analysis.result.notes.map((n) => n.note.time + n.note.duration),
-        )
-      : Math.max(take.stopSec, 1)
+  // 每段从局部 0 秒开始绘图，跳过的曲谱不占据图表空间。
+  const chartDuration = Math.max(take.stopSec - take.startSec, 1)
 
   return (
     <main className="result" style={{ '--song-accent': song.accent } as React.CSSProperties}>
@@ -322,8 +358,14 @@ export default function ResultPage() {
         <h1>{song.title}</h1>
         <div className="result-meta">
           {new Date(take.startedAt).toLocaleString('zh-CN')} · 录音时长 {fmt(take.durationSec)} ·{' '}
-          采集位置 {fmt(take.startSec)}–{fmt(take.stopSec)}
+          采集位置 {fmt(take.startSec)}–{fmt(take.stopSec)} · {rangeLabel}
         </div>
+        {session.message && <p className="result-save-warning" role="alert">{session.message}</p>}
+        {segments.length > 1 && <label className="segment-selector">录音分段
+          <select aria-label="选择录音段" value={take.id} onChange={(event) => selectSegment(event.target.value)}>
+            {segments.map((segment, index) => <option key={segment.id} value={segment.id}>第 {index + 1} 段 · {rangeFor(segment)} · {fmt(segment.durationSec)}</option>)}
+          </select><span>共 {segments.length} 段</span>
+        </label>}
       </section>
 
       <section className="result-grid">
@@ -333,6 +375,7 @@ export default function ResultPage() {
             {/* 伴奏滑杆只在对照播放开启时出现（t_5957a725）：只回听录音不需要，
                 且伴奏增益与演奏页共用，不该在回放页随手可动 */}
             <PlaybackDeck
+              key={takeSessionId}
               src={take.audioUrl}
               accent={song.accent}
               audioRef={audioRef}
@@ -405,8 +448,8 @@ export default function ResultPage() {
         {analysis.status === 'done' ? (
           <>
             <PitchChart
-              notes={analysis.result.notes}
-              track={analysis.result.annotatedTrack}
+              notes={analysis.result.notes.map((item) => ({ ...item, note: { ...item.note, time: item.note.time - take.startSec } }))}
+              track={analysis.result.annotatedTrack.map((point) => ({ ...point, time: point.time - take.startSec }))}
               durationSec={chartDuration}
               accent={song.accent}
             />

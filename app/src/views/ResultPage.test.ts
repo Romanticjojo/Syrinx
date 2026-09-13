@@ -2,7 +2,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../store'
-import type { PerformanceSession, Take } from '../types'
+import type { PerformanceSegment, PerformanceSession, Take } from '../types'
 
 const fakeSong = vi.hoisted(() => ({
   id: 'test-song',
@@ -40,7 +40,11 @@ vi.mock('../songs', () => ({
         { time: 4, duration: 1, midi: 69, measure: 2 },
         { time: 5, duration: 1, midi: 69, measure: 2 },
       ],
-      measureTimes: [],
+      measureTimes: [
+        { measure: 1, time: 0, quarters: 0 },
+        { measure: 2, time: 4, quarters: 8 },
+        { measure: 3, time: 8, quarters: 16, end: true as const },
+      ],
     },
   }),
 }))
@@ -49,7 +53,7 @@ vi.mock('../components/PlaybackDeck', () => ({
   default: ({ src, audioRef }: { src: string; audioRef: React.RefObject<HTMLAudioElement | null> }) =>
     createElement('audio', { ref: audioRef, src }),
 }))
-vi.mock('../components/PitchChart', () => ({ default: () => null }))
+vi.mock('../components/PitchChart', () => ({ default: ({ notes, track, durationSec }: { notes: unknown[]; track: unknown[]; durationSec: number }) => createElement('div', { 'data-chart-notes': JSON.stringify(notes), 'data-chart-track': JSON.stringify(track), 'data-chart-duration': durationSec }) }))
 
 const takeFor = (sessionId = 'session-1'): Take => ({
   sessionId,
@@ -71,14 +75,24 @@ const takeFor = (sessionId = 'session-1'): Take => ({
   },
 })
 
+const segmentFor = (id: string, startSec: number, stopSec: number): PerformanceSegment => ({
+  ...takeFor(),
+  id,
+  audioUrl: `blob:${id}`,
+  startSec,
+  stopSec,
+  durationSec: stopSec - startSec,
+  pitchTrack: [{ time: startSec + 0.5, hz: 440, cents: 0 }],
+})
+
 let root: Root | null = null
 let container: HTMLElement | null = null
 
-async function renderWith(session: PerformanceSession | null, lastTake: Take | null = null) {
+async function renderWith(session: (Omit<PerformanceSession, 'segments'> & { segments?: PerformanceSegment[] }) | null, lastTake: Take | null = null) {
   useAppStore.setState({
     view: 'result',
     currentSongId: session?.songId ?? 'test-song',
-    performanceSession: session,
+    performanceSession: session ? { ...session, segments: session.segments ?? [] } : null,
     lastTake,
   })
   const { default: ResultPage } = await import('./ResultPage')
@@ -156,6 +170,20 @@ describe('结果页会话状态', () => {
 })
 
 describe('录音与伴奏同步', () => {
+  it('shows a partial-save warning while keeping the completed segment playable', async () => {
+    const segment = segmentFor('segment-1', 4, 6)
+    const page = await renderWith({ id: 'session-1', songId: 'test-song', status: 'completed', take: segment, segments: [segment], message: '最后一段保存失败，已保留此前录音。' })
+    expect(page.textContent).toContain('最后一段保存失败，已保留此前录音。')
+    expect(page.querySelector('audio')?.getAttribute('src')).toBe(segment.audioUrl)
+  })
+  it('fits the chart to the selected segment and excludes skipped score time', async () => {
+    const segment = segmentFor('segment-2', 4, 6)
+    const page = await renderWith({ id: 'session-1', songId: 'test-song', status: 'completed', take: segment, segments: [segment] })
+    const chart = page.querySelector('[data-chart-duration]')!
+    expect(chart.getAttribute('data-chart-duration')).toBe('2')
+    expect(JSON.parse(chart.getAttribute('data-chart-notes')!).map((item: { note: { time: number } }) => item.note.time)).toEqual([0, 1])
+    expect(JSON.parse(chart.getAttribute('data-chart-track')!)[0].time).toBe(0.5)
+  })
   it('a pause cancels a media play event still waiting for audio resume', async () => {
     const take = takeFor()
     const page = await renderWith({ id: take.sessionId, songId: take.songId, status: 'completed', take }, take)
@@ -262,5 +290,61 @@ describe('录音与伴奏同步', () => {
     mocked.engine.pause.mockClear()
     audio.dispatchEvent(new Event('pause'))
     expect(mocked.engine.pause).toHaveBeenCalledOnce()
+  })
+
+  it('显式选择录音段并只从该段起点播放伴奏，显示对应小节范围', async () => {
+    const first = segmentFor('segment-1', 0, 2)
+    const second = segmentFor('segment-2', 4, 6)
+    const page = await renderWith({
+      id: 'session-1',
+      songId: 'test-song',
+      status: 'completed',
+      take: second,
+      segments: [first, second],
+    }, second)
+
+    expect(page.querySelector('audio')?.getAttribute('src')).toBe('blob:segment-2')
+    expect(page.textContent).toContain('第 2 小节')
+    const selector = page.querySelector<HTMLSelectElement>('[aria-label="选择录音段"]')!
+    await act(async () => { selector.value = first.id; selector.dispatchEvent(new Event('change', { bubbles: true })) })
+    await act(async () => { await Promise.resolve() })
+    expect(page.querySelector('audio')?.getAttribute('src')).toBe('blob:segment-1')
+    expect(page.textContent).toContain('第 1 小节')
+
+    mocked.engine.play.mockClear()
+    const syncButton = [...page.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('对照伴奏播放'),
+    )!
+    await act(async () => syncButton.click())
+    expect(mocked.engine.play).toHaveBeenCalledWith(0)
+  })
+  it('changing segments cancels a comparison still waiting to resume', async () => {
+    const first = segmentFor('segment-1', 0, 2), second = segmentFor('segment-2', 4, 6)
+    const page = await renderWith({ id: 'session-1', songId: 'test-song', status: 'completed', take: second, segments: [first, second] })
+    let resume!: () => void
+    mocked.engine.resume.mockReturnValueOnce(new Promise<void>(resolve => { resume = resolve }))
+    const sync = [...page.querySelectorAll('button')].find(button => button.textContent?.includes('对照伴奏播放'))!
+    await act(async () => sync.click())
+    const selector = page.querySelector<HTMLSelectElement>('[aria-label="选择录音段"]')!
+    await act(async () => { selector.value = first.id; selector.dispatchEvent(new Event('change', { bubbles: true })) })
+    await act(async () => resume())
+    expect(mocked.engine.play).not.toHaveBeenCalled()
+    expect(page.querySelector('audio')?.getAttribute('src')).toBe(first.audioUrl)
+  })
+  it('does not write late decoding results into a different selected segment', async () => {
+    const first = { ...segmentFor('segment-1', 0, 2), stats: null, pitchTrack: null }, second = segmentFor('segment-2', 4, 6)
+    vi.stubGlobal('fetch', vi.fn(async () => ({ arrayBuffer: async () => new ArrayBuffer(4) })))
+    let decode!: (value: AudioBuffer) => void
+    mocked.engine.decode.mockReturnValueOnce(new Promise<AudioBuffer>(resolve => { decode = resolve }))
+    const page = await renderWith({ id: 'session-1', songId: 'test-song', status: 'completed', take: second, segments: [first, second] })
+    const selector = page.querySelector<HTMLSelectElement>('[aria-label="选择录音段"]')!
+    await act(async () => { selector.value = first.id; selector.dispatchEvent(new Event('change', { bubbles: true })) })
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 80)) })
+    expect(mocked.engine.decode).toHaveBeenCalledOnce()
+    await act(async () => { selector.value = second.id; selector.dispatchEvent(new Event('change', { bubbles: true })) })
+    await act(async () => decode({} as AudioBuffer))
+    expect(useAppStore.getState().performanceSession?.segments[0].stats).toBeNull()
+    expect(page.textContent).toContain('第 2 小节')
+    expect(page.querySelector('audio')?.getAttribute('src')).toBe(second.audioUrl)
   })
 })

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { OSMDScore } from '../score/OSMDScore'
+import { bindMeasureTap } from '../score/measure-tap'
 import type { Timeline } from '../types'
 import './ScoreSheet.css'
 
@@ -20,6 +21,8 @@ interface Props {
   /** 小节变化回调：随实例一起挂/摘（实例在本组件内创建，挂接放这里才不会
       错过 StrictMode remount 换出的新实例——演奏页侧挂会扑空，t_b22f5467 项 3） */
   onMeasureChange?: (measure: number, total: number) => void
+  /** Optional rendered-measure selection, with absolute accompaniment time. */
+  onMeasureSelect?: (measure: number, time: number) => void
   /** 谱面缩放（配合容器限宽调整每行小节数，默认 1） */
   zoom?: number
   /** OSMD 原生跟随滚动开关（默认 true 原行为）。false = 滚动权移交调用方
@@ -48,11 +51,13 @@ export default function ScoreSheet({
   accent = '#3ddfae',
   scoreRef,
   onMeasureChange,
+  onMeasureSelect,
   zoom = 1,
   autoScroll = true,
   autoShowCursor = false,
 }: Props) {
   const divRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const osmdRef = useRef<OSMDScore | null>(null)
@@ -70,6 +75,18 @@ export default function ScoreSheet({
   // （ready→countdown→performing）都重载谱面——只取挂载/重挂载当下的值即可
   const autoShowRef = useRef(autoShowCursor)
   useEffect(() => { autoShowRef.current = autoShowCursor }, [autoShowCursor])
+  const measureSelectRef = useRef(onMeasureSelect)
+  const loadedContent = useRef<{ osmd: OSMDScore; xml: string; timeline: Timeline } | null>(null)
+  const retainedSelection = useRef<{ xml: string; timeline: Timeline; measure: number | null } | null>(null)
+  useEffect(() => { measureSelectRef.current = onMeasureSelect }, [onMeasureSelect])
+  useEffect(() => {
+    if (!rootRef.current) return
+    return bindMeasureTap(rootRef.current, (x, y) => {
+      if (!measureSelectRef.current) return
+      const hit = osmdRef.current?.selectMeasureAtPoint(x, y)
+      if (hit) measureSelectRef.current(hit.measure, hit.time)
+    })
+  }, [])
 
   useEffect(() => {
     const mq = window.matchMedia(`(min-width: ${FIT_MIN_VIEWPORT}px)`)
@@ -97,6 +114,7 @@ export default function ScoreSheet({
     if (scoreRef) scoreRef.current = osmd
     if (onMeasureChange) osmd.onMeasureChange = onMeasureChange
     return () => {
+      if (loadedContent.current?.osmd === osmd) retainedSelection.current = { ...loadedContent.current, measure: osmd.getSelectedMeasure() }
       osmd.onMeasureChange = undefined
       osmd.dispose()
       osmdRef.current = null
@@ -115,8 +133,12 @@ export default function ScoreSheet({
       .load(xml, timeline)
       .then(() => {
         if (osmdRef.current === osmd) {
+          loadedContent.current = { osmd, xml, timeline }
           // fit 模式：渲染完成才知道虚拟谱面高，补一次缩放与高度补偿
           applyScaleRef.current()
+          const retained = retainedSelection.current
+          if (retained?.xml === xml && retained.timeline === timeline && retained.measure !== null && measureSelectRef.current) osmd.selectMeasure(retained.measure)
+          retainedSelection.current = null
           if (autoShowRef.current) {
             // 演奏/倒数中重挂载：恢复光标（下一帧 syncToTime 快进回当前小节）；
             // HUD 初始化回调跳过——演奏中由主循环驱动，避免先跳回第 1 小节再弹回
@@ -124,7 +146,7 @@ export default function ScoreSheet({
           } else if (onMeasureChange) {
             // HUD 初始化：谱面一就绪即报第 1 小节（终点标记不是真实小节），不等起奏第一帧
             const total = timeline.measureTimes.filter((e) => !e.end).length
-            onMeasureChange(1, total)
+            onMeasureChange(retained?.xml === xml && retained.timeline === timeline ? retained.measure ?? 1 : 1, total)
           }
         }
       })
@@ -163,7 +185,7 @@ export default function ScoreSheet({
   }, [mode])
 
   return (
-    <div className="score-sheet">
+    <div className="score-sheet" ref={rootRef}>
       {error && <div className="sheet-error">曲谱渲染失败：{error}</div>}
       {/* key 分枝防「容器复用 + 命令式清空」互踩：跨模式切换时两分支外层同为
           .sheet-container（div），React 默认复用 DOM 节点——而 OSMDScore.dispose

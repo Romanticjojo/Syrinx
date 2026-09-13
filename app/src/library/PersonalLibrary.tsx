@@ -6,6 +6,7 @@ import { decodeLibraryBackup, encodeLibraryBackupParts, type BackupPart } from '
 import LibraryImport from './LibraryImport'
 import LibraryDetail from './LibraryDetail'
 import LibraryMetadata from './LibraryMetadata'
+import LibraryMenu from './LibraryMenu'
 import { Icon, ScoreCover } from './ui'
 import { downloadLocal, errorMessage } from './library-utils'
 import './library.css'
@@ -29,19 +30,22 @@ function ScoreArtwork({ score }: { score: PersonalScoreSummary }) {
   }, [score.id, score.hasCover, key])
   return <ScoreCover title={score.title} composer={score.composer} mode={score.settings.mode} image={score.hasCover && cover?.key === key ? cover.image : null} />
 }
-function LibraryItem({ score, list, checked, folderName, onSelect, onOpen, onEdit, onMove, onDelete, onFavorite }: {
-  score: PersonalScoreSummary; list: boolean; checked: boolean; folderName: string
+function LibraryItem({ score, list, checked, selecting, onSelect, onOpen, onEdit, onMove, onDelete, onFavorite }: {
+  score: PersonalScoreSummary; list: boolean; checked: boolean; selecting: boolean
   onSelect: () => void; onOpen: () => void; onEdit: () => void; onMove: () => void; onDelete: () => void; onFavorite: () => void
 }) {
-  return <article className={`${list ? 'library-list-row' : 'library-card'}${checked ? ' is-selected' : ''}`}>
-    <label className="library-select-score"><input type="checkbox" aria-label={`选择 ${score.title}`} checked={checked} onChange={onSelect} /><span>选择</span></label>
-    <button className="library-card-open" onClick={onOpen} aria-label={`打开 ${score.title}`}><ScoreArtwork score={score} />{!list && <span className="library-card-open-hint"><Icon name="sheet" />翻开乐谱</span>}</button>
-    <div className="library-item-description"><div className="library-card-info"><button className="library-title-button" onClick={onOpen}>{score.title}</button><button className={`library-icon-button${score.favorite ? ' is-favorite' : ''}`} aria-label={`${score.favorite ? '取消收藏' : '收藏'} ${score.title}`} aria-pressed={score.favorite} onClick={onFavorite}><Icon name="star" size={17} /></button></div>
-      <p className="library-card-composer">{score.composer || '未填写作者信息'}</p>
-      <div className="library-card-meta"><span>{score.settings.mode === 'original' ? '钢琴伴奏' : '电子乐谱'}</span><span title={folderName}>{folderName}</span></div>
+  return <article className={`${list ? 'library-list-row' : 'library-card'}${checked ? ' is-selected' : ''}${selecting ? ' is-selecting' : ''}`}>
+    {selecting && <label className="library-select-score"><input type="checkbox" aria-label={`选择 ${score.title}`} checked={checked} onChange={onSelect} /><span>选择</span></label>}
+    <button className="library-card-open" onClick={selecting ? onSelect : onOpen} aria-label={`${selecting ? '选择乐谱' : '打开'} ${score.title}`}><ScoreArtwork score={score} />{!list && !selecting && <span className="library-card-open-hint"><Icon name="sheet" />翻开乐谱</span>}</button>
+    <div className="library-item-description"><div className="library-card-info"><button className="library-title-button" onClick={selecting ? onSelect : onOpen} title={score.title}>{score.title}</button>{score.favorite && <span className="library-favorite-mark" aria-label="已收藏"><Icon name="star" size={13} /></span>}</div>
+      {score.composer && <p className="library-card-composer">{score.composer}</p>}
     </div>
-    {list && <time className="library-added-date">{new Date(score.createdAt).toLocaleDateString('zh-CN')}</time>}
-    <div className="library-card-actions"><button onClick={onEdit} aria-label={`编辑 ${score.title}`}>编辑信息</button><button onClick={onMove} aria-label={`移动 ${score.title}`}>移动到</button><button onClick={onDelete} aria-label={`移除 ${score.title}`}>移除</button></div>
+    {!selecting && <LibraryMenu label={`${score.title} 的更多操作`} items={[
+      { label: '编辑信息', onSelect: onEdit },
+      { label: '移动到文件夹', onSelect: onMove },
+      { label: score.favorite ? '取消收藏' : '收藏乐谱', onSelect: onFavorite },
+      { label: '移除乐谱', onSelect: onDelete, danger: true, divider: true },
+    ]} />}
   </article>
 }
 
@@ -59,6 +63,7 @@ export default function PersonalLibrary() {
   const [view, setView] = useState(savedView)
   const [page, setPage] = useState(0)
   const [checked, setChecked] = useState<string[]>([])
+  const [selecting, setSelecting] = useState(false)
   const [moving, setMoving] = useState<string[] | null>(null)
   const [targetFolder, setTargetFolder] = useState('')
   const [folderEditor, setFolderEditor] = useState<{ id?: string; name: string } | null>(null)
@@ -73,6 +78,7 @@ export default function PersonalLibrary() {
   const [dragging, setDragging] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
   const backupInput = useRef<HTMLInputElement>(null)
+  const toolbar = useRef<HTMLDivElement>(null)
   const mounted = useRef(true)
   const readGeneration = useRef(0)
   const editGeneration = useRef(0)
@@ -121,6 +127,10 @@ export default function PersonalLibrary() {
     catch (e) { setError(errorMessage(e)) }
   }
   const resetPage = () => { setPage(0); setChecked([]) }
+  const turnPage = (next: number) => {
+    setPage(next)
+    toolbar.current?.scrollIntoView({ block: 'start' })
+  }
   const chooseFolder = (id: string | null) => { setFolder(id); resetPage() }
   const chooseView = (next: 'grid' | 'list') => {
     setView(next); resetPage()
@@ -186,14 +196,11 @@ export default function PersonalLibrary() {
   const move = async () => {
     if (!moving || busy) return
     setBusy(true); setError('')
-    try { await scoreRepository.moveScores(moving, targetFolder || null); await refresh(); setNotice(`已移动 ${moving.length} 份乐谱。`); setMoving(null); setChecked([]) }
+    try { await scoreRepository.moveScores(moving, targetFolder || null); await refresh(); setNotice(`已移动 ${moving.length} 份乐谱。`); setMoving(null); setChecked([]); setSelecting(false) }
     catch (e) { setError(errorMessage(e)) }
     finally { setBusy(false) }
   }
   const beginMove = (ids: string[]) => { setMoving(ids); setTargetFolder(folder ?? ''); setError('') }
-  const folderNames = new Map(folders.map((item) => [item.id, item.name]))
-  const folderCounts = new Map<string, number>()
-  for (const score of scores) { const id = score.folderId || ''; folderCounts.set(id, (folderCounts.get(id) || 0) + 1) }
   const activeFolder = folders.find((item) => item.id === folder)
   const lowerQuery = query.trim().toLocaleLowerCase()
   const inFolder = (score: PersonalScoreSummary) => folder === null || (score.folderId || '') === folder
@@ -203,27 +210,60 @@ export default function PersonalLibrary() {
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize))
   const currentPage = Math.min(page, pageCount - 1)
   const visible = filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize)
-  const recent = scores.filter((score) => score.lastOpenedAt !== null).sort((a, b) => b.lastOpenedAt! - a.lastOpenedAt!).slice(0, 6)
   return <div className="personal-library" onDragOver={(e) => { if (!record && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false) }} onDrop={(e) => { e.preventDefault(); setDragging(false); if (!record && !files.length) selectFiles([...e.dataTransfer.files]) }}>
     <input ref={fileInput} className="library-file-input" type="file" accept=".musicxml,.xml,.mxl" multiple aria-label="选择 MusicXML 乐谱文件" onChange={(e) => { selectFiles([...e.target.files ?? []]); e.target.value = '' }} />
     <input ref={backupInput} className="library-file-input" type="file" accept=".json,application/json" aria-label="选择仓库备份文件" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void readBackup(file) }} />
     {record ? <LibraryDetail key={record.id} record={record} onBack={() => setRecord(null)} onEdit={() => { void edit(record.id) }} onFavorite={() => { void favorite(summarize(record)) }} onSave={(settings) => update(record.id, { settings })} /> : <>
-      <header className="library-heading"><div><div className="library-eyebrow">YOUR MUSIC, ALWAYS WITH YOU</div><h1>个人仓库<span>{scores.length.toString().padStart(2, '0')}</span></h1><p>收藏每一段，想再吹起的旋律。</p></div><div className="library-heading-actions"><button className="btn-pill" disabled={busy || loading} onClick={() => { void exportBackup() }}><Icon name="download" />导出备份</button><button className="library-primary" disabled={loading} onClick={() => fileInput.current?.click()}><Icon name="add" />导入乐谱</button></div></header>
+      <header className="library-heading">
+        <h1>个人仓库<span>{scores.length} 份乐谱</span></h1>
+        <div className="library-heading-actions">
+          <button className="library-primary" disabled={loading} onClick={() => fileInput.current?.click()}><Icon name="add" />导入乐谱</button>
+          <LibraryMenu label="仓库选项" disabled={busy || loading} items={[
+            { label: '选择乐谱', disabled: !scores.length, onSelect: () => { setSelecting(true); setChecked([]) } },
+            { label: '新建文件夹', onSelect: () => { setFolderEditor({ name: '' }); setError('') } },
+            ...(activeFolder ? [
+              { label: '重命名文件夹', onSelect: () => { setFolderEditor({ id: activeFolder.id, name: activeFolder.name }); setError('') } },
+              { label: '移除文件夹', onSelect: () => { setFolderToRemove(activeFolder); setError('') } },
+            ] : []),
+            { label: '导出备份', divider: true, onSelect: () => { void exportBackup() } },
+            { label: '从备份恢复', onSelect: () => backupInput.current?.click() },
+          ]} />
+        </div>
+      </header>
       {!!error && <div className="library-error" role="alert">{error}<button onClick={() => { setError(''); void refresh() }}>重试</button></div>}
       {!!notice && <div className="library-notice" role="status"><Icon name="check" />{notice}<button aria-label="关闭提示" onClick={() => setNotice('')}>×</button></div>}
-      {!loading && <section className="library-folders" aria-label="文件夹"><div className="folder-shelf"><button className={folder === null ? 'selected' : ''} aria-pressed={folder === null} onClick={() => chooseFolder(null)}><Icon name="sheet" />全部文件夹<span>{scores.length}</span></button><button className={folder === '' ? 'selected' : ''} aria-pressed={folder === ''} onClick={() => chooseFolder('')}><Icon name="folder" />未分类<span>{folderCounts.get('') || 0}</span></button>{folders.map((item) => <button key={item.id} className={folder === item.id ? 'selected' : ''} aria-pressed={folder === item.id} onClick={() => chooseFolder(item.id)} title={item.name}><Icon name="folder" /><strong>{item.name}</strong><span>{folderCounts.get(item.id) || 0}</span></button>)}</div><button className="folder-create" onClick={() => { setFolderEditor({ name: '' }); setError('') }}><Icon name="add" size={17} />新建文件夹</button></section>}
-      {activeFolder && <div className="active-folder"><h2>{activeFolder.name}</h2><button onClick={() => { setFolderEditor({ id: activeFolder.id, name: activeFolder.name }); setError('') }}>重命名</button><button onClick={() => { setFolderToRemove(activeFolder); setError('') }}>移除文件夹</button></div>}
+      {!loading && (scores.length > 0 || folders.length > 0) && (
+        <div ref={toolbar} className="library-toolbar">
+          <label className="library-search"><Icon name="search" size={18} /><input aria-label="搜索个人乐谱" placeholder="搜索曲名、作者" value={query} onChange={(e) => { setQuery(e.target.value); resetPage() }} /></label>
+          <label className="library-folder-picker"><Icon name="folder" size={17} /><select aria-label="浏览文件夹" value={folder ?? '__all'} onChange={(e) => chooseFolder(e.target.value === '__all' ? null : e.target.value)}>
+            <option value="__all">全部乐谱</option><option value="">未分类</option>{folders.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select></label>
+          <div className="library-toolbar-options">
+            <button className={`library-menu-trigger${filter === 'favorites' ? ' is-active' : ''}`} aria-label="只看收藏" title="只看收藏" aria-pressed={filter === 'favorites'} onClick={() => { setFilter(filter === 'favorites' ? 'all' : 'favorites'); resetPage() }}><Icon name="star" size={18} /></button>
+            <LibraryMenu label="乐谱排序" items={[
+              { label: '最近加入', selected: sort === 'newest', onSelect: () => { setSort('newest'); resetPage() } },
+              { label: '最近打开', selected: sort === 'opened', onSelect: () => { setSort('opened'); resetPage() } },
+              { label: '按名称', selected: sort === 'title', onSelect: () => { setSort('title'); resetPage() } },
+            ]}><Icon name="sort" size={18} /></LibraryMenu>
+            <div className="library-view-switch" role="group" aria-label="浏览方式"><button aria-label="卡片视图" title="卡片视图" aria-pressed={view === 'grid'} onClick={() => chooseView('grid')}><Icon name="grid" size={16} /></button><button aria-label="列表视图" title="列表视图" aria-pressed={view === 'list'} onClick={() => chooseView('list')}><Icon name="list" size={16} /></button></div>
+          </div>
+        </div>
+      )}
       {loading ? <div className="library-progress" role="status">正在打开你的乐谱库…</div> : scores.length === 0 && folder === null ? <div className="library-empty">
-        <div className="library-empty-copy"><span className="empty-number">CHAPTER 01</span><h2>让厚厚的乐谱，<br />轻轻装进口袋。</h2><p>从一份 MusicXML 开始。<br />翻阅、收藏，把熟悉的旋律整理在一起。</p><button className="library-primary" onClick={() => fileInput.current?.click()}><Icon name="add" />导入第一份乐谱</button><div className="empty-formats">MusicXML · XML · MXL<span>也可以将文件拖到这里</span></div></div>
+        <div className="library-empty-copy"><h2>你的乐谱，随身收藏。</h2><p>导入 MusicXML，开始阅读与练习。</p><button className="library-primary" onClick={() => fileInput.current?.click()}><Icon name="add" />导入第一份乐谱</button><div className="empty-formats">MusicXML · XML · MXL<span>也可以将文件拖到这里</span></div></div>
         <div className="empty-books" aria-hidden="true"><div className="empty-book-back" /><ScoreCover title="你的下一首" composer="A COLLECTION OF YOUR OWN" large /></div>
       </div> : <>
-        {recent.length > 0 && !lowerQuery && filter === 'all' && folder === null && <section className="library-recent"><div className="library-section-heading"><h2>接着上次的旋律</h2><span>最近打开</span></div><div className="recent-shelf">{recent.map((score) => <button className="recent-card" key={score.id} onClick={() => { void open(score) }}><div className="recent-mark"><Icon name="sheet" size={28} /></div><div><strong>{score.title}</strong><span>{score.composer || '我的乐谱'}</span></div><Icon name="back" size={16} /></button>)}</div></section>}
-        <div className="library-controls"><div className="library-filters"><button className={filter === 'all' ? 'selected' : ''} aria-pressed={filter === 'all'} onClick={() => { setFilter('all'); resetPage() }}>全部乐谱 <span>{folderScores.length}</span></button><button className={filter === 'favorites' ? 'selected' : ''} aria-pressed={filter === 'favorites'} onClick={() => { setFilter('favorites'); resetPage() }}>我的收藏 <span>{folderScores.filter((score) => score.favorite).length}</span></button></div><div className="library-find"><label className="library-search"><Icon name="search" size={17} /><input aria-label="搜索个人乐谱" placeholder="搜索曲名、作者、标签" value={query} onChange={(e) => { setQuery(e.target.value); resetPage() }} /></label><select aria-label="乐谱排序" value={sort} onChange={(e) => { setSort(e.target.value); resetPage() }}><option value="newest">最近加入</option><option value="opened">最近打开</option><option value="title">按名称</option></select></div></div>
-        <div className="library-browse-bar"><div><button className="text-button" disabled={!visible.length} onClick={() => setChecked(visible.map((score) => score.id))}>选择本页</button>{!!checked.length && <><span>已选 {checked.length} 份</span><button className="text-button" onClick={() => beginMove(checked)}>移动到文件夹</button><button className="text-button" onClick={() => setChecked([])}>取消选择</button></>}</div><div className="library-view-switch" role="group" aria-label="浏览方式"><button aria-label="卡片视图" aria-pressed={view === 'grid'} onClick={() => chooseView('grid')}><Icon name="grid" size={16} />卡片</button><button aria-label="列表视图" aria-pressed={view === 'list'} onClick={() => chooseView('list')}><Icon name="list" size={16} />列表</button></div></div>
-        {visible.length ? <div className={view === 'grid' ? 'library-grid' : 'library-list'}>{visible.map((score) => <LibraryItem key={score.id} score={score} list={view === 'list'} checked={checked.includes(score.id)} folderName={folderNames.get(score.folderId || '') || '未分类'} onSelect={() => setChecked((ids) => ids.includes(score.id) ? ids.filter((id) => id !== score.id) : [...ids, score.id])} onOpen={() => { void open(score) }} onEdit={() => { void edit(score.id) }} onMove={() => beginMove([score.id])} onDelete={() => { setRemoving(score); setError('') }} onFavorite={() => { void favorite(score) }} />)}</div> : <div className="library-no-results"><Icon name={folder !== null && !query ? 'folder' : 'search'} size={30} /><h3>{folder !== null && !query && filter === 'all' ? '这个文件夹还没有乐谱' : filter === 'favorites' && !query ? '把喜欢的乐谱留在这里' : '还没有找到这段旋律'}</h3><p>{folder !== null && !query ? '可以导入乐谱，或从全部乐谱中批量移入。' : '试试其他曲名、作者或标签。'}</p><button className="btn-pill" onClick={() => { setQuery(''); setFilter('all'); chooseFolder(null) }}>查看全部乐谱</button></div>}
-        {pageCount > 1 && <nav className="reader-pagination" aria-label="仓库分页"><button className="btn-pill" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><span aria-live="polite">{currentPage + 1} / {pageCount} 页 · {filtered.length} 份</span><button className="btn-pill" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</button></nav>}
+        {selecting && <div className="library-selection-bar" role="region" aria-label="整理乐谱">
+          <span aria-live="polite">已选 {checked.length} 份</span>
+          <button className="text-button" disabled={!visible.length} onClick={() => setChecked((previous) => [...new Set([...previous, ...visible.map((score) => score.id)])])}>选择本页</button>
+          <button className="text-button" disabled={!checked.length} onClick={() => beginMove(checked)}>移动到文件夹</button>
+          <button className="btn-pill" onClick={() => { setSelecting(false); setChecked([]) }}>完成整理</button>
+        </div>}
+        {(filter === 'favorites' || lowerQuery) && <div className="library-result-summary"><span>{filter === 'favorites' ? '收藏乐谱 · ' : ''}{filtered.length} 份{lowerQuery ? '搜索结果' : ''}</span><button className="text-button" onClick={() => { setFilter('all'); setQuery(''); resetPage() }}>清除筛选</button></div>}
+        {visible.length ? <div className={view === 'grid' ? 'library-grid' : 'library-list'}>{visible.map((score) => <LibraryItem key={score.id} score={score} list={view === 'list'} checked={checked.includes(score.id)} selecting={selecting} onSelect={() => setChecked((ids) => ids.includes(score.id) ? ids.filter((id) => id !== score.id) : [...ids, score.id])} onOpen={() => { void open(score) }} onEdit={() => { void edit(score.id) }} onMove={() => beginMove([score.id])} onDelete={() => { setRemoving(score); setError('') }} onFavorite={() => { void favorite(score) }} />)}</div> : <div className="library-no-results"><Icon name={folder !== null && !query ? 'folder' : 'search'} size={30} /><h3>{folder !== null && !query && filter === 'all' ? '这个文件夹还没有乐谱' : filter === 'favorites' && !query ? '把喜欢的乐谱留在这里' : '还没有找到这段旋律'}</h3><p>{folder !== null && !query ? '可以导入乐谱，或从全部乐谱中批量移入。' : '试试其他曲名、作者或标签。'}</p><button className="btn-pill" onClick={() => { setQuery(''); setFilter('all'); chooseFolder(null) }}>查看全部乐谱</button></div>}
+        {pageCount > 1 && <nav className="reader-pagination" aria-label="仓库分页"><button className="btn-pill" disabled={currentPage === 0} onClick={() => turnPage(currentPage - 1)}>上一页</button><span aria-live="polite">{currentPage + 1} / {pageCount} 页 · {filtered.length} 份</span><button className="btn-pill" disabled={currentPage + 1 >= pageCount} onClick={() => turnPage(currentPage + 1)}>下一页</button></nav>}
       </>}
-      <footer className="library-footer"><span><Icon name="lock" size={15} />只保存在这台设备 · 建议定期备份</span><button disabled={busy} onClick={() => backupInput.current?.click()}><Icon name="upload" size={16} />{busy ? '正在处理…' : '从备份恢复'}</button></footer>
+      <footer className="library-footer"><span><Icon name="lock" size={14} />保存在此设备</span></footer>
     </>}
     {dragging && <div className="library-dropzone"><Icon name="upload" size={40} /><strong>松开，将乐谱带进来</strong><span>文件仅保存在本机</span></div>}
     {files.length > 0 && <LibraryImport files={files} folders={folders} defaultFolderId={folder || null} onClose={() => setFiles([])} onSaved={(saved, duplicate) => { setNotice(duplicate ? `“${saved.title}”已在仓库，保留已有信息。` : `“${saved.title}”已加入个人仓库。`); void refresh() }} />}

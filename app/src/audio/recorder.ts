@@ -32,15 +32,17 @@ export interface MicSession {
   /** 取当前分析帧（复用同一 Float32Array，调用方当帧用完即弃） */
   readFrame(): Float32Array
   /** 丢弃当前段并立即重开一段新采集 */
-  restartCapture(): void
+  restartCapture(): Promise<void>
   /** 暂停写入（音轨与分析流保持开启），对齐伴奏暂停 */
-  pauseCapture(): void
+  pauseCapture(): Promise<void>
   /** 继续写入 */
-  resumeCapture(): void
+  resumeCapture(): Promise<void>
   /** 丢弃当前段，写入流关闭 */
-  discardCapture(): void
+  discardCapture(): Promise<void>
+  /** 封存当前段但保持麦克风、分析支路与写入节点可继续使用。 */
+  finishCapture(): Promise<RecordingResult | null>
   /** 定稿采集、释放音轨并返回整段 blob 与可回放 ObjectURL（调用方负责 revoke） */
-  stop: () => Promise<RecordingResult>
+  stop: () => Promise<RecordingResult | null>
   /** 中途退出：丢弃一切并释放音轨，不产出 blob */
   release(): void
 }
@@ -57,6 +59,7 @@ class MicTapProcessor extends AudioWorkletProcessor {
       if (e.data && e.data.type === 'gate') {
         this.gateOn = e.data.on
         this.id = e.data.id
+        this.port.postMessage({ type: 'gate-ack', on: this.gateOn, id: this.id })
       }
     }
   }
@@ -75,10 +78,12 @@ registerProcessor('mic-tap', MicTapProcessor)
 /** 直采节点统一门控接口（worklet 与 fallback 同构） */
 interface Tap {
   /** 开/关写入（on=false 时样本直接丢弃，等价 MediaRecorder pause 语义） */
-  setGate(on: boolean, id: number): void
+  setGate(on: boolean, id: number): Promise<void>
   /** 断开 source 连接并释放节点 */
   dispose(): void
 }
+
+const GATE_ACK_TIMEOUT_MS = 2_000
 
 /** 已注册过 mic-tap 模块的上下文（同上下文重复 addModule 会抛异常） */
 const workletReady = new WeakSet<AudioContext>()
@@ -99,11 +104,60 @@ async function createWorkletTap(
     workletReady.add(ctx)
   }
   const node = new AudioWorkletNode(ctx, 'mic-tap', { numberOfInputs: 1, numberOfOutputs: 0 })
-  node.port.onmessage = (e: MessageEvent<{ id: number; pcm: Float32Array }>) => onChunk(e.data.id, e.data.pcm)
+  const gateWaiters: {
+    on: boolean
+    id: number
+    resolve: () => void
+    reject: (error: Error) => void
+    timer: ReturnType<typeof setTimeout>
+  }[] = []
+  let disposed = false
+  node.port.onmessage = (e: MessageEvent<{ type?: string; on?: boolean; id: number; pcm?: Float32Array }>) => {
+    if (e.data.type === 'gate-ack') {
+      const index = gateWaiters.findIndex((waiter) => waiter.id === e.data.id && waiter.on === e.data.on)
+      if (index >= 0) {
+        const waiter = gateWaiters.splice(index, 1)[0]
+        clearTimeout(waiter.timer)
+        waiter.resolve()
+      }
+      return
+    }
+    if (e.data.pcm) onChunk(e.data.id, e.data.pcm)
+  }
   source.connect(node)
   return {
-    setGate: (on, id) => void node.port.postMessage({ type: 'gate', on, id }),
+    setGate: (on, id) => new Promise((resolve, reject) => {
+      if (disposed) {
+        reject(new Error('录音写入节点已关闭'))
+        return
+      }
+      const waiter = {
+        on,
+        id,
+        resolve,
+        reject,
+        timer: setTimeout(() => {
+          const index = gateWaiters.indexOf(waiter)
+          if (index >= 0) gateWaiters.splice(index, 1)
+          reject(new Error('录音写入确认超时'))
+        }, GATE_ACK_TIMEOUT_MS),
+      }
+      gateWaiters.push(waiter)
+      try {
+        node.port.postMessage({ type: 'gate', on, id })
+      } catch (error) {
+        clearTimeout(waiter.timer)
+        gateWaiters.splice(gateWaiters.indexOf(waiter), 1)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    }),
     dispose: () => {
+      if (disposed) return
+      disposed = true
+      for (const waiter of gateWaiters.splice(0)) {
+        clearTimeout(waiter.timer)
+        waiter.reject(new Error('录音写入节点已关闭'))
+      }
       node.port.onmessage = null
       node.port.close()
       try {
@@ -130,16 +184,20 @@ function createFallbackTap(
   source.connect(sp)
   let gateOn = false
   let id = -1
+  let disposed = false
   sp.onaudioprocess = (e) => {
     if (!gateOn) return
     onChunk(id, new Float32Array(e.inputBuffer.getChannelData(0)))
   }
   return {
-    setGate: (on, nextId) => {
+    setGate: async (on, nextId) => {
+      if (disposed) throw new Error('录音写入节点已关闭')
       gateOn = on
       id = nextId
     },
     dispose: () => {
+      if (disposed) return
+      disposed = true
       sp.onaudioprocess = null
       try {
         source.disconnect(sp)
@@ -174,6 +232,9 @@ export async function openMic(ctx: AudioContext): Promise<MicSession> {
   // 写入支路：收集当前段分片（id 作废旧段在途分片）；gate 由采集语义驱动
   let chunks: Float32Array[] = []
   let captureId = -1 // -1 = 无进行中的段
+  let nextCaptureId = 0
+  let gateQueue = Promise.resolve()
+  let gateFailure: unknown = null
   const onChunk = (id: number, pcm: Float32Array) => {
     if (id === captureId && id >= 0) chunks.push(pcm)
   }
@@ -186,16 +247,19 @@ export async function openMic(ctx: AudioContext): Promise<MicSession> {
     tap = createFallbackTap(ctx, source, onChunk)
   }
 
-  const releaseTracks = () => stream.getTracks().forEach((t) => t.stop())
+  let released = false
+  const releaseTracks = () => {
+    if (released) return
+    released = true
+    stream.getTracks().forEach((t) => t.stop())
+  }
 
-  const finalize = (): RecordingResult => {
+  const finalize = (): RecordingResult | null => {
     const collected = chunks
     chunks = []
     captureId = -1
     if (!collected.length) {
-      // 一分片都没到（极少见：stop 早于首个回调）--产出空 WAV 保持契约
-      const blob = new Blob()
-      return { blob, url: URL.createObjectURL(blob), mime: 'audio/wav', silent: false }
+      return null
     }
     const { blob, silent } = buildRecordingWav(collected, ctx.sampleRate)
     if (silent) {
@@ -207,6 +271,28 @@ export async function openMic(ctx: AudioContext): Promise<MicSession> {
     return { blob, url: URL.createObjectURL(blob), mime: 'audio/wav', silent }
   }
 
+  const setGate = (on: boolean, id: number) => {
+    const previous = gateQueue
+    const pending = previous.then(() => {
+      if (gateFailure) throw gateFailure
+      return tap.setGate(on, id)
+    })
+    gateQueue = pending.then(
+      () => {},
+      (error) => { gateFailure = error },
+    )
+    return pending
+  }
+
+  const finishCapture = async (): Promise<RecordingResult | null> => {
+    const id = captureId
+    if (id < 0) return null
+    await setGate(false, id)
+    if (captureId !== id) return null
+    captureId = -1
+    return finalize()
+  }
+
   return {
     analyser,
     sampleRate: () => ctx.sampleRate,
@@ -214,30 +300,36 @@ export async function openMic(ctx: AudioContext): Promise<MicSession> {
       analyser.getFloatTimeDomainData(frameBuf)
       return frameBuf
     },
-    restartCapture() {
+    async restartCapture() {
+      await gateQueue
+      if (gateFailure) throw gateFailure
       chunks = []
-      captureId += 1
-      tap.setGate(true, captureId)
+      captureId = ++nextCaptureId
+      await setGate(true, captureId)
     },
-    pauseCapture() {
-      tap.setGate(false, captureId)
+    async pauseCapture() {
+      if (captureId >= 0) await setGate(false, captureId)
     },
-    resumeCapture() {
-      if (captureId >= 0) tap.setGate(true, captureId)
+    async resumeCapture() {
+      if (captureId >= 0) await setGate(true, captureId)
     },
-    discardCapture() {
+    async discardCapture() {
+      const id = captureId
+      if (id >= 0) await setGate(false, id)
+      if (captureId !== id) return
       chunks = []
       captureId = -1
-      tap.setGate(false, -1)
     },
+    finishCapture,
     stop: async () => {
-      tap.setGate(false, -1)
-      tap.dispose()
-      releaseTracks()
-      return finalize()
+      try {
+        return await finishCapture()
+      } finally {
+        tap.dispose()
+        releaseTracks()
+      }
     },
     release() {
-      tap.setGate(false, -1)
       tap.dispose()
       releaseTracks()
     },
