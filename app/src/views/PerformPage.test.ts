@@ -873,22 +873,71 @@ describe('演奏录音会话', () => {
     expect(mic.restartCapture).toHaveBeenCalledTimes(2)
   })
 
-  it('倒数期间再次点选会取消旧跳转，只有最后目标恢复播放', async () => {
+  it('续录倒数中点选小节：取消倒数落在暂停态，按播放重新倒数后从定位点续录', async () => {
     const mic = makeMic()
     mocked.openMic.mockResolvedValue(mic)
     await mountPerformPage(1)
     const container = containers.at(-1)!
     await beginPerformance(container)
     mocked.engine.time = 0.25
-    mocked.engine.play.mockClear()
-
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第2小节"]')!.click())
+    // 播放中点选（现状保持）：封段 + 自动倒数续录
+    expect(useAppStore.getState().performanceSession?.segments).toHaveLength(1)
+    mocked.engine.ctxTime = 11 // 新倒数 t0≈10.12，remain>0 → 倒数进行中
+    await flushRaf()
+    expect(container.querySelector('.perform-overlay.countdown')).not.toBeNull()
+
+    mocked.engine.play.mockClear()
+    mocked.engine.scheduleTick.mockClear()
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第1小节"]')!.click())
+    // 新行为：倒数被打断——浮层消失、暂停态（播放键）、不自动重启、toast 提示定位
+    expect(container.querySelector('.perform-overlay.countdown')).toBeNull()
+    expect(container.querySelector('.ctl.main')!.getAttribute('aria-label')).toBe('播放')
+    expect(mocked.engine.scheduleTick).not.toHaveBeenCalled()
+    expect(mocked.engine.play).not.toHaveBeenCalled()
+    expect(mocked.engine.playing).toBe(false)
+    expect(mocked.engine.seek).toHaveBeenCalledWith(0.1)
+    expect(container.querySelector('.perform-toast')?.textContent).toContain('已定位')
+
+    // 按播放：重新 4 拍倒数（而非直接续播），归零后从定位点续录
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="播放"]')!.click())
+    expect(mocked.engine.scheduleTick).toHaveBeenCalledTimes(4)
+    expect(mocked.engine.play).not.toHaveBeenCalled()
     mocked.engine.ctxTime = 20
     await flushRaf()
-
     expect(mocked.engine.play).toHaveBeenCalledTimes(1)
     expect(mocked.engine.play).toHaveBeenCalledWith(0.1)
+    expect(mocked.engine.playing).toBe(true)
+    expect(mic.restartCapture).toHaveBeenCalledTimes(2)
+  })
+
+  it('初次倒数中点选小节：立即取消倒数并回到就绪浮层，不再自动重启', async () => {
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await act(async () => container.querySelector<HTMLButtonElement>('.ov-start')!.click())
+    mocked.engine.ctxTime = 1 // t0=0.12、4 拍×0.5s → remain>0，倒数进行中
+    await flushRaf()
+    expect(container.querySelector('.perform-overlay.countdown')).not.toBeNull()
+    expect(container.querySelector('.count-num')!.textContent).toBe('3')
+
+    mocked.engine.scheduleTick.mockClear()
+    mocked.engine.play.mockClear()
+    mocked.engine.seek.mockClear()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第2小节"]')!.click())
+    // 新行为：倒数取消、定位、回 ready（.ov-start 重现 = 等用户再点播放）
+    expect(container.querySelector('.perform-overlay.countdown')).toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('.ov-start')).not.toBeNull()
+    expect(mocked.engine.scheduleTick).not.toHaveBeenCalled()
+    expect(mocked.engine.play).not.toHaveBeenCalled()
+    expect(mocked.engine.playing).toBe(false)
+    expect(mocked.engine.seek).toHaveBeenCalledWith(0.5)
+
+    // 再点开始：天然重新倒数并从定位点起奏
+    await act(async () => container.querySelector<HTMLButtonElement>('.ov-start')!.click())
+    expect(mocked.engine.scheduleTick).toHaveBeenCalledTimes(4)
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.play).toHaveBeenCalledWith(0.5)
   })
 
   it('第一次封段仍在等待时重复点选，最终仍按播放中语义从最后目标续播', async () => {
@@ -1124,6 +1173,8 @@ describe('演奏录音会话', () => {
     await flushRaf()
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第1小节"]')!.click())
+    // 排空 seekTo 异步链（seal→定位→重排倒数需要多个微任务 tick，单次 act 排不干）
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
     mocked.engine.ctxTime = 30
     await flushRaf()
     expect(mocked.engine.playing).toBe(true)

@@ -24,6 +24,7 @@ type Phase = 'loading' | 'ready' | 'countdown' | 'performing' | 'ended' | 'error
 
 const IDLE_MS = 3200
 const COUNT_BEATS = 4
+const SEEK_TOAST = '已定位，播放时从这里继续'
 const TAIL_GRACE = 0.6 // 末音后留给混响的余韵再收
 const LIVE_EVERY = 3 // 实时音高检测隔帧跑（≈20Hz），YIN O(W²) 控制开销
 
@@ -106,6 +107,9 @@ export default function PerformPage() {
   const [countdownRound, setCountdownRound] = useState(0)
   const transitionGenerationRef = useRef(0)
   const transitionShouldResumeRef = useRef(false)
+  /** 续录倒数被谱面点击打断时的「续录承诺」：定位点暂存于此，用户按播放
+   *  时改走 beginCountIn 重新倒数（而非直接续播），倒数归零后从该点续录。 */
+  const pendingReplayCountInRef = useRef<number | null>(null)
   const playOperationSeqRef = useRef(0)
   const playOwnerRef = useRef(0)
   const playIntentRef = useRef(false)
@@ -358,6 +362,7 @@ export default function PerformPage() {
     captureGenerationRef.current += 1
     cancelCountIn()
     transitionShouldResumeRef.current = false
+    pendingReplayCountInRef.current = null
     const stopSec = audioEngine.time
     playIntentRef.current = false
     audioEngine.pause()
@@ -451,6 +456,7 @@ export default function PerformPage() {
       cancelCountIn()
       startPendingRef.current = false
       resumePendingRef.current = false
+      pendingReplayCountInRef.current = null
       cancelPendingAccompaniment(song.id)
       audioEngine.onEnd = undefined
       playIntentRef.current = false
@@ -732,6 +738,14 @@ export default function PerformPage() {
       setPlaying(false)
       shellRef.current?.classList.remove('idle')
     } else if (!resumePendingRef.current) {
+      // 倒数被打断时承诺的续录点：按播放 = 重新倒数（而非直接续播），归零后从定位点续录
+      const pendingReplay = pendingReplayCountInRef.current
+      if (pendingReplay !== null) {
+        pendingReplayCountInRef.current = null
+        beginCountIn(pendingReplay, false)
+        wake()
+        return
+      }
       resumePendingRef.current = true
       const playOperation = claimPlayOperation()
       const generation = transitionGenerationRef.current
@@ -801,7 +815,7 @@ export default function PerformPage() {
         wake()
       })()
     }
-  }, [claimPlayOperation, pauseOwnedPlay, playOperationIsCurrent, resumeCapture, showToast, start, startCapture, wake])
+  }, [beginCountIn, claimPlayOperation, pauseOwnedPlay, playOperationIsCurrent, resumeCapture, showToast, start, startCapture, wake])
 
   /** 停止演奏：走与自然结束相同的 finish() 封存流程（伴奏停在点击时刻、
    *  Take.durationSec 截断为该时刻，回放页按截断口径统计与播放） */
@@ -828,8 +842,11 @@ export default function PerformPage() {
     }
   }, [])
 
-  /** 单次跳转事务：播放中先封段，再定位、倒数并续录；暂停/就绪只定位。 */
-  const seekTo = useCallback((t: number, measure?: number, nextRate?: number) => {
+  /** 单次跳转事务：播放中先封段，再定位、倒数并续录；暂停/就绪只定位。
+   *  interruptCountdown：谱面点击打断倒数——立即停倒数并落暂停态（initial 回
+   *  ready、续录记 pendingReplay 等播放重倒数），绝不自动重启；BPM 变速/重启
+   *  按钮等非谱面跳转不传此参，保持「自动重排倒数」现状。 */
+  const seekTo = useCallback((t: number, measure?: number, nextRate?: number, interruptCountdown = false) => {
       const currentPhase = phaseRef.current
       if (!['ready', 'performing', 'countdown'].includes(currentPhase)) return
       const tl = timelineRef.current
@@ -845,10 +862,15 @@ export default function PerformPage() {
         wake()
         return
       }
-      const resumeAfter = audioEngine.playing
-        || (currentPhase === 'countdown' && !countdownRef.current.initial)
-        || transitionShouldResumeRef.current
-      const initialCountdown = currentPhase === 'countdown' && countdownRef.current.initial
+      // 谱面点击打断倒数：取消后不自动重启（等用户按播放）。伴奏已在响（真播放中，
+      // 上一轮倒数刚归零、gate 尚未确认）不算打断对象；BPM 变速（prepareRate）除外
+      const interruptedCountdown = interruptCountdown
+        && currentPhase === 'countdown'
+        && !prepareRate
+        && !audioEngine.playing
+      const resumeAfter = !interruptedCountdown
+        && (audioEngine.playing || transitionShouldResumeRef.current)
+      const countdownInitial = currentPhase === 'countdown' && countdownRef.current.initial
       transitionShouldResumeRef.current = resumeAfter
       captureGenerationRef.current += 1
       cancelCountIn()
@@ -885,6 +907,7 @@ export default function PerformPage() {
             tempoPendingRef.current = false
             setTempoPending(false)
             transitionShouldResumeRef.current = false
+            pendingReplayCountInRef.current = null
             const stoppedPhase = currentPhase === 'ready' ? 'ready' : 'performing'
             phaseRef.current = stoppedPhase
             setPhase(stoppedPhase)
@@ -895,14 +918,40 @@ export default function PerformPage() {
         if (!mountedRef.current || finishedRef.current || generation !== transitionGenerationRef.current) return
         positionTransport(clamped, measure)
         if (currentPhase === 'ready') {
+          pendingReplayCountInRef.current = null
           phaseRef.current = 'ready'
           setPhase('ready')
-        } else if (resumeAfter || initialCountdown) beginCountIn(clamped, initialCountdown)
-        else {
+        } else if (prepareRate && currentPhase === 'countdown') {
+          // BPM 变速撞上倒数：显式速度操作，按新速度自动重启倒数（与谱面点击的「等播放」语义不同）
+          pendingReplayCountInRef.current = null
+          beginCountIn(clamped, countdownInitial)
+        } else if (resumeAfter) {
+          pendingReplayCountInRef.current = null
+          beginCountIn(clamped, false)
+        } else if (interruptedCountdown) {
+          if (countdownInitial) {
+            // 首次起奏的倒数被打断：回就绪浮层（start 自带倒数，天然满足「等播放再倒数」）
+            pendingReplayCountInRef.current = null
+            phaseRef.current = 'ready'
+            setPhase('ready')
+          } else {
+            // 续录倒数被打断：落暂停态记住定位点，按播放先倒数再续录
+            pendingReplayCountInRef.current = clamped
+            phaseRef.current = 'performing'
+            setPhase('performing')
+            showToast(SEEK_TOAST)
+          }
+        } else if (currentPhase === 'countdown') {
+          // 非谱面点击的倒数中跳转（重启按钮/进度轨键盘）：保持既有「自动重排倒数」
+          pendingReplayCountInRef.current = null
+          beginCountIn(clamped, countdownInitial)
+        } else {
+          // 暂停的演奏态点选：只定位（现状），按播放直接续播
+          pendingReplayCountInRef.current = null
           transitionShouldResumeRef.current = false
           phaseRef.current = 'performing'
           setPhase('performing')
-          showToast('已定位，播放时从这里继续')
+          showToast(SEEK_TOAST)
         }
         wake()
       })()
@@ -1144,7 +1193,7 @@ export default function PerformPage() {
             accent={song.accent}
             scoreRef={scoreRef}
             onMeasureChange={handleMeasure}
-            onMeasureSelect={(measure, time) => seekTo(time, measure)}
+            onMeasureSelect={(measure, time) => seekTo(time, measure, undefined, true)}
             zoom={0.85}
             autoScroll={false}
             autoShowCursor={phase === 'performing' || phase === 'countdown'}
