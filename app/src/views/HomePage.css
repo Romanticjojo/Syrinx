@@ -59,6 +59,8 @@
 .catalog-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .catalog-caption { font-size: 12px; color: var(--ink-faint); letter-spacing: .06em; }
 .edition-tab-mark { font-size: 9px; font-weight: 400; padding: 3px 5px; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink-dim); }
+.edition-notice-copy { display: grid; gap: 14px; }
+.edition-notice-copy p { margin: 0; }
 .nav-pill {
   background: transparent;
   color: var(--ink-dim);
