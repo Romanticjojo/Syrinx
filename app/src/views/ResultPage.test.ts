@@ -26,6 +26,8 @@ const mocked = vi.hoisted(() => ({
     decode: vi.fn(),
     setRate: vi.fn(async (rate: number) => { mocked.engine.rate = rate; return true }),
   },
+  loadAccompaniment: vi.fn(),
+  renderMix: vi.fn(),
 }))
 
 vi.mock('../songs', () => ({
@@ -51,6 +53,16 @@ vi.mock('../songs', () => ({
   }),
 }))
 vi.mock('../audio/AudioEngine', () => ({ audioEngine: mocked.engine }))
+vi.mock('../audio/accompaniment', () => ({
+  loadAccompaniment: (...args: unknown[]) => mocked.loadAccompaniment(...args),
+}))
+vi.mock('../audio/mix', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../audio/mix')>()
+  return {
+    ...actual,
+    renderMix: (...args: unknown[]) => mocked.renderMix(...(args as Parameters<typeof actual.renderMix>)),
+  }
+})
 vi.mock('../components/PlaybackDeck', () => ({
   default: ({ src, audioRef }: { src: string; audioRef: React.RefObject<HTMLAudioElement | null> }) =>
     createElement('audio', { ref: audioRef, src }),
@@ -90,6 +102,15 @@ const segmentFor = (id: string, startSec: number, stopSec: number): PerformanceS
 let root: Root | null = null
 let container: HTMLElement | null = null
 
+/** 混音测试替身：伴奏 20s 单声道 / 渲染产物 2s 单声道（encodeWav 只读这些字段） */
+const accDuck = { duration: 20, sampleRate: 44100, numberOfChannels: 1, length: 882000, getChannelData: () => new Float32Array(882000) }
+const renderedDuck = { duration: 2, sampleRate: 44100, numberOfChannels: 1, length: 88200, getChannelData: () => new Float32Array(88200) }
+
+const completedSession = (take: Take) => ({ id: take.sessionId, songId: take.songId, status: 'completed' as const, take })
+
+const mixButtonOf = (page: HTMLElement): HTMLButtonElement =>
+  [...page.querySelectorAll('button')].find((button) => button.textContent?.includes('下载混音'))!
+
 async function renderWith(session: (Omit<PerformanceSession, 'segments'> & { segments?: PerformanceSegment[] }) | null, lastTake: Take | null = null) {
   useAppStore.setState({
     view: 'result',
@@ -117,6 +138,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocked.engine.rate = 1
   mocked.engine.setRate.mockReset().mockImplementation(async (rate: number) => { mocked.engine.rate = rate; return true })
+  mocked.loadAccompaniment.mockReset().mockResolvedValue({ buffer: accDuck, synthesized: false })
+  mocked.renderMix.mockReset().mockResolvedValue(renderedDuck)
 })
 
 afterEach(async () => {
@@ -466,5 +489,73 @@ describe('录音与伴奏同步', () => {
     expect(useAppStore.getState().performanceSession?.segments[0].stats).toBeNull()
     expect(page.textContent).toContain('第 2 小节')
     expect(page.querySelector('audio')?.getAttribute('src')).toBe(second.audioUrl)
+  })
+})
+
+describe('下载录音+伴奏混音', () => {
+  it('伴奏预载完成前按钮禁用；加载失败保持禁用并提示不可用', async () => {
+    let rejectAcc!: (error: Error) => void
+    mocked.loadAccompaniment.mockReset().mockReturnValueOnce(new Promise((_resolve, reject) => { rejectAcc = reject }))
+    const take = takeFor()
+    const page = await renderWith(completedSession(take))
+    expect(mocked.loadAccompaniment).toHaveBeenCalledWith(expect.objectContaining({ id: 'test-song' }), expect.objectContaining({ durationSec: 20 }))
+    const mix = mixButtonOf(page)
+    expect(mix.hasAttribute('disabled')).toBe(true)
+    expect(mix.getAttribute('title')).toContain('录音+伴奏混合')
+    await act(async () => { rejectAcc(new Error('伴奏不可用')) })
+    expect(mix.hasAttribute('disabled')).toBe(true)
+    expect(mix.getAttribute('title')).toContain('伴奏不可用')
+  })
+
+  it('点击下载混音：按 take 窗口渲染并以 -mix 命名下载', async () => {
+    const take = takeFor()
+    const page = await renderWith(completedSession(take))
+    await act(async () => {
+      await vi.waitFor(() => { expect(mixButtonOf(page).hasAttribute('disabled')).toBe(false) })
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ arrayBuffer: async () => new ArrayBuffer(4) })))
+    const recDuck = { duration: 2, sampleRate: 32000, numberOfChannels: 1, length: 64000, getChannelData: () => new Float32Array(64000) }
+    mocked.engine.decode.mockResolvedValueOnce(recDuck)
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mix')
+    await act(async () => { mixButtonOf(page).click() })
+    await act(async () => { await vi.waitFor(() => expect(click).toHaveBeenCalledOnce()) })
+    expect(mocked.renderMix).toHaveBeenCalledOnce()
+    const [plan, rec, acc] = mocked.renderMix.mock.calls[0] as [{ recDuration: number; accStart: number; accRate: number; accDur: number }, unknown, { duration: number }]
+    expect(plan).toEqual({ recDuration: 2, accStart: 4, accRate: 1, accDur: 2 })
+    expect(rec).toBe(recDuck)
+    expect(acc.duration).toBe(20)
+    const anchor = click.mock.instances[0] as HTMLAnchorElement
+    expect(anchor.download).toMatch(/^syrinx-test-song-\d{4}-\d{2}-\d{2}\d{6}-part1-mix\.wav$/)
+    expect(anchor.getAttribute('href')).toBe('blob:mix')
+  })
+
+  it('变速录音（takeRate 1.25）：伴奏窗口按录音时长 × rate 规划', async () => {
+    const take = { ...takeFor(), playbackRate: 1.25, durationSec: 1.6 }
+    const page = await renderWith(completedSession(take))
+    await act(async () => {
+      await vi.waitFor(() => { expect(mixButtonOf(page).hasAttribute('disabled')).toBe(false) })
+    })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ arrayBuffer: async () => new ArrayBuffer(4) })))
+    const recDuck = { duration: 1.6, sampleRate: 32000, numberOfChannels: 1, length: 51200, getChannelData: () => new Float32Array(51200) }
+    mocked.engine.decode.mockResolvedValueOnce(recDuck)
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mix')
+    await act(async () => { mixButtonOf(page).click() })
+    await act(async () => { await vi.waitFor(() => expect(click).toHaveBeenCalledOnce()) })
+    const [plan] = mocked.renderMix.mock.calls[0] as [{ recDuration: number; accStart: number; accRate: number; accDur: number }]
+    expect(plan).toEqual({ recDuration: 1.6, accStart: 4, accRate: 1.25, accDur: 2 })
+  })
+
+  it('仅录音下载不触发混音且命名不带 -mix（回归）', async () => {
+    const take = takeFor()
+    const page = await renderWith(completedSession(take))
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const download = [...page.querySelectorAll('button')].find((button) => button.textContent?.includes('下载录音'))!
+    await act(async () => { download.click() })
+    await act(async () => { await vi.waitFor(() => expect(click).toHaveBeenCalledOnce()) })
+    const anchor = click.mock.instances[0] as HTMLAnchorElement
+    expect(anchor.download).toMatch(/^syrinx-test-song-\d{4}-\d{2}-\d{2}\d{6}-part1\.wav$/)
+    expect(mocked.renderMix).not.toHaveBeenCalled()
   })
 })

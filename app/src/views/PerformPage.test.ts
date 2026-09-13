@@ -873,7 +873,194 @@ describe('演奏录音会话', () => {
     expect(mic.restartCapture).toHaveBeenCalledTimes(2)
   })
 
-  it('倒数期间再次点选会取消旧跳转，只有最后目标恢复播放', async () => {
+  it('续录倒数中点选小节：取消倒数落在暂停态，按播放重新倒数后从定位点续录', async () => {
+    const mic = makeMic()
+    mocked.openMic.mockResolvedValue(mic)
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await beginPerformance(container)
+    mocked.engine.time = 0.25
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第2小节"]')!.click())
+    // 播放中点选（现状保持）：封段 + 自动倒数续录
+    expect(useAppStore.getState().performanceSession?.segments).toHaveLength(1)
+    mocked.engine.ctxTime = 11 // 新倒数 t0≈10.12，remain>0 → 倒数进行中
+    await flushRaf()
+    expect(container.querySelector('.perform-overlay.countdown')).not.toBeNull()
+
+    mocked.engine.play.mockClear()
+    mocked.engine.scheduleTick.mockClear()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第1小节"]')!.click())
+    // 新行为：倒数被打断——浮层消失、暂停态（播放键）、不自动重启、toast 提示定位
+    expect(container.querySelector('.perform-overlay.countdown')).toBeNull()
+    expect(container.querySelector('.ctl.main')!.getAttribute('aria-label')).toBe('播放')
+    expect(mocked.engine.scheduleTick).not.toHaveBeenCalled()
+    expect(mocked.engine.play).not.toHaveBeenCalled()
+    expect(mocked.engine.playing).toBe(false)
+    expect(mocked.engine.seek).toHaveBeenCalledWith(0.1)
+    expect(container.querySelector('.perform-toast')?.textContent).toContain('已定位')
+
+    // 按播放：重新 4 拍倒数（而非直接续播），归零后从定位点续录
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="播放"]')!.click())
+    expect(mocked.engine.scheduleTick).toHaveBeenCalledTimes(4)
+    expect(mocked.engine.play).not.toHaveBeenCalled()
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.play).toHaveBeenCalledTimes(1)
+    expect(mocked.engine.play).toHaveBeenCalledWith(0.1)
+    expect(mocked.engine.playing).toBe(true)
+    expect(mic.restartCapture).toHaveBeenCalledTimes(2)
+  })
+
+  it('初次倒数中点选小节：立即取消倒数并回到就绪浮层，不再自动重启', async () => {
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await act(async () => container.querySelector<HTMLButtonElement>('.ov-start')!.click())
+    mocked.engine.ctxTime = 1 // t0=0.12、4 拍×0.5s → remain>0，倒数进行中
+    await flushRaf()
+    expect(container.querySelector('.perform-overlay.countdown')).not.toBeNull()
+    expect(container.querySelector('.count-num')!.textContent).toBe('3')
+
+    mocked.engine.scheduleTick.mockClear()
+    mocked.engine.play.mockClear()
+    mocked.engine.seek.mockClear()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第2小节"]')!.click())
+    // 新行为：倒数取消、定位、回 ready（.ov-start 重现 = 等用户再点播放）
+    expect(container.querySelector('.perform-overlay.countdown')).toBeNull()
+    expect(container.querySelector<HTMLButtonElement>('.ov-start')).not.toBeNull()
+    expect(mocked.engine.scheduleTick).not.toHaveBeenCalled()
+    expect(mocked.engine.play).not.toHaveBeenCalled()
+    expect(mocked.engine.playing).toBe(false)
+    expect(mocked.engine.seek).toHaveBeenCalledWith(0.5)
+
+    // 再点开始：天然重新倒数并从定位点起奏
+    await act(async () => container.querySelector<HTMLButtonElement>('.ov-start')!.click())
+    expect(mocked.engine.scheduleTick).toHaveBeenCalledTimes(4)
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.play).toHaveBeenCalledWith(0.5)
+  })
+
+  it('就绪态改 BPM 后起奏：倒数节拍按 60/(tempo×rate) 缩放', async () => {
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    expect(mocked.engine.rate).toBeCloseTo(119 / 120)
+    mocked.engine.scheduleTick.mockClear()
+    await act(async () => container.querySelector<HTMLButtonElement>('.ov-start')!.click())
+    const ticks = mocked.engine.scheduleTick.mock.calls
+    expect(ticks).toHaveLength(4)
+    expect(ticks[1]![0] - ticks[0]![0]).toBeCloseTo(60 / 119)
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.play).toHaveBeenCalled()
+  })
+
+  it('初次倒数中改 BPM：取消当前倒数并按新速度自动重启（BPM 是显式速度操作，与谱面点击的「等播放」语义不同）', async () => {
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await act(async () => container.querySelector<HTMLButtonElement>('.ov-start')!.click())
+    mocked.engine.ctxTime = 1
+    await flushRaf()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    mocked.engine.play.mockClear()
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    // 旧倒数取消、新倒数按 119 BPM 排 4 拍
+    const ticks = mocked.engine.scheduleTick.mock.calls.slice(-4)
+    expect(ticks[1]![0] - ticks[0]![0]).toBeCloseTo(60 / 119)
+    expect(container.querySelector('.perform-overlay.countdown')).not.toBeNull()
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.play).toHaveBeenCalledWith(0)
+    expect(mocked.engine.playing).toBe(true)
+  })
+
+  it('续录倒数中改 BPM：同样按新速度自动重启倒数并从定位点续录', async () => {
+    const mic = makeMic()
+    mocked.openMic.mockResolvedValue(mic)
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await beginPerformance(container)
+    mocked.engine.time = 0.25
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第2小节"]')!.click())
+    mocked.engine.ctxTime = 11
+    await flushRaf()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    mocked.engine.play.mockClear()
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    const ticks = mocked.engine.scheduleTick.mock.calls.slice(-4)
+    expect(ticks[1]![0] - ticks[0]![0]).toBeCloseTo(60 / 119)
+    expect(container.querySelector('.perform-overlay.countdown')).not.toBeNull()
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.play).toHaveBeenCalledWith(0.5)
+    expect(mic.restartCapture).toHaveBeenCalledTimes(2)
+  })
+
+  it('tempoPending 期间播放/暂停无响应，setRate 完成后自动倒数续录恢复', async () => {
+    const mic = makeMic()
+    mocked.openMic.mockResolvedValue(mic)
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await beginPerformance(container)
+    mocked.engine.time = 0.25
+    let prepared!: (value: boolean) => void
+    mocked.engine.setRate.mockReturnValueOnce(new Promise<boolean>(resolve => { prepared = resolve }))
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    // 变速准备中：seekTo 已暂停引擎，按钮呈播放但点击无响应（锁定现状）
+    expect(container.querySelector('.ctl.main')!.getAttribute('aria-label')).toBe('播放')
+    mocked.engine.play.mockClear()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="播放"]')!.click())
+    expect(mocked.engine.play).not.toHaveBeenCalled()
+    // setRate 完成 → 自动倒数续录
+    mocked.engine.scheduleTick.mockClear()
+    await act(async () => prepared(true))
+    expect(mocked.engine.scheduleTick).toHaveBeenCalledTimes(4)
+    mocked.engine.ctxTime = 20
+    await flushRaf()
+    expect(mocked.engine.play).toHaveBeenCalledWith(0.25)
+    expect(mocked.engine.playing).toBe(true)
+  })
+
+  it('保调变速失败：回暂停态提示「未能继续」，此后按播放直接续播原速度', async () => {
+    const mic = makeMic()
+    mocked.openMic.mockResolvedValue(mic)
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await beginPerformance(container)
+    mocked.engine.time = 0.25
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    mocked.engine.setRate.mockResolvedValueOnce(false)
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    expect(mocked.engine.rate).toBe(1)
+    expect(container.querySelector('.ctl.main')!.getAttribute('aria-label')).toBe('播放')
+    expect(container.textContent).toContain('未能继续')
+    expect(container.querySelector('[aria-label="开启录音"]')).not.toBeNull()
+    mocked.engine.scheduleTick.mockClear()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="播放"]')!.click())
+    expect(mocked.engine.scheduleTick).not.toHaveBeenCalled()
+    expect(mocked.engine.play).toHaveBeenCalledWith()
+    expect(mocked.engine.playing).toBe(true)
+  })
+
+  it('就绪态变速失败：保持就绪浮层并提示「未能继续」', async () => {
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+    mocked.engine.setRate.mockResolvedValueOnce(false)
+    await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+    expect(container.querySelector('.ov-start')).not.toBeNull()
+    expect(container.textContent).toContain('未能继续')
+  })
+
+  it('连续改 BPM 三次：旧事务全部作废，仅最新速度生效且只保留最后一轮倒数', async () => {
     const mic = makeMic()
     mocked.openMic.mockResolvedValue(mic)
     await mountPerformPage(1)
@@ -881,14 +1068,43 @@ describe('演奏录音会话', () => {
     await beginPerformance(container)
     mocked.engine.time = 0.25
     mocked.engine.play.mockClear()
-
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第2小节"]')!.click())
-    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第1小节"]')!.click())
+    // 三次应用：119（播放中变速→自动倒数），118、117（各自打断上一轮倒数→按新速度重启）
+    for (let i = 0; i < 3; i++) {
+      await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="调整演奏速度"]')!.click())
+      await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="降低 BPM"]')!.click())
+      await act(async () => document.querySelector<HTMLButtonElement>('.tempo-apply')!.click())
+      mocked.engine.ctxTime = 11 + i
+      await flushRaf()
+    }
+    expect(mocked.engine.setRate).toHaveBeenCalledTimes(3)
+    expect(mocked.engine.rate).toBeCloseTo(117 / 120)
+    // 倒数共 4 轮（起奏 1 轮 + 变速 3 轮），最后一轮按 117 BPM
+    const ticks = mocked.engine.scheduleTick.mock.calls
+    expect(ticks).toHaveLength(16)
+    expect(ticks[13]![0] - ticks[12]![0]).toBeCloseTo(60 / 117)
     mocked.engine.ctxTime = 20
     await flushRaf()
-
     expect(mocked.engine.play).toHaveBeenCalledTimes(1)
-    expect(mocked.engine.play).toHaveBeenCalledWith(0.1)
+    expect(mocked.engine.play).toHaveBeenCalledWith(0.25)
+    expect(mocked.engine.playing).toBe(true)
+  })
+
+  it('倒数中点击进度轨无效（进度轨只在演奏态允许定位）', async () => {
+    await mountPerformPage(1)
+    const container = containers.at(-1)!
+    await act(async () => container.querySelector<HTMLButtonElement>('.ov-start')!.click())
+    mocked.engine.ctxTime = 1
+    await flushRaf()
+    const rail = container.querySelector<HTMLElement>('.progress-rail')!
+    Object.defineProperty(rail, 'getBoundingClientRect', {
+      value: () => ({ left: 0, width: 100, right: 100, top: 0, bottom: 10, height: 10, x: 0, y: 0, toJSON() {} }),
+    })
+    Object.defineProperty(rail, 'setPointerCapture', { value: vi.fn() })
+    mocked.engine.seek.mockClear()
+    await act(async () => rail.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 3, clientX: 80 })))
+    await act(async () => rail.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 3, clientX: 80 })))
+    expect(mocked.engine.seek).not.toHaveBeenCalled()
+    expect(container.querySelector('.perform-overlay.countdown')).not.toBeNull()
   })
 
   it('第一次封段仍在等待时重复点选，最终仍按播放中语义从最后目标续播', async () => {
@@ -1124,6 +1340,8 @@ describe('演奏录音会话', () => {
     await flushRaf()
 
     await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="选择第1小节"]')!.click())
+    // 排空 seekTo 异步链（seal→定位→重排倒数需要多个微任务 tick，单次 act 排不干）
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
     mocked.engine.ctxTime = 30
     await flushRaf()
     expect(mocked.engine.playing).toBe(true)
