@@ -5,56 +5,293 @@
     "title": "Syrinx 整体架构",
     "locale": "zh-CN",
     "subtitle": "Vite + React 19 · 浏览器内闭环 · 零后端 API",
-    "output": "D:/LLM_work/syrinx-architecture/syrinx-architecture-zh.html",
+    "output": "syrinx-architecture-zh.html",
     "quality_profile": "showcase",
-    "viewBox": [1050, 550],
+    "viewBox": [
+      1050,
+      550
+    ],
     "views": [
       {
         "id": "perform-loop",
         "label": "演奏主环",
-        "focus": ["web", "views", "score", "audio", "rec", "pitch", "store"],
+        "focus": [
+          "web",
+          "views",
+          "score",
+          "audio",
+          "rec",
+          "pitch",
+          "store"
+        ],
         "note": "装载 → 解析 → 演奏 → 采集 → 分析 → 状态回填的浏览器内闭环。"
       },
       {
         "id": "score-assets",
         "label": "谱面与素材",
-        "focus": ["songpack", "synctune", "score", "audio"],
+        "focus": [
+          "songpack",
+          "synctune",
+          "score",
+          "audio"
+        ],
         "note": "Song Pack 五件套与锚点微调工作台供给谱面/音频引擎。"
       },
       {
         "id": "immersion",
         "label": "沉浸反馈",
-        "focus": ["audio", "bg", "pitch", "store", "views"],
+        "focus": [
+          "audio",
+          "bg",
+          "pitch",
+          "store",
+          "views"
+        ],
         "note": "低频能量驱动动态背景，音准统计回填全局状态。"
       }
     ]
   },
   "components": [
-    { "id": "web", "type": "cloud", "label": "静态站点", "sublabel": "Vite 构建产物", "tag": "静态托管", "pos": [40, 70], "size": [130, 64] },
-    { "id": "views", "type": "frontend", "label": "视图层", "sublabel": "React 19 · 五视图", "tag": "src/views", "pos": [250, 70], "size": [130, 64] },
-    { "id": "store", "type": "frontend", "label": "全局状态", "sublabel": "zustand · store.ts", "pos": [880, 70], "size": [130, 64] },
-    { "id": "score", "type": "backend", "label": "谱面引擎", "sublabel": "MusicXML → 时间轴", "tag": "TDD", "pos": [250, 240], "size": [130, 64] },
-    { "id": "audio", "type": "backend", "label": "音频引擎", "sublabel": "AudioContext 时钟", "tag": "<50ms", "pos": [460, 240], "size": [130, 64] },
-    { "id": "rec", "type": "backend", "label": "演奏录音", "sublabel": "AudioWorklet 直采", "pos": [670, 240], "size": [130, 64] },
-    { "id": "pitch", "type": "backend", "label": "YIN 音准分析", "sublabel": "差分函数 · 插值", "tag": "纯 TS · TDD", "pos": [880, 240], "size": [130, 64] },
-    { "id": "synctune", "type": "backend", "label": "锚点工作台", "sublabel": "/sync-tune 微调页", "tag": "TDD", "pos": [40, 410], "size": [130, 64] },
-    { "id": "songpack", "type": "database", "label": "Song Pack", "sublabel": "songs/<id>/ 五件套", "tag": "不入库", "pos": [250, 410], "size": [130, 64] },
-    { "id": "bg", "type": "frontend", "label": "动态背景", "sublabel": "three.js 音频呼吸", "tag": "audio-reactive", "pos": [460, 410], "size": [130, 64] }
+    {
+      "id": "web",
+      "type": "cloud",
+      "label": "静态站点",
+      "sublabel": "Vite 构建产物",
+      "tag": "静态托管",
+      "pos": [
+        40,
+        70
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "views",
+      "type": "frontend",
+      "label": "视图层",
+      "sublabel": "React 19 · 五视图",
+      "tag": "src/views",
+      "pos": [
+        250,
+        70
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "store",
+      "type": "frontend",
+      "label": "全局状态",
+      "sublabel": "zustand · store.ts",
+      "pos": [
+        880,
+        70
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "score",
+      "type": "backend",
+      "label": "谱面引擎",
+      "sublabel": "MusicXML → 时间轴",
+      "tag": "TDD",
+      "pos": [
+        250,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "audio",
+      "type": "backend",
+      "label": "音频引擎",
+      "sublabel": "实际伴奏播放时钟",
+      "tag": "BPM · 小节起奏",
+      "pos": [
+        460,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "rec",
+      "type": "backend",
+      "label": "演奏录音",
+      "sublabel": "AudioWorklet 直采",
+      "pos": [
+        670,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "pitch",
+      "type": "backend",
+      "label": "YIN 音准分析",
+      "sublabel": "后台 Worker 分析",
+      "tag": "纯 TS · TDD",
+      "pos": [
+        880,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "synctune",
+      "type": "backend",
+      "label": "锚点工作台",
+      "sublabel": "/sync-tune 微调页",
+      "tag": "TDD",
+      "pos": [
+        40,
+        410
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "songpack",
+      "type": "database",
+      "label": "Song Pack",
+      "sublabel": "songs/<id>/ 五件套",
+      "tag": "不入库",
+      "pos": [
+        250,
+        410
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "bg",
+      "type": "frontend",
+      "label": "动态背景",
+      "sublabel": "three.js 音频呼吸",
+      "tag": "audio-reactive",
+      "pos": [
+        460,
+        410
+      ],
+      "size": [
+        130,
+        64
+      ]
+    }
   ],
   "boundaries": [
-    { "kind": "region", "label": "Syrinx · 浏览器内闭环（零后端 API）", "wraps": ["web", "views", "store", "score", "audio", "rec", "pitch", "synctune", "songpack", "bg"] }
+    {
+      "kind": "region",
+      "label": "Syrinx · 浏览器内闭环（零后端 API）",
+      "wraps": [
+        "web",
+        "views",
+        "store",
+        "score",
+        "audio",
+        "rec",
+        "pitch",
+        "synctune",
+        "songpack",
+        "bg"
+      ]
+    }
   ],
   "connections": [
-    { "id": "web-views", "from": "web", "to": "views", "label": "装载 SPA" },
-    { "id": "views-store", "from": "views", "to": "store", "label": "读写状态" },
-    { "id": "views-score", "from": "views", "to": "score", "label": "选曲解析", "labelAt": [328, 185] },
-    { "id": "score-audio", "from": "score", "to": "audio", "label": "时间轴", "variant": "emphasis" },
-    { "id": "audio-rec", "from": "audio", "to": "rec", "label": "录音起停" },
-    { "id": "rec-pitch", "from": "rec", "to": "pitch", "label": "PCM 帧", "variant": "emphasis" },
-    { "id": "pitch-store", "from": "pitch", "to": "store", "label": "音准统计", "variant": "emphasis" },
-    { "id": "songpack-score", "from": "songpack", "to": "score", "label": "五件套" },
-    { "id": "synctune-songpack", "from": "synctune", "to": "songpack", "label": "锚点写回", "variant": "dashed" },
-    { "id": "audio-bg", "from": "audio", "to": "bg", "label": "低频能量", "labelAt": [538, 355] }
+    {
+      "id": "web-views",
+      "from": "web",
+      "to": "views",
+      "label": "装载 SPA"
+    },
+    {
+      "id": "views-store",
+      "from": "views",
+      "to": "store",
+      "label": "读写状态"
+    },
+    {
+      "id": "views-score",
+      "from": "views",
+      "to": "score",
+      "label": "选曲解析",
+      "labelAt": [
+        328,
+        185
+      ]
+    },
+    {
+      "id": "score-audio",
+      "from": "score",
+      "to": "audio",
+      "label": "时间轴",
+      "variant": "emphasis"
+    },
+    {
+      "id": "audio-rec",
+      "from": "audio",
+      "to": "rec",
+      "label": "录音起停"
+    },
+    {
+      "id": "rec-pitch",
+      "from": "rec",
+      "to": "pitch",
+      "label": "PCM 帧",
+      "variant": "emphasis"
+    },
+    {
+      "id": "pitch-store",
+      "from": "pitch",
+      "to": "store",
+      "label": "音准统计",
+      "variant": "emphasis"
+    },
+    {
+      "id": "songpack-score",
+      "from": "songpack",
+      "to": "score",
+      "label": "五件套"
+    },
+    {
+      "id": "synctune-songpack",
+      "from": "synctune",
+      "to": "songpack",
+      "label": "锚点写回",
+      "variant": "dashed"
+    },
+    {
+      "id": "audio-bg",
+      "from": "audio",
+      "to": "bg",
+      "label": "低频能量",
+      "labelAt": [
+        538,
+        355
+      ]
+    }
   ],
   "cards": [
     {
@@ -68,11 +305,11 @@
     },
     {
       "dot": "cyan",
-      "title": "唯一时钟",
+      "title": "播放与录音同步",
       "items": [
-        "AudioContext.currentTime 是全应用唯一时间源",
-        "谱 / 音 / 背景三方同步误差听感 < 50ms",
-        "光标走 rAF 直写 DOM，不进响应式 store，避免重渲染抖动"
+        "音频引擎提供实际播放位置，光标与录音按同一谱面时间对齐",
+        "播放中跳小节或变速：保留当前录音，四拍倒数后开启新段",
+        "每段保存起点与速度；光标由 rAF 更新，避免整页重渲染"
       ]
     },
     {

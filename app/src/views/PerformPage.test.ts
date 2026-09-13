@@ -138,6 +138,7 @@ async function flushRaf(): Promise<void> {
 }
 
 beforeEach(() => {
+  localStorage.removeItem('syrinx.practice-hint.v1')
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   rafCallbacks = new Map()
   rafSeq = 0
@@ -217,6 +218,30 @@ async function hidePerformHud(container: HTMLElement): Promise<void> {
   await act(async () => expire())
   expect(container.querySelector('.perform')?.classList.contains('idle')).toBe(true)
 }
+
+describe('first-use practice hint', () => {
+  it('explains measure selection and BPM once, remembers dismissal across mounts', async () => {
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    const hint = page.querySelector('.practice-hint')
+    expect(hint?.textContent).toContain('点小节选起点')
+    expect(hint?.textContent).toContain('点 BPM 调速度')
+    const dismiss = [...page.querySelectorAll('button')].find(b => b.textContent === '知道了')!
+    await act(async () => dismiss.click())
+    expect(page.querySelector('.practice-hint')).toBeNull()
+    await mountPerformPage(1)
+    expect(containers.at(-1)!.querySelector('.practice-hint')).toBeNull()
+  })
+
+  it('remembers the hint when the user starts directly without dismissing it', async () => {
+    await mountPerformPage(1)
+    const page = containers.at(-1)!
+    expect(page.querySelector('.practice-hint')).not.toBeNull()
+    await beginPerformance(page)
+    expect(page.querySelector('.practice-hint')).toBeNull()
+    expect(localStorage.getItem('syrinx.practice-hint.v1')).toBe('seen')
+  })
+})
 
 describe('录音指示反映实际采集', () => {
   it('keeps REC dark through microphone permission and capture-gate preparation', async () => {

@@ -36,7 +36,7 @@ Personal music library · Sheet music reader · Flute practice with accompanimen
 | | Full features · Run locally | Web demo |
 |---|---|---|
 | Purpose | Collect, read and practice with your own scores | Try the performance flow with featured pieces |
-| Personal library | Import, edit information, covers, folders, favorites and backups | A visible tab opens a full-version notice |
+| Personal library | Import, edit information, covers, folders, favorites and backups | A tab marked “开发中” (In development) opens a brief notice |
 | Music | Your imports; featured pieces depend on local assets | Four featured pieces: Luv Letter, Flower Dance, Lumière, Interstellar |
 | Entry point | `dev` · `npm run dev` | [Try online](https://romanticjojo.com) · `npm run dev:web` |
 | Version mapping | `dev` → `v0.3.0` | `web-deploy` → `v0.3.0-web` |
@@ -75,7 +75,7 @@ Use a score's menu to edit its title, author, tags and PNG / JPEG / WebP cover. 
 
 Melody-only scores are ready for page-by-page reading. For a score with an existing piano part, preview the accompaniment and choose “开始演奏” (Start performing). A four-beat count-in leads into accompaniment and a moving score cursor.
 
-Click a measure to choose a starting point, or use the BPM control to slow down. Seeking or applying a new tempo during performance saves the current recording segment, then starts a new one after four count-in beats. These actions leave ready or paused sessions stopped.
+A first-use hint introduces measure selection and BPM; dismissing it or starting playback saves that choice. Click a measure to choose a starting point, or use the BPM control to slow down. The selection box disappears after that measure has played. Seeking or applying a new tempo during performance saves the current recording segment, then starts a new one after four count-in beats. These actions leave ready or paused sessions stopped.
 
 <p align="center">
   <img src="docs/img/readme/practice-tempo.png" alt="Actual Morning Light practice screen with measure five selected and the tempo control set to 60 BPM" width="100%" />
@@ -122,6 +122,24 @@ The personal library needs no account. Import parsing, cover processing and synt
 Different browsers, profiles and site addresses have separate libraries. Changing a domain or local port does not migrate your data, and clearing site data deletes the library. **Export backups** regularly from the library menu and import them to restore or move your collection. Save and restore every part of a multi-file backup.
 
 A locally running app can read imported scores and play their original piano accompaniment offline while its local server remains available. Website offline caching and cloud sync are not provided. Editing means changing score information; accompaniment uses one existing piano part. Note editing and automatic arrangement are outside the current feature set.
+
+## Architecture and performance data flow
+
+Syrinx is a statically hosted browser application. These Archify diagrams show the core path for featured pieces; every engine in the diagrams runs in the browser.
+
+### Core architecture
+
+![Syrinx core architecture: views, scores, accompaniment, recording and pitch analysis](docs/img/syrinx-architecture-en.png)
+
+[Interactive diagram source](docs/img/syrinx-architecture-en.html) · [Structured data](docs/img/syrinx-architecture-en.json)
+
+### From a score to practice feedback
+
+![Syrinx data flow: asset parsing, timeline, synchronized playback, recording segments and pitch feedback](docs/img/syrinx-dataflow-en.png)
+
+[Interactive diagram source](docs/img/syrinx-dataflow-en.html) · [Structured data](docs/img/syrinx-dataflow-en.json)
+
+The live accompaniment position drives the score cursor. Seeking or changing tempo during playback saves the current take and counts in a new segment. Each segment retains its start and speed so replay and charts align with score time. Post-take pitch analysis runs in a background Worker to keep the interface responsive. The personal library separately uses IndexedDB for local score storage.
 
 ## Contributing
 

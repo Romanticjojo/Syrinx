@@ -473,7 +473,14 @@ export class OSMDScore {
   /** 每帧调用：把光标推进到曲目时间 t（秒）。由 rAF 驱动，只前进不后退。
    *  音值感知推进（任务 A）：下一个停靠点的开始时刻已到才前进——光标/高亮
    *  停在正在响的音上，直到该音实际时值结束；只前进语义与 seek 快进机制不变 */
-  syncToTime(t: number): void {
+  syncToTime(t: number, dismissPlayedSelection = false): void {
+    // Selection is a start-point cue, not a playback highlight. Only retire it
+    // on an active playback frame, at its exact accompaniment end anchor.
+    if (dismissPlayedSelection && this.selectedMeasure !== null) {
+      const selectedIndex = this.measureTimes.findIndex(e => !e.end && e.measure === this.selectedMeasure)
+      const end = selectedIndex >= 0 ? this.measureTimes[selectedIndex + 1]?.time : undefined
+      if (end !== undefined && t >= end) this.clearMeasureSelection()
+    }
     const cursor = this.osmd.cursor
     const it = cursor.iterator
     let advanced = false
