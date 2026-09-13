@@ -44,4 +44,25 @@ describe('yinDetect', () => {
   it('静音（全零）→ 返回 null', () => {
     expect(yinDetect(new Float32Array(2048), SR)).toBeNull()
   })
+
+  it.each([16000, 44100, 48000])('keeps useful flute accuracy across low and high notes at %i Hz', (sampleRate) => {
+    for (const hz of [180.2, 246.941651, 261.625565, 523.25113, 1046.50226, 2349.31814]) {
+      const result = yinDetect(sine(hz, Math.round(0.0464 * sampleRate), sampleRate), sampleRate)
+      expect(result).not.toBeNull()
+      expect(Math.abs(1200 * Math.log2(result!.hz / hz))).toBeLessThan(20)
+      expect(result!.clarity).toBeGreaterThan(0.9)
+    }
+  })
+
+  it('keeps the public detector usable outside the offline flute range', () => {
+    for (const hz of [65.406391, 110, 3520]) {
+      const result = yinDetect(sine(hz, 4096), SR)
+      expect(result).not.toBeNull()
+      expect(Math.abs(1200 * Math.log2(result!.hz / hz))).toBeLessThan(6)
+    }
+  })
+
+  it('does not treat a still-descending bounded search edge as a pitch valley', () => {
+    expect(yinDetect(sine(175), SR, 0.12, 180)).toBeNull()
+  })
 })

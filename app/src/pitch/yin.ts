@@ -4,8 +4,8 @@
  * 抛物线插值精化周期 → sampleRate/tau 得基频。
  * 长笛为单音乐器，YIN 足够；检测器接口化后可替换 CREPE/tfjs（后续）。
  *
- * 复杂度 O(W²)（W=帧长一半）：离线分析 40s 录音约数百帧，秒级完成，MVP 可接受；
- * 若要实时再换 FFT 差分优化。
+ * 差分与归一化按周期递增计算；找到第一个阈值谷就停止，不计算后续无用周期。
+ * 可用 minHz 限定最大周期。默认仍支持完整帧可解析的音域。
  */
 
 export interface YinResult {
@@ -21,6 +21,7 @@ export function yinDetect(
   buf: Float32Array,
   sampleRate: number,
   threshold = 0.12,
+  minHz = 0,
 ): YinResult | null {
   const W = Math.floor(buf.length / 2)
   if (W < 16) return null
@@ -30,44 +31,27 @@ export function yinDetect(
   for (let i = 0; i < buf.length; i++) energy += buf[i] * buf[i]
   if (Math.sqrt(energy / buf.length) < SILENCE_RMS) return null
 
-  // 差分函数 d(tau) = Σ (x[i] - x[i+tau])²
-  const d = new Float64Array(W)
-  for (let tau = 1; tau < W; tau++) {
+  // 多留一个周期供抛物线插值；长笛无需搜索帧长一半的所有周期。
+  const maxTau = Math.min(W - 1, minHz > 0 ? Math.ceil(sampleRate / minHz) + 1 : W - 1)
+  let runSum = 0
+  let previous2 = 1
+  let previous = 1
+  for (let tau = 1; tau <= maxTau; tau++) {
     let sum = 0
     for (let i = 0; i < W; i++) {
       const diff = buf[i] - buf[i + tau]
       sum += diff * diff
     }
-    d[tau] = sum
-  }
-
-  // 累积均值归一化 d'(tau) = d(tau) · tau / Σ_{j<=tau} d(j)
-  const dp = new Float64Array(W)
-  dp[0] = 1
-  let runSum = 0
-  for (let tau = 1; tau < W; tau++) {
-    runSum += d[tau]
-    dp[tau] = runSum === 0 ? 1 : (d[tau] * tau) / runSum
-  }
-
-  // 绝对阈值下首个谷：低于 threshold 后走到局部最小
-  let tau = -1
-  for (let t = 2; t < W - 1; t++) {
-    if (dp[t] < threshold) {
-      while (t + 1 < W - 1 && dp[t + 1] < dp[t]) t++
-      tau = t
-      break
+    runSum += sum
+    const normalized = runSum === 0 ? 1 : (sum * tau) / runSum
+    // 同原算法：首个低于阈值的局部最小。音域截断处仍下降时不伪造谷点。
+    if (tau >= 3 && previous < threshold && (normalized >= previous || tau === W - 1)) {
+      const denom = previous2 + normalized - 2 * previous
+      const shift = denom !== 0 ? (0.5 * (previous2 - normalized)) / denom : 0
+      return { hz: sampleRate / (tau - 1 + shift), clarity: 1 - previous }
     }
+    previous2 = previous
+    previous = normalized
   }
-  if (tau === -1) return null
-
-  // 抛物线插值精化周期
-  const y0 = dp[tau - 1]
-  const y1 = dp[tau]
-  const y2 = dp[tau + 1]
-  const denom = y0 + y2 - 2 * y1
-  const shift = denom !== 0 ? (0.5 * (y0 - y2)) / denom : 0
-  const tauRefined = tau + shift
-
-  return { hz: sampleRate / tauRefined, clarity: 1 - y1 }
+  return null
 }

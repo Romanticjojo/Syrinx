@@ -1,195 +1,146 @@
 <div align="center">
 
-<a href="README.md">中文</a>
+<img src="app/public/brand/favicon-256.png" alt="Syrinx" width="80" />
 
-<img src="docs/img/logo.jpg" alt="Syrinx Logo" width="200"/>
+# Syrinx · Flowing Flute
 
-# 🎶 Syrinx · Flowing Flute
+**Keep your music close. Make room for a calmer practice.**
 
-**Play a real flute, and let the score flow with you.**
+Personal music library · Sheet music reader · Flute practice with accompaniment
 
-[中文](README.md) · [Quick Start](#-quick-start) · [Features](#-features) · [Roadmap](#-roadmap) · [FAQ](#-faq--known-issues)
+[中文](README.md) · [Try online](https://romanticjojo.com) · [Quick start](#quick-start) · [Release notes](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/releases/v0.3.0.md)
 
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![Node](https://img.shields.io/badge/node-%3E%3D20.19-339933?style=flat-square&logo=node.js&logoColor=white)
-![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square)
-
-*A flute performance companion between a "smart sheet-music player" and a music rhythm game.*
+![Local first](https://img.shields.io/badge/local-first-77B7AC?style=flat-square)
+![React](https://img.shields.io/badge/React-19-202827?style=flat-square&logo=react&logoColor=77B7AC)
+[![License](https://img.shields.io/badge/license-Apache--2.0-202827?style=flat-square)](LICENSE)
 
 </div>
 
+> **Start with `dev`.** This README describes the v0.3.0 updates on the `dev` branch. The default GitHub branch, `master`, receives documentation updates; use the `--branch dev` instructions below to get these features. **The application UI is currently in Chinese.**
+
 <p align="center">
-  <img src="docs/img/overview.png" alt="Syrinx entry screen: goddess-flute emblem, brand wordmark and Enter button" width="100%"/>
+  <img src="docs/img/readme/library-desktop.png" alt="Actual Syrinx desktop library: dark bookshelf, original example scores, search and view controls" width="100%" />
+  <br /><sub>Actual application screenshot · Desktop personal library · Original project studies shown</sub>
 </p>
 
-## ✅ Features
+## A home for everyday practice
 
-The screen above is the first thing you see when opening Syrinx: the goddess-flute emblem and brand wordmark on a dark stage — click "Enter" to reach the library. From there, the core experience is a perform view where the top HUD shows measure and time in real time, a cursor advances note by note with the accompaniment across the score, a three.js living background breathes with the music, and the bottom control bar gathers pause / recording / zoom / exit in one place. Around this main loop, the subsystems offer:
+**Collect and organize.** Import MusicXML, XML or MXL, then add titles, composer / arranger details, tags and covers. Find your next piece with folders, favorites and search. Both card and list views support pagination.
 
-| Status | Feature |
-|:---:|---|
-| ✅ | MusicXML score rendering (OpenSheetMusicDisplay), cursor tracking the accompaniment timeline note by note, auto-scrolling page turns |
-| ✅ | Web Audio as the single master clock: score / audio / background three-way sync, perceptible error < 50ms |
-| ✅ | Procedural accompaniment synthesis: when no accompaniment audio exists, an OfflineAudioContext synthesizes a nocturne-style backing |
-| ✅ | In-house pure-TS **YIN pitch detection** (TDD), producing pitch-comparison curves and intonation statistics (±50 cents) after each performance |
-| ✅ | Performance recording and playback, with the accompaniment playing alongside for comparison |
-| ✅ | three.js dynamic immersive background; low-frequency energy drives glow and particle breathing (audio-reactive) |
-| ✅ | 3D flute-model entrance animation + preview page, skippable |
-| ✅ | Light & dark themes + per-song accent color (defined in the Song Pack) |
-| ✅ | Vitest unit tests covering the score timeline / YIN / pitch statistics |
-| ❌ | Mobile / PWA (planned) |
-| ❌ | CREPE deep-learning pitch detection enhancement (planned) |
-| ❌ | Loop-measure practice, tempo adjustment (planned) |
+**Open and read.** Browse, turn pages and zoom at desktop, tablet and phone widths. A flute-only score opens as sheet music without generating audio. Editing its information preserves the original imported score.
 
-## ✨ Highlights
+**Practice at your pace.** When the score contains piano, choose one existing piano part for locally synthesized accompaniment, including both staves of that part. Follow the score cursor, adjust BPM, start from a selected measure, then listen back and review pitch comparisons.
 
-Beneath the feature table lie a few design decisions that run through the whole project — they define Syrinx's engineering character for the "live performance" scenario:
+## Choose your edition
 
-> 🎼 **Time is the score**
-> `AudioContext.currentTime` is the single source of time → converted every frame by rAF → written straight to the DOM to drive the cursor, bypassing the reactive store to avoid re-render jitter.
+| | Full features · Run locally | Web demo |
+|---|---|---|
+| Purpose | Collect, read and practice with your own scores | Try the performance flow with featured pieces |
+| Personal library | Import, edit information, covers, folders, favorites and backups | A visible tab opens a full-version notice |
+| Music | Your imports; featured pieces depend on local assets | Four featured pieces: Luv Letter, Flower Dance, Lumière, Interstellar |
+| Entry point | `dev` · `npm run dev` | [Try online](https://romanticjojo.com) · `npm run dev:web` |
+| Version mapping | `dev` → `v0.3.0` | `web-deploy` → `v0.3.0-web` |
 
-> 🎹 **Accompaniment with zero assets**
-> It runs without an mp3: the app procedurally synthesizes a nocturne-style accompaniment — "melody + bass pad + breath noise + reverb" — from MusicXML note events.
+Both modes currently run in a browser. Native Windows, Android, macOS and iOS installers are planned. The online site runs its deployed build and may lag behind branch updates; pushing source code does not automatically deploy the site.
 
-> 🎤 **Hear your intonation**
-> An in-house YIN algorithm (difference function + cumulative mean normalized difference + parabolic interpolation), implemented in pure TypeScript with TDD all green and an interface-based design so it can be swapped for CREPE.
+## Three steps to your next practice
 
-> 🌌 **Atmosphere while you play**
-> A three.js dawn-light theme scene breathes with the music while the score area stays protected; controls fade away after 3.2 seconds of inactivity for immersive performance.
+### 1. Import a score
 
-## 🚀 Quick Start
+After starting locally, open “个人仓库” (Personal library), click “导入乐谱” (Import score) or drop a file, then confirm its title and parts. Start with either of the two original studies included in this repository:
 
-**Requirements**: Node.js **≥ 20.19** (or ≥ 22.12, required by Vite 8); npm ≥ 10.
+| Example | Contents | Try it with |
+|---|---|---|
+| [Morning Light · 晨光练习](https://raw.githubusercontent.com/Romanticjojo/Syrinx/dev/docs/examples/morning-light.musicxml) | Flute + one piano part with two staves | “钢琴伴奏” (Piano accompaniment) for reading, listening and performing |
+| [Breath Study · 长音与呼吸](https://raw.githubusercontent.com/Romanticjojo/Syrinx/dev/docs/examples/breath-study.musicxml) | Solo flute | “仅阅谱” (Read only) |
+
+Save the linked file with a `.musicxml` extension and import it, or find it in `docs/examples/` after cloning. [About the examples](docs/examples/README.md)
+
+### 2. Make the library yours
+
+Use a score's menu to edit its title, author, tags and PNG / JPEG / WebP cover. Create folders, move multiple scores, or favorite pieces you practice often. Removing a folder returns its scores to “未分类” (Unfiled).
+
+<table>
+  <tr>
+    <td width="76%"><img src="docs/img/readme/library-list.png" alt="Personal library in list view, with titles, composers and score details" width="100%" /></td>
+    <td width="24%"><img src="docs/img/readme/library-mobile.png" alt="Personal library at a 390-pixel phone width, with a two-column bookshelf" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>A list for finding the next piece</sub></td>
+    <td align="center"><sub>A bookshelf for smaller screens</sub></td>
+  </tr>
+</table>
+
+### 3. Open your music and practice
+
+Melody-only scores are ready for page-by-page reading. For a score with an existing piano part, preview the accompaniment and choose “开始演奏” (Start performing). A four-beat count-in leads into accompaniment and a moving score cursor.
+
+Click a measure to choose a starting point, or use the BPM control to slow down. Seeking or applying a new tempo during performance saves the current recording segment, then starts a new one after four count-in beats. These actions leave ready or paused sessions stopped.
+
+<p align="center">
+  <img src="docs/img/readme/practice-tempo.png" alt="Actual Morning Light practice screen with measure five selected and the tempo control set to 60 BPM" width="100%" />
+  <br /><sub>Actual application screenshot · Adjusting practice tempo with the original Morning Light score</sub>
+</p>
+
+| To… | Use… |
+|---|---|
+| Start / pause / resume | The play control or Space |
+| Start from a measure | Click that measure; seeking during playback triggers a new count-in |
+| Change tempo | Open BPM, type a value or move the slider, then choose “应用速度” (Apply tempo) |
+| Restore the score's suggested tempo | “还原推荐” (Restore recommended) in the tempo panel |
+| Record and listen back | Enable recording; after finishing, select a segment and replay it with optional accompaniment |
+| Adjust the score size | Zoom controls; the personal reader also provides previous / next page buttons |
+
+Tempo spans **0.5–1.5×** the score's initial tempo, keeping written tempo changes in proportion. Speed changes use the browser's pitch-preservation support. Each recording segment retains its practice speed so replay and pitch analysis align with the corresponding score interval. Recording needs microphone permission; headphones help keep accompaniment out of the recording.
+
+## Quick start
+
+You need **Node.js 20.19+ or 22.12+** and npm. Run:
 
 ```bash
-git clone https://github.com/Romanticjojo/Syrinx.git
+git clone --branch dev https://github.com/Romanticjojo/Syrinx.git
 cd Syrinx/app
 npm install
-
-npm run dev        # Start the dev server → http://localhost:5173
-npm run build      # Production build
-npm run preview    # Preview the production build
+npm run dev
 ```
 
-After launching: entrance animation (skippable) → pick a song in the library → detail preview → **Start performing**:
-4-beat count-in · Space to pause/resume · ⏺ recording toggle · zoom +/- · Esc to exit.
+Open the local address printed in the terminal, usually `http://localhost:5173`. This command enables the personal library; `desktop` is the current name of this feature mode.
 
-> ⚠️ **Song assets are not distributed with the repo**: the scores / accompaniments / covers under `app/public/songs/` (copyrighted media) are not included, so the library is empty after cloning. Add songs yourself following the [Song Pack](#-song-pack) spec below, or drop in any MusicXML file for a quick try.
-
-> 🎧 Playing with headphones is recommended: speaker accompaniment will leak into the microphone recording.
-
-## 📁 Project Structure
-
-```
-Syrinx/
-├── app/                        # Frontend project (Vite + React + TS)
-│   ├── public/
-│   │   └── songs/              # Song assets (Song Pack, not committed)
-│   ├── src/
-│   │   ├── views/              # Views: Home / Preview / Perform / Result / SyncTune
-│   │   ├── score/              # MusicXML → timeline parsing (TDD), OSMD wrapper
-│   │   ├── audio/              # Master clock engine, accompaniment synth, recording, PCM/WAV
-│   │   ├── pitch/              # YIN pitch detection, comparison statistics (TDD)
-│   │   ├── synctune/           # tune-mode logic and state (TDD)
-│   │   ├── background/         # three.js theme scenes, 3D flute
-│   │   ├── components/         # Score container, control bar, pitch charts, intro animation
-│   │   └── store.ts            # zustand global state
-│   └── scripts/                # Rendering / screenshot / validation helper scripts
-├── docs/                       # Design specs, technology choices, screenshots
-├── plans/                      # Implementation plans
-└── resources/                  # Asset sources (local & private, not committed)
+```bash
+npm run dev:web        # Web demo mode
+npm run build          # Web demo build → app/dist
+npm run build:desktop  # Full-feature build → app/dist-desktop
+npm run preview        # Preview the default app/dist build
 ```
 
-## 🌊 Performance Data Flow
+The repository includes a four-measure public fallback sample and the two importable studies above. Private featured-song scores, audio, covers and videos are excluded from the source, so a fresh clone's featured catalog may differ from the online site.
 
-One path from Song Pack assets to intonation feedback explains the whole app (interactive version: [syrinx-dataflow-en.html](docs/img/syrinx-dataflow-en.html), append `?theme=dark` for the dark theme):
+## Your data stays on your device
 
-<p align="center">
-  <img src="docs/img/syrinx-dataflow-en.png" alt="Syrinx data flow: Song Pack → parse → perform loop → capture → feedback" width="100%"/>
-</p>
+The personal library needs no account. Import parsing, cover processing and synthesis of the original piano part happen locally. Scores, edited information, covers and folders live in the current browser's IndexedDB storage.
 
-## 🏗️ Architecture
+Different browsers, profiles and site addresses have separate libraries. Changing a domain or local port does not migrate your data, and clearing site data deletes the library. **Export backups** regularly from the library menu and import them to restore or move your collection. Save and restore every part of a multi-file backup.
 
-Frontend-only SPA with an in-browser closed loop and zero backend API: a static site loads five React views, while the score / audio / recorder / pitch engines and the Song Pack asset layer each hold their place (interactive version: [syrinx-architecture-en.html](docs/img/syrinx-architecture-en.html), append `?theme=dark` for the dark theme):
+A locally running app can read imported scores and play their original piano accompaniment offline while its local server remains available. Website offline caching and cloud sync are not provided. Editing means changing score information; accompaniment uses one existing piano part. Note editing and automatic arrangement are outside the current feature set.
 
-<p align="center">
-  <img src="docs/img/syrinx-architecture-en.png" alt="Syrinx architecture: static site → views → four engines → global state, fed by Song Pack and the anchor workbench" width="100%"/>
-</p>
+## Contributing
 
-## 🎵 Song Pack
+Syrinx uses React, TypeScript, Vite, OpenSheetMusicDisplay, Web Audio and three.js. Reading and performance run in the browser; the personal library and featured Song Packs are separate score sources.
 
-Each song is one asset pack placed under `app/public/songs/<song-id>/`:
-
-```
-app/public/songs/<song-id>/
-├── manifest.json       # Metadata (see below)
-├── score.musicxml      # Score (MusicXML)
-├── accompaniment.mp3   # Accompaniment audio (optional; synthesized procedurally if missing)
-├── background.mp4      # Background video (optional; three.js theme scene if missing)
-└── cover.jpg           # Cover art (optional)
+```bash
+cd app                # Skip if already in app
+npm test              # Unit and component tests
+npm run lint          # Static checks
+npm run build
+npm run build:desktop
 ```
 
-```jsonc
-{
-  "id": "my-song",
-  "title": "My Song",
-  "composer": "…",
-  "difficulty": 2,                  // 1-3
-  "durationLabel": "3:45",
-  "keyLabel": "C major",
-  "scoreUrl": "/songs/my-song/score.musicxml",
-  "accompanimentUrl": "/songs/my-song/accompaniment.mp3",
-  "accent": "#5fb8a8",              // Song theme color
-  "backgroundTheme": "lumiere",
-  "bpm": 90
-}
-```
+- [v0.3.0 release notes](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/releases/v0.3.0.md) · [Personal library scope](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/superpowers/specs/2026-09-13-personal-library-scope-update.md)
+- [Tempo and recording segment design](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/superpowers/specs/2026-09-13-tempo-feedback-design.md) · [Web deployment](https://github.com/Romanticjojo/Syrinx/blob/dev/docs/DEPLOY-WEB.md)
+- [Report an issue or suggest an improvement](https://github.com/Romanticjojo/Syrinx/issues) · [Explore the development source](https://github.com/Romanticjojo/Syrinx/tree/dev/app/src)
 
-Image-based scores can be converted to MusicXML through an OMR pipeline and added following the spec above.
+Next directions: native installers, measure-loop practice, and further reading and performance validation on physical devices.
 
-## 🗺 Roadmap
+## Acknowledgements and license
 
-The core performance loop has landed; the focus now shifts to the song-library ecosystem and advanced practice features:
-
-| Phase | Scope | Status |
-|:---:|---|:---:|
-| M1 | Preview + rendering: library → preview → OSMD score rendering | ✅ |
-| M2 | Synchronized performance: timeline TDD, score/audio/cursor sync, dynamic background, immersive controls | ✅ |
-| M3 | Recording + feedback: recording playback, YIN intonation detection, comparison charts, 3D entrance | ✅ |
-| P1 | More Song Packs, tempo adjustment, loop measures | 🚧 |
-| P2 | CREPE pitch detection enhancement, mixer playback | 📅 |
-| P3 | Multi-platform (PWA / mobile), desktop packaging | 📅 |
-
-## ❓ FAQ / Known Issues
-
-**Q: The library is empty after cloning?**
-A: Expected — scores / accompaniments / covers are copyrighted media and are not distributed with the repo. Put songs under `app/public/songs/` following the [Song Pack](#-song-pack) spec.
-
-**Q: The exported WAV recording is silent?**
-A: Older versions had an issue where the analysis branch and the recording branch were not on the same audio source; it now captures directly via AudioWorklet (same source as the analysis branch). If it is still silent, check the system microphone permission and input device selection.
-
-**Q: The accompaniment and the cursor are out of sync?**
-A: Sync uses `AudioContext.currentTime` as the sole clock; if you use an external accompaniment audio file, make sure the beat anchors (beats) in the manifest align with it.
-
-**Known issues**: ① The 3D entrance animation runs at low frame rates on some integrated GPUs (skippable); ② the first screen looks sparse when the library is empty (add one song to restore it).
-
-## 🤝 Acknowledgements
-
-- [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay) — browser MusicXML rendering engine
-- [three.js](https://threejs.org/) — 3D background and flute model
-
-> Song assets (scores / accompaniments / covers) are copyrighted media and not distributed with the repo; each song belongs to its rights holders.
-
----
-
-## 📄 License
-
-Released under the **Apache License 2.0**.
-
-Apache License 2.0 © 2026 Syrinx contributors — you are free to use, modify and distribute this project (commercially included), provided the copyright and license notices are retained; it also grants an express patent license, and derivative works must state significant changes.
-
-<div align="center">
-<sub>Happy playing 🎶 — S Y R I N X · Flowing Flute</sub>
-</div>
+Thanks to [OpenSheetMusicDisplay](https://github.com/opensheetmusicdisplay/opensheetmusicdisplay), [three.js](https://github.com/mrdoob/three.js) and the wider open-source community. Syrinx uses the [Apache License 2.0](LICENSE). Song media belongs to its respective rights holders.

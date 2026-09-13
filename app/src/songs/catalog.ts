@@ -3,16 +3,17 @@ import type { SongManifest } from '../types'
 export const PRIVATE_SONG_ORDER = [
   'luv-letter',
   'flower-dance',
-  'river-flows-in-you',
   'expedition-33',
-  'birds-poem',
+  'alicia',
   'interstellar',
+  'weight-of-the-world',
 ] as const
 
 type ManifestModule = { default?: unknown } | unknown
 
-// These old placeholder packs remain on disk only as parser test fixtures.
-const RETIRED_FIXTURE_IDS = new Set(['lumiere', 'aurora-scale'])
+// Keep old local packs from reappearing through glob discovery or deployment lists.
+// Personal-library imports are independent of this built-in catalog.
+const RETIRED_SONG_IDS = new Set(['lumiere', 'aurora-scale', 'birds-poem', 'river-flows-in-you'])
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
@@ -35,7 +36,7 @@ function privateSongs(modules: Record<string, ManifestModule>): SongManifest[] {
   for (const [path, module] of Object.entries(modules)) {
     const manifest = unwrapManifest(module)
     if (!isSongManifest(manifest)) continue
-    if (RETIRED_FIXTURE_IDS.has(manifest.id)) continue
+    if (RETIRED_SONG_IDS.has(manifest.id)) continue
     const pathId = /\/songs\/([^/]+)\/manifest\.json$/.exec(path.replaceAll('\\', '/'))?.[1]
     if (pathId && pathId !== manifest.id) continue
     if (!byId.has(manifest.id)) byId.set(manifest.id, manifest)

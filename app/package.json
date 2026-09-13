@@ -1,17 +1,20 @@
 {
   "name": "app",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --mode web",
+    "dev:web": "vite --mode web",
     "build": "tsc -b && vite build",
+    "build:desktop": "tsc -b && vite build --mode desktop --outDir dist-desktop",
     "test": "vitest run",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.1",
+    "fflate": "^0.8.3",
     "opensheetmusicdisplay": "^2.1.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -24,6 +27,7 @@
     "@types/react-dom": "^19.2.4",
     "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.12.0",
     "oxlint": "^1.79.0",
     "typescript": "~6.0.2",

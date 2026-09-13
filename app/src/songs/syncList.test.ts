@@ -29,14 +29,18 @@ describe('syncSongList', () => {
     }
   })
 
-  it('当前曲库现实：恰为 4 首有 beats 的曲（web-deploy 体验版隐藏 river-flows-in-you / birds-poem 半成品；dev 分支为 6 首，新增曲目时更新此清单）', () => {
+  it('同步曲库遵循六首精选曲与当前发布允许清单', () => {
+    const allowlist = import.meta.env.VITE_SONG_IDS as string | undefined
+    const allowed = allowlist === undefined ? null : new Set(allowlist.split(',').map((id) => id.trim()))
     expect([...list.map((s) => s.id)].sort()).toEqual(
       [
+        'alicia',
         'expedition-33',
         'flower-dance',
         'interstellar',
         'luv-letter',
-      ].sort(),
+        'weight-of-the-world',
+      ].filter((id) => allowed === null || allowed.has(id)).sort(),
     )
   })
 })

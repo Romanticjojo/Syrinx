@@ -1,0 +1,20 @@
+.dialog-backdrop { position: fixed; inset: 0; z-index: 100; background: color-mix(in srgb, var(--page-scrim) 78%, transparent); backdrop-filter: blur(12px); display: grid; place-items: center; padding: 24px; }
+.dialog-panel { width: min(100%, 510px); max-height: calc(100dvh - 48px); overflow-y: auto; border: 1px solid var(--line-strong); border-radius: 18px; background: var(--surface); padding: 28px; box-shadow: var(--shadow-md); color: var(--ink); }
+.dialog-wide { width: min(100%, 740px); }
+.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.dialog-heading h2 { font: 26px/1.25 var(--serif); }
+.dialog-close { flex-shrink: 0; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: var(--circ); background: transparent; color: var(--ink-dim); font-size: 25px; cursor: pointer; }
+.dialog-close:hover { color: var(--ink); border-color: var(--line-strong); }
+.dialog-panel p { font-size: 14px; line-height: 1.85; color: var(--ink-dim); }
+.dialog-actions { display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap; margin-top: 28px; }
+.dialog-panel :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.edition-emblem { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .2em; margin-bottom: 16px; }
+.edition-features { display: grid; gap: 10px; padding: 24px 0 0; margin-top: 22px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink); }
+@media(max-width: 520px) { .dialog-backdrop { padding: 12px; } .dialog-panel { padding: 22px; max-height: calc(100dvh - 24px); } .dialog-heading h2 { font-size: 23px; } }
+.dialog-panel { overscroll-behavior: contain; overflow-wrap: anywhere; min-height: 0; }
+.dialog-heading h2 { min-width: 0; }
+@media (max-width: 640px), (max-height: 500px) {
+  .dialog-backdrop { padding: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); }
+  .dialog-panel { max-height: calc(100dvh - max(10px, env(safe-area-inset-top, 0px)) - max(10px, env(safe-area-inset-bottom, 0px))); padding: 20px; }
+  .dialog-actions > button { min-height: 44px; }
+}

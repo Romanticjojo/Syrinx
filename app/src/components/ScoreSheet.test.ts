@@ -1,7 +1,8 @@
-import { act, createElement } from 'react'
+import { act, createElement, type RefObject } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Timeline } from '../types'
+import type { OSMDScore } from '../score/OSMDScore'
 
 /** [t_1d124051] 谱面小屏混合适配组件测试：
  *  - fit（视口 ≥640px）：三层结构 .sheet-container > .sheet-scale > .sheet-virtual，
@@ -14,6 +15,7 @@ import type { Timeline } from '../types'
  *    初始化回调——演奏中 HUD 由 rAF 主循环驱动） */
 
 const registry = vi.hoisted(() => ({
+  loadBehavior: null as null | (() => Promise<void>),
   instances: [] as Array<{
     container: HTMLElement
     args: unknown[]
@@ -21,6 +23,9 @@ const registry = vi.hoisted(() => ({
     dispose: ReturnType<typeof vi.fn>
     setViewScale: ReturnType<typeof vi.fn>
     showCursor: ReturnType<typeof vi.fn>
+    selectMeasureAtPoint: ReturnType<typeof vi.fn>
+    selectMeasure: ReturnType<typeof vi.fn<(value: number | null) => void>>
+    getSelectedMeasure: ReturnType<typeof vi.fn<() => number | null>>
     onMeasureChange: ((m: number, total: number) => void) | undefined
   }>,
 }))
@@ -29,10 +34,14 @@ vi.mock('../score/OSMDScore', () => ({
   OSMDScore: class {
     container: HTMLElement
     args: unknown[]
-    load = vi.fn(async () => {})
+    load = vi.fn(async () => { await registry.loadBehavior?.() })
     dispose = vi.fn()
     setViewScale = vi.fn()
     showCursor = vi.fn()
+    selectMeasureAtPoint = vi.fn(() => ({ measure: 2, time: 3 }))
+    selected: number | null = null
+    selectMeasure = vi.fn((value: number | null) => { this.selected = value })
+    getSelectedMeasure = vi.fn(() => this.selected)
     onMeasureChange: ((m: number, total: number) => void) | undefined
     constructor(container: HTMLElement, ...args: unknown[]) {
       this.container = container
@@ -91,6 +100,7 @@ let rafCbs: FrameRequestCallback[] = []
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   registry.instances.length = 0
+  registry.loadBehavior = null
   rafCbs = []
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     rafCbs.push(cb)
@@ -121,7 +131,11 @@ type SheetProps = {
   timeline?: Timeline | null
   autoShowCursor?: boolean
   onMeasureChange?: (m: number, total: number) => void
+  onMeasureSelect?: (m: number, time: number) => void
   autoScroll?: boolean
+  zoom?: number
+  accent?: string
+  scoreRef?: RefObject<OSMDScore | null>
 }
 
 async function mountSheet(props: SheetProps = {}) {
@@ -148,6 +162,82 @@ async function mountSheet(props: SheetProps = {}) {
 }
 
 describe('ScoreSheet 小屏混合适配（t_1d124051）', () => {
+  it('taps call the latest selection handler without rebuilding or reloading the score', async () => {
+    stubMediaAtLeast640(true)
+    const first = vi.fn()
+    const latest = vi.fn()
+    const host = await mountSheet({ onMeasureSelect: first })
+    const instance = registry.instances[0]
+    const { default: ScoreSheet } = await import('./ScoreSheet')
+    await act(async () => roots[0].render(createElement(ScoreSheet, {
+      xml: '<score-partwise/>', timeline: MINI_TIMELINE, onMeasureSelect: latest,
+    })))
+    const target = host.querySelector('.sheet-virtual')!
+    for (const type of ['pointerdown', 'pointerup']) {
+      const event = new Event(type, { bubbles: true })
+      Object.assign(event, { pointerId: 1, button: 0, clientX: 100, clientY: 50 })
+      target.dispatchEvent(event)
+    }
+    expect(registry.instances).toHaveLength(1)
+    expect(instance.load).toHaveBeenCalledOnce()
+    expect(first).not.toHaveBeenCalled()
+    expect(latest).toHaveBeenCalledExactlyOnceWith(2, 3)
+  })
+
+  it('reading without a selection callback does not activate selection', async () => {
+    stubMediaAtLeast640(true)
+    const host = await mountSheet()
+    const target = host.querySelector('.sheet-virtual')!
+    for (const type of ['pointerdown', 'pointerup']) {
+      const event = new Event(type, { bubbles: true })
+      Object.assign(event, { pointerId: 1, button: 0, clientX: 100, clientY: 50 })
+      target.dispatchEvent(event)
+    }
+    expect(registry.instances[0].selectMeasureAtPoint).not.toHaveBeenCalled()
+  })
+
+  it('loads the unchanged score into every replacement instance when zooming in and out', async () => {
+    stubMediaAtLeast640(true)
+    await mountSheet({ zoom: 1 })
+    const { default: ScoreSheet } = await import('./ScoreSheet')
+    for (const zoom of [1.2, .8]) {
+      const previous = registry.instances.at(-1)!
+      await act(async () => roots[0].render(createElement(ScoreSheet, { xml: '<score-partwise/>', timeline: MINI_TIMELINE, zoom })))
+      const current = registry.instances.at(-1)!
+      expect(current).not.toBe(previous)
+      expect(previous.dispose).toHaveBeenCalledOnce()
+      expect(current.load).toHaveBeenCalledExactlyOnceWith('<score-partwise/>', MINI_TIMELINE)
+    }
+  })
+
+  it.each([
+    ['accent', { accent: '#aabbcc' }],
+    ['autoScroll', { autoScroll: false }],
+    ['scoreRef', { scoreRef: { current: null } }],
+    ['onMeasureChange', { onMeasureChange: vi.fn() }],
+  ] as const)('reloads unchanged XML when %s rebuilds the instance', async (_, changed) => {
+    stubMediaAtLeast640(true)
+    await mountSheet()
+    const previous = registry.instances.at(-1)!
+    const { default: ScoreSheet } = await import('./ScoreSheet')
+    await act(async () => roots[0].render(createElement(ScoreSheet, { xml: '<score-partwise/>', timeline: MINI_TIMELINE, ...changed })))
+    const current = registry.instances.at(-1)!
+    expect(current).not.toBe(previous)
+    expect(previous.dispose).toHaveBeenCalledOnce()
+    expect(current.load).toHaveBeenCalledExactlyOnceWith('<score-partwise/>', MINI_TIMELINE)
+  })
+
+  it('does not rebuild or reload on autoShowCursor-only phase changes', async () => {
+    stubMediaAtLeast640(true)
+    await mountSheet()
+    const { default: ScoreSheet } = await import('./ScoreSheet')
+    for (const autoShowCursor of [true, false, true]) {
+      await act(async () => roots[0].render(createElement(ScoreSheet, { xml: '<score-partwise/>', timeline: MINI_TIMELINE, autoShowCursor })))
+    }
+    expect(registry.instances).toHaveLength(1)
+    expect(registry.instances[0].load).toHaveBeenCalledOnce()
+  })
+
   it('fit（视口 ≥640px）：三层结构，OSMD 容器为虚拟宽节点，autoResize 关闭', async () => {
     stubMediaAtLeast640(true)
     const host = await mountSheet({ autoScroll: false })
@@ -239,6 +329,30 @@ describe('ScoreSheet 小屏混合适配（t_1d124051）', () => {
     expect(reflowInst.load).toHaveBeenCalledTimes(1)
     expect(host.querySelector('.sheet-virtual')).toBeNull()
     expect(reflowInst.container).toBe(host.querySelector('.sheet-container'))
+  })
+  it('keeps the selected measure when rotating across a layout breakpoint', async () => {
+    const media = stubMediaAtLeast640(true)
+    await mountSheet({ onMeasureSelect: vi.fn() })
+    registry.instances.at(-1)!.selectMeasure(2)
+    await act(async () => { media.setViewport(390); await new Promise(resolve => setTimeout(resolve, 10)) })
+    expect(registry.instances.at(-1)!.selectMeasure).toHaveBeenCalledWith(2)
+    registry.instances.at(-1)!.selectMeasure(null)
+    await act(async () => { media.setViewport(820); await new Promise(resolve => setTimeout(resolve, 10)) })
+    expect(registry.instances.at(-1)!.selectMeasure).not.toHaveBeenCalledWith(2)
+  })
+  it('retains selection through an intermediate instance whose load has not completed', async () => {
+    stubMediaAtLeast640(true)
+    const onMeasureSelect = vi.fn()
+    await mountSheet({ onMeasureSelect })
+    registry.instances.at(-1)!.selectMeasure(2)
+    const pending: (() => void)[] = []
+    registry.loadBehavior = () => new Promise(resolve => pending.push(resolve))
+    const { default: ScoreSheet } = await import('./ScoreSheet')
+    for (const zoom of [1.1, 1.2]) await act(async () => roots[0].render(createElement(ScoreSheet, { xml: '<score-partwise/>', timeline: MINI_TIMELINE, zoom, onMeasureSelect })))
+    await act(async () => pending[1]())
+    expect(registry.instances.at(-1)!.selectMeasure).toHaveBeenCalledWith(2)
+    await act(async () => pending[0]())
+    expect(registry.instances.at(-1)!.getSelectedMeasure()).toBe(2)
   })
 
   it('跨阈值往返：上穿回 fit 后新树真正在文档中（dispose 不得清掉 React 刚插入的子树）', async () => {

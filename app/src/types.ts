@@ -18,14 +18,17 @@ export interface NoteEvent {
 export interface Timeline {
   /** 全曲时长（末音符结束时间） */
   durationSec: number
-  /** 一个四分音符的秒数（由首个 tempo 决定；MVP 假定全曲恒速） */
+  /** 首个速度下一个四分音符的秒数；无精确速度段时用于回退换算 */
   secPerQuarter: number
   /** 四分音符速度（BPM） */
   tempo: number
   notes: NoteEvent[]
+  /** 精确速度段（按 quarters 递增，从 0 开始），支持小节内变速。
+   *  缺省时沿用精选乐谱的 measureTimes 伴奏锚点插值。 */
+  tempoSegments?: { quarters: number; time: number; bpm: number }[]
   /**
-   * 每小节起始时间表。quarters = 小节起点的四分音符位置（与 OSMD cursor
-   * RealValue 同单位），供光标按小节分段插值推进；末项为全曲终点标记
+   * 每小节起始时间表。quarters = 小节起点的四分音符位置（OSMD cursor
+   * RealValue 为全音符，需乘 4），供光标按小节分段插值推进；末项为全曲终点标记
    * （end: true，measure 号为虚构的末小节+1），不是真实小节。
    */
   measureTimes: { measure: number; time: number; quarters: number; end?: true }[]
@@ -45,10 +48,18 @@ export interface Take {
   startSec: number
   /** 录音停止对应的伴奏时间（秒） */
   stopSec: number
+  /** Fixed accompaniment speed for this segment; absent in older takes means 1. */
+  playbackRate?: number
   /** 演奏时长内实测的音高轨迹（时间 → 频率/音分偏移） */
   pitchTrack: PitchPoint[] | null
   /** 音准统计（无法分析时为 null） */
   stats: TuneStats | null
+}
+
+/** 一次演奏会话中可独立回放、分析的连续录音段。 */
+export interface PerformanceSegment extends Take {
+  /** 会话内单调生成的唯一段编号，异步结果必须凭此写回。 */
+  id: string
 }
 
 export interface PitchPoint {
@@ -86,12 +97,16 @@ export interface PerformanceSession {
   songId: string
   status: PerformanceStatus
   take: Take | null
+  /** 已完成封存的全部录音段；take 始终兼容地指向最后一段。 */
+  segments: PerformanceSegment[]
   message?: string
 }
 
 /** 曲目包元数据（Song Pack manifest） */
 export interface SongManifest {
   id: string
+  /** Personal songs are supplied by a local runtime source, never fetched from a server. */
+  source?: 'personal'
   title: string
   composer: string
   /** 1 入门 / 2 进阶 / 3 演奏级 */

@@ -4,10 +4,10 @@ import type { SongManifest } from '../types'
 import { expandRepeats, parseMusicXml, stripForcedBreaks } from '../score/musicxml'
 import type { BeatsFile } from '../score/anchors'
 
-/** 产线二期接入的四首新曲（t_0ad1f095）：manifest 必填字段、beats 结构、
+/** 产线二期仍在精选曲库的曲目：manifest 必填字段、beats 结构、
  * 谱面可解析三道闸。媒体不入库，跑此测试前需按 Song Pack 格式放置
  * public/songs/<id>/（与 luv-letter 同结构）。 */
-const NEW_SONGS = ['flower-dance', 'river-flows-in-you', 'expedition-33', 'birds-poem'] as const
+const NEW_SONGS = ['flower-dance', 'expedition-33'] as const
 
 // happy-dom 的 XML 解析器不支持单引号属性（浏览器/Electron 原生 DOMParser 无此问题，
 // 与 omr-check.test.ts 的 luv-letter 处理一致）：OMR 导出的声明是单引号，读取时归一化，

@@ -110,7 +110,7 @@
   accent-color: var(--song-accent, var(--accent));
   cursor: pointer;
 }
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .ctl-volume input[type='range'] {
     width: 56px;
   }
@@ -145,4 +145,19 @@
   .ctl-volume input[type='range'] {
     width: 44px;
   }
+}
+
+/* Keep controls reachable by width even when a tablet has a mouse attached. */
+.control-bar { max-width: calc(100% - 24px); }
+.ctl { min-width: 44px; min-height: 44px; }
+.ctl.rec { min-width: 44px; }
+.ctl-volume { min-height: 44px; }
+@media (max-width: 760px) {
+  .control-bar { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); width: min(100%, 380px); gap: 4px 8px; padding: 8px; border-radius: 24px; }
+  .control-bar > .ctl { justify-self: center; width: 44px; height: 44px; }
+  .control-bar .ctl.rec { padding: 0; }
+  .control-bar .rec-badge, .control-bar .ctl-sep { display: none; }
+  .control-bar .ctl.exit { grid-column: 5; grid-row: 1; }
+  .control-bar .ctl-volume { grid-column: 3 / -1; grid-row: 2; width: 100%; padding: 0 6px; gap: 8px; }
+  .control-bar .ctl-volume input[type='range'] { width: 100%; min-width: 0; height: 32px; }
 }

@@ -5,6 +5,7 @@ import { assetUrl } from '../lib/assetUrl'
 import { expandRepeats, parseMusicXml, stripForcedBreaks } from '../score/musicxml'
 import sampleManifest from './sample/manifest.json'
 import { buildSongCatalog } from './catalog'
+import { getRuntimeSong } from './runtime'
 
 /**
  * 内置曲库：正式曲目按 Song Pack 格式放入 public/songs/<id>/ 并在此登记即可扩展。
@@ -28,7 +29,7 @@ export const SONGS: SongManifest[] = buildSongCatalog(
 )
 
 export function getSong(id: string | null): SongManifest | undefined {
-  return SONGS.find((s) => s.id === id)
+  return getRuntimeSong(id)?.manifest ?? SONGS.find((s) => s.id === id)
 }
 
 /** loadSong 可选项（PlanB T2）：cursorMode 运行时覆盖光标数据源（优先于
@@ -46,6 +47,11 @@ export async function loadSong(
   manifest: SongManifest,
   opts?: LoadSongOptions,
 ): Promise<{ xml: string; timeline: Timeline; cursorMode: CursorMode }> {
+  if (manifest.source === 'personal') {
+    const local = getRuntimeSong(manifest.id)
+    if (!local) throw new Error('请回到个人仓库重新打开这份乐谱')
+    return { xml: local.xml, timeline: local.timeline, cursorMode: 'score' }
+  }
   const cursorMode: CursorMode = opts?.cursorMode ?? manifest.cursorMode ?? 'anchors'
   const res = await fetch(assetUrl(manifest.scoreUrl))
   if (!res.ok) throw new Error(`曲谱加载失败：${manifest.scoreUrl}（HTTP ${res.status}）`)
