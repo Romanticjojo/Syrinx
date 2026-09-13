@@ -223,7 +223,7 @@ export default function HomePage() {
       {editionNotice && <Dialog title="个人仓库" onClose={() => setEditionNotice(false)}>
         <div className="edition-notice-copy">
           <p>导入自己的 MusicXML 乐谱，编辑曲名、作者和封面，再用文件夹整理曲目。乐谱保存在设备本地，无需注册，离线也能查看和练习。</p>
-          <p>个人仓库仍在开发中，将随本地应用一同提供。网页体验版暂不开放导入，你可以先在精选乐谱中选择曲目，体验演奏功能。</p>
+          <p>个人仓库仍在开发中，将随本地应用一同提供。网页体验版暂不开放导入，您可以先在精选乐谱中选择曲目，体验演奏功能。</p>
         </div>
         <div className="dialog-actions"><button className="btn-pill" onClick={() => setEditionNotice(false)}>知道了</button></div>
       </Dialog>}
