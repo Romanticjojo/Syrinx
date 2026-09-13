@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
+import { loadAccompaniment } from '../audio/accompaniment'
+import { planMix, renderMix } from '../audio/mix'
 import { encodeWav } from '../audio/wav'
 import PlaybackDeck from '../components/PlaybackDeck'
 import PitchChart from '../components/PitchChart'
@@ -54,6 +56,8 @@ export default function ResultPage() {
   const analysis = useMemo<Analysis>(() => storedAnalysis.key === takeSessionId ? storedAnalysis.value : { status: 'analyzing' }, [storedAnalysis, takeSessionId])
   const [syncEnabled, setSyncEnabled] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [mixing, setMixing] = useState(false)
+  const [accMix, setAccMix] = useState<{ status: 'loading' | 'ready' | 'unavailable'; buffer: AudioBuffer | null }>({ status: 'loading', buffer: null })
   const [rangeTimeline, setRangeTimeline] = useState<{ songId: string; timeline: Timeline } | null>(null)
   const rangeFor = (segment: PerformanceSegment) => rangeTimeline?.songId === segment.songId ? segmentRangeLabel(rangeTimeline.timeline, segment) : `${fmt(segment.startSec)}–${fmt(segment.stopSec)}`
   const rangeLabel = take ? rangeFor(take) : ''
@@ -138,6 +142,25 @@ export default function ResultPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [take, takeSessionId, takeRate, song, cacheSegmentAnalysis, cacheTakeAnalysis])
+
+  // 混音伴奏预载：下载混音需要整段伴奏 buffer（与演奏页共用 loader 缓存）。
+  // 加载失败（外部伴奏拉取失败且曲谱不可合成/曲谱本身不可用）时禁用混音按钮。
+  useEffect(() => {
+    if (!session || session.status !== 'completed') return
+    let alive = true
+    setAccMix({ status: 'loading', buffer: null })
+    ;(async () => {
+      try {
+        const { timeline } = await loadSong(song)
+        const { buffer } = await loadAccompaniment(song, timeline)
+        if (alive) setAccMix({ status: 'ready', buffer })
+      } catch {
+        if (alive) setAccMix({ status: 'unavailable', buffer: null })
+      }
+    })()
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song, session?.status])
 
   const selectSegment = useCallback((id: string) => {
     if (id === take?.id) return
@@ -323,6 +346,33 @@ export default function ResultPage() {
     }
   }
 
+  /** 下载混音按钮：OfflineAudioContext 离线渲染「录音+伴奏」，时长 = 录音实长，
+   *  两轨各 1.0 定增益；takeRate≠1 时伴奏窗口经 WSOLA 保调拉伸对齐
+   *  （preservesPitch 同款铁律，映射关系见 audio/mix.ts planMix） */
+  const downloadMix = async () => {
+    if (!take || mixing || accMix.status !== 'ready' || !accMix.buffer) return
+    setMixing(true)
+    const stamp = new Date(take.startedAt).toISOString().slice(0, 19).replace(/[:T]/g, '')
+    try {
+      const res = await fetch(take.audioUrl)
+      const recBuffer = await audioEngine.decode(await res.arrayBuffer())
+      const plan = planMix(take, recBuffer.duration, accMix.buffer.duration)
+      if (!plan) return
+      const rendered = await renderMix(plan, recBuffer, accMix.buffer)
+      const url = URL.createObjectURL(encodeWav(rendered))
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `syrinx-${song.id}-${stamp}-part${segments.findIndex((segment) => segment.id === take.id) + 1}-mix.wav`
+      a.click()
+      // 留出浏览器取走 blob 的时间再释放
+      setTimeout(() => URL.revokeObjectURL(url), 30_000)
+    } catch (e: unknown) {
+      console.warn(`[result] 混音下载失败：${e instanceof Error ? e.message : e}`)
+    } finally {
+      setMixing(false)
+    }
+  }
+
   const chartData = useMemo(() => {
     if (!take || analysis.status !== 'done') return null
     return {
@@ -433,6 +483,14 @@ export default function ResultPage() {
               title="下载本段录音（32kHz 单声道 WAV）"
             >
               {downloading ? '下载中…' : '⤓ 下载录音'}
+            </button>
+            <button
+              className="btn-pill"
+              onClick={() => void downloadMix()}
+              disabled={accMix.status !== 'ready' || mixing}
+              title={accMix.status === 'unavailable' ? '本曲伴奏不可用，无法混音' : '录音+伴奏混合（WAV）'}
+            >
+              {mixing ? '混音中…' : '⤓ 下载混音'}
             </button>
           </div>
         </div>
