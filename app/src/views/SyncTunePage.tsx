@@ -820,7 +820,7 @@ export default function SyncTunePage({ songId }: { songId: string }) {
     (t: number) => {
       audioEngine.seek(t)
       scoreRef.current?.resetCursor()
-      if (!audioEngine.playing) scoreRef.current?.syncToTime(t)
+      if (!audioEngine.playing) scoreRef.current?.syncToTime(t, false, true)
       updateTransport(audioEngine.time)
       waveDirtyRef.current = true
       waveKickRef.current()

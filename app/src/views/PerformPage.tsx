@@ -830,7 +830,8 @@ export default function PerformPage() {
     const clamped = Math.max(0, Math.min(time, tl.durationSec))
     audioEngine.seek(clamped)
     scoreRef.current?.resetCursor()
-    scoreRef.current?.syncToTime(clamped)
+    // seek 快进：跳转距离跨多个停靠点时挂起光标栅格化，避免逐点 toDataURL 冻结主线程
+    scoreRef.current?.syncToTime(clamped, undefined, true)
     if (measure !== undefined) scoreRef.current?.selectMeasure(measure)
     liveTrackerRef.current.reset()
     pitchMeterRef.current?.reset()

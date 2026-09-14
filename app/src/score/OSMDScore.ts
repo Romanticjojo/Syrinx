@@ -123,6 +123,33 @@ export class OSMDScore {
   private measureSelection: SVGRectElement | null = null
   private selectionObserver: MutationObserver | null = null
 
+  /** [countdown-reclick] 光标栅格化门闸：OSMD Cursor.updateStyle 每次调用都
+   *  canvas.toDataURL 重新生成光标 PNG（~5ms），bulk 推进（prescan/seek 快进）
+   *  会连乘出秒级主线程冻结。挂起期间 updateStyle 短路（迭代器与几何不受
+   *  影响，只是 img.src 不刷新），恢复后下一次 update 自然补上最终样式。
+   *  幂等 patch：只在首次调用时改原型，之后翻转标志位。返回是否「本次调用
+   *  挂起了」（已挂起时返回 false，调用方据此避免重复恢复）。 */
+  private cursorStylePatch: ((suspend: boolean) => boolean) | null = null
+  private setCursorStyleSuspended(suspend: boolean): boolean {
+    if (!this.cursorStylePatch) {
+      const proto = Object.getPrototypeOf(this.osmd.cursor) as
+        { updateStyle?: (w: number, h: number, y: number, height: number) => void } | null
+      if (!proto?.updateStyle) return false
+      let suspended = false
+        const original = proto.updateStyle
+        proto.updateStyle = function patched(this: { __styleSuspended?: boolean }, ...args: Parameters<typeof original>) {
+          if (suspended) return
+          return original.apply(this, args)
+        }
+        this.cursorStylePatch = (on: boolean) => {
+          const was = suspended
+          suspended = on
+          return was
+        }
+    }
+    return this.cursorStylePatch(suspend)
+  }
+
   constructor(
     container: HTMLElement,
     accent = '#3ddfae',
@@ -346,9 +373,13 @@ export class OSMDScore {
    */
   private prescanCursorStops(): void {
     const cursor = this.osmd.cursor
+    // [countdown-reclick] bulk 推进挂起光标栅格化：数千停靠点 × ~5ms toDataURL
+    // = 载入时秒级冻结。挂起后迭代器照常走，nextIdx 表照常建，恢复一次即可。
+    const suspended = this.setCursorStyleSuspended(true)
+    const stops: number[] = []
+    try {
     cursor.reset()
     const it = cursor.iterator
-    const stops: number[] = []
     let guard = 0
     while (!it.EndReached && guard < 8192) {
       stops.push(it.currentTimeStamp.RealValue)
@@ -356,6 +387,9 @@ export class OSMDScore {
       guard++
     }
     cursor.reset()
+    } finally {
+      if (suspended) this.setCursorStyleSuspended(false)
+    }
     this.useStopTable = stops.length > 0
     this.stopQuarters = stops
     this.nextIdx = 1
@@ -473,7 +507,7 @@ export class OSMDScore {
   /** 每帧调用：把光标推进到曲目时间 t（秒）。由 rAF 驱动，只前进不后退。
    *  音值感知推进（任务 A）：下一个停靠点的开始时刻已到才前进——光标/高亮
    *  停在正在响的音上，直到该音实际时值结束；只前进语义与 seek 快进机制不变 */
-  syncToTime(t: number, dismissPlayedSelection = false): void {
+  syncToTime(t: number, dismissPlayedSelection = false, fastforward = false): void {
     // Selection is a start-point cue, not a playback highlight. Only retire it
     // on an active playback frame, at its exact accompaniment end anchor.
     if (dismissPlayedSelection && this.selectedMeasure !== null) {
@@ -484,6 +518,12 @@ export class OSMDScore {
     const cursor = this.osmd.cursor
     const it = cursor.iterator
     let advanced = false
+    // [countdown-reclick] OSMD 每次 cursor.next()/reset() 都同步重栅格化光标
+    // （update → updateWidthAndStyle → canvas.toDataURL，~5ms/次）；seek 快进
+    // 跨几十上百个停靠点 = 秒级主线程冻结（实测点击后 106 次 toDataURL、浮层
+    // 1.5-2s 才消失）。快进期间挂起 DOM 更新，迭代器照常推进，结束时恢复一次。
+    const suspendStyle = fastforward && this.setCursorStyleSuspended(true)
+    try {
     if (this.useStopTable) {
       while (
         this.nextIdx < this.stopQuarters.length &&
@@ -505,6 +545,9 @@ export class OSMDScore {
         advanced = true
         guard++
       }
+    }
+    } finally {
+      if (suspendStyle) this.setCursorStyleSuspended(false)
     }
     if (advanced) {
       this.updateHighlight()
