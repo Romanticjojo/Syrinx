@@ -107,9 +107,6 @@ export default function PerformPage() {
   const [countdownRound, setCountdownRound] = useState(0)
   const transitionGenerationRef = useRef(0)
   const transitionShouldResumeRef = useRef(false)
-  /** 续录倒数被谱面点击打断时的「续录承诺」：定位点暂存于此，用户按播放
-   *  时改走 beginCountIn 重新倒数（而非直接续播），倒数归零后从该点续录。 */
-  const pendingReplayCountInRef = useRef<number | null>(null)
   const playOperationSeqRef = useRef(0)
   const playOwnerRef = useRef(0)
   const playIntentRef = useRef(false)
@@ -362,7 +359,6 @@ export default function PerformPage() {
     captureGenerationRef.current += 1
     cancelCountIn()
     transitionShouldResumeRef.current = false
-    pendingReplayCountInRef.current = null
     const stopSec = audioEngine.time
     playIntentRef.current = false
     audioEngine.pause()
@@ -456,7 +452,6 @@ export default function PerformPage() {
       cancelCountIn()
       startPendingRef.current = false
       resumePendingRef.current = false
-      pendingReplayCountInRef.current = null
       cancelPendingAccompaniment(song.id)
       audioEngine.onEnd = undefined
       playIntentRef.current = false
@@ -637,6 +632,26 @@ export default function PerformPage() {
               setRecOn(false)
               showToast(`录音无法开始：${error instanceof Error ? error.message : String(error)}`)
             }
+          } else if (recOnRef.current && micRef.current && recStartedRef.current) {
+            // [countdown-semantic] 暂停后续播：采集仅被 gate 暂停（recStarted 仍在），
+            // 归零起播时重开 gate 接回同一段（对齐旧 toggle 的 resumeCapture 语义）
+            try {
+              await resumeCapture()
+            } catch (error) {
+              if (
+                !alive
+                || finishedRef.current
+                || phaseRef.current !== 'countdown'
+                || generation !== transitionGenerationRef.current
+                || !playOperationIsCurrent(playOperation)
+              ) {
+                pauseOwnedPlay(playOperation)
+                return
+              }
+              recOnRef.current = false
+              setRecOn(false)
+              showToast(`录音无法继续：${error instanceof Error ? error.message : String(error)}`)
+            }
           }
           if (
             !alive
@@ -681,7 +696,7 @@ export default function PerformPage() {
       alive = false
       cancelAnimationFrame(raf)
     }
-  }, [claimPlayOperation, countdownRound, ensureMic, pauseOwnedPlay, phase, playOperationIsCurrent, setPerformanceStatus, showToast, startCapture])
+  }, [claimPlayOperation, countdownRound, ensureMic, pauseOwnedPlay, phase, playOperationIsCurrent, resumeCapture, setPerformanceStatus, showToast, startCapture])
 
   // 演奏主循环：唯一时间源 audioEngine.time → 光标推进 + HUD 直写 + 实时音准 + 结束判定
   useEffect(() => {
@@ -737,85 +752,15 @@ export default function PerformPage() {
       playingRef.current = false
       setPlaying(false)
       shellRef.current?.classList.remove('idle')
-    } else if (!resumePendingRef.current) {
-      // 倒数被打断时承诺的续录点：按播放 = 重新倒数（而非直接续播），归零后从定位点续录
-      const pendingReplay = pendingReplayCountInRef.current
-      if (pendingReplay !== null) {
-        pendingReplayCountInRef.current = null
-        beginCountIn(pendingReplay, false)
-        wake()
-        return
-      }
-      resumePendingRef.current = true
-      const playOperation = claimPlayOperation()
-      const generation = transitionGenerationRef.current
-      const captureGeneration = captureGenerationRef.current
-      const sessionId = sessionIdRef.current
-      void (async () => {
-        let started = false
-        try {
-          started = await audioEngine.play()
-        } catch {
-          // 下方按 started=false 统一保留暂停态并提示
-        }
-        if (playOwnerRef.current === playOperation) resumePendingRef.current = false
-        if (
-          !mountedRef.current
-          || finishedRef.current
-          || phaseRef.current !== 'performing'
-          || generation !== transitionGenerationRef.current
-          || sessionId !== sessionIdRef.current
-          || !playOperationIsCurrent(playOperation)
-        ) {
-          if (started) pauseOwnedPlay(playOperation)
-          return
-        }
-        if (!started) {
-          playIntentRef.current = false
-          showToast('伴奏无法继续，请重试')
-          return
-        }
-        const mic = micRef.current
-        if (recOnRef.current && mic) {
-          try {
-            if (recStartedRef.current) await resumeCapture()
-            else await startCapture(false)
-          } catch (error) {
-            if (
-              !mountedRef.current
-              || finishedRef.current
-              || phaseRef.current !== 'performing'
-              || generation !== transitionGenerationRef.current
-              || sessionId !== sessionIdRef.current
-              || !playOperationIsCurrent(playOperation)
-            ) {
-              pauseOwnedPlay(playOperation)
-              return
-            }
-            if (captureGeneration === captureGenerationRef.current) {
-              recOnRef.current = false
-              setRecOn(false)
-              showToast(`录音无法继续：${error instanceof Error ? error.message : String(error)}`)
-            }
-          }
-        }
-        if (
-          !mountedRef.current
-          || finishedRef.current
-          || phaseRef.current !== 'performing'
-          || generation !== transitionGenerationRef.current
-          || sessionId !== sessionIdRef.current
-          || !playOperationIsCurrent(playOperation)
-        ) {
-          pauseOwnedPlay(playOperation)
-          return
-        }
-        playingRef.current = true
-        setPlaying(true)
-        wake()
-      })()
+      return
     }
-  }, [beginCountIn, claimPlayOperation, pauseOwnedPlay, playOperationIsCurrent, resumeCapture, showToast, start, startCapture, wake])
+    // [countdown-semantic] 用户钦定：暂停态按播放一律先倒数（与「点小节只定位+暂停」
+    // 成对）——从当前伴奏位置 beginCountIn，归零后续录；不再直接续播。
+    // 不调 showCursor：光标自起奏起已显示且停在当前位置，reset 会跳回第 1 小节。
+    dismissPracticeHint()
+    beginCountIn(audioEngine.time, false)
+    wake()
+  }, [beginCountIn, dismissPracticeHint, showToast, start, wake])
 
   /** 停止演奏：走与自然结束相同的 finish() 封存流程（伴奏停在点击时刻、
    *  Take.durationSec 截断为该时刻，回放页按截断口径统计与播放） */
@@ -864,12 +809,15 @@ export default function PerformPage() {
         return
       }
       // 谱面点击打断倒数：取消后不自动重启（等用户按播放）。伴奏已在响（真播放中，
-      // 上一轮倒数刚归零、gate 尚未确认）不算打断对象；BPM 变速（prepareRate）除外
+      // 上一轮倒数刚归零、gate 尚未确认）不算打断对象；BPM 变速（prepareRate）除外。
+      // [countdown-semantic] 用户钦定语义：任何谱面点击只定位+暂停，绝不自动续播
+      // ——播放中的点选同样落暂停态，续播一律等用户按播放（按播放永远先倒数）。
       const interruptedCountdown = interruptCountdown
         && currentPhase === 'countdown'
         && !prepareRate
         && !audioEngine.playing
       const resumeAfter = !interruptedCountdown
+        && !interruptCountdown
         && (audioEngine.playing || transitionShouldResumeRef.current)
       const countdownInitial = currentPhase === 'countdown' && countdownRef.current.initial
       transitionShouldResumeRef.current = resumeAfter
@@ -908,7 +856,6 @@ export default function PerformPage() {
             tempoPendingRef.current = false
             setTempoPending(false)
             transitionShouldResumeRef.current = false
-            pendingReplayCountInRef.current = null
             const stoppedPhase = currentPhase === 'ready' ? 'ready' : 'performing'
             phaseRef.current = stoppedPhase
             setPhase(stoppedPhase)
@@ -919,37 +866,32 @@ export default function PerformPage() {
         if (!mountedRef.current || finishedRef.current || generation !== transitionGenerationRef.current) return
         positionTransport(clamped, measure)
         if (currentPhase === 'ready') {
-          pendingReplayCountInRef.current = null
           phaseRef.current = 'ready'
           setPhase('ready')
         } else if (prepareRate && currentPhase === 'countdown') {
           // BPM 变速撞上倒数：显式速度操作，按新速度自动重启倒数（与谱面点击的「等播放」语义不同）
-          pendingReplayCountInRef.current = null
           beginCountIn(clamped, countdownInitial)
         } else if (resumeAfter) {
-          pendingReplayCountInRef.current = null
+          // 进度轨键盘/重启按钮等非谱面跳转：保持「自动重排倒数续录」现状
           beginCountIn(clamped, false)
         } else if (interruptedCountdown) {
+          // 倒数被谱面点击打断（任何倒数）：取消后落暂停态等播放（initial 回就绪浮层，
+          // start 天然重新倒数；续录倒数落 performing 暂停，按播放 beginCountIn 续录）
           if (countdownInitial) {
-            // 首次起奏的倒数被打断：回就绪浮层（start 自带倒数，天然满足「等播放再倒数」）
-            pendingReplayCountInRef.current = null
             phaseRef.current = 'ready'
             setPhase('ready')
             showToast(SEEK_TOAST)
           } else {
-            // 续录倒数被打断：落暂停态记住定位点，按播放先倒数再续录
-            pendingReplayCountInRef.current = clamped
             phaseRef.current = 'performing'
             setPhase('performing')
             showToast(SEEK_TOAST)
           }
         } else if (currentPhase === 'countdown') {
           // 非谱面点击的倒数中跳转（重启按钮/进度轨键盘）：保持既有「自动重排倒数」
-          pendingReplayCountInRef.current = null
           beginCountIn(clamped, countdownInitial)
         } else {
-          // 暂停的演奏态点选：只定位（现状），按播放直接续播
-          pendingReplayCountInRef.current = null
+          // 暂停的演奏态点选（含 [countdown-semantic] 播放中点选）：只定位+暂停，
+          // 按播放一律先倒数再续录
           transitionShouldResumeRef.current = false
           phaseRef.current = 'performing'
           setPhase('performing')
