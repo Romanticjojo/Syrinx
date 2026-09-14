@@ -1,9 +1,11 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import './Dialog.css'
+import { useT } from '../i18n'
 
 export default function Dialog({ title, onClose, children, wide = false }: {
   title: string; onClose: () => void; children: ReactNode; wide?: boolean
 }) {
+  const t = useT()
   const titleId = useId()
   const panel = useRef<HTMLDivElement>(null)
   const closeRef = useRef(onClose)
@@ -36,7 +38,7 @@ export default function Dialog({ title, onClose, children, wide = false }: {
   }, [])
   return <div className="dialog-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
     <div ref={panel} className={`dialog-panel${wide ? ' dialog-wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-      <div className="dialog-heading"><h2 id={titleId}>{title}</h2><button className="dialog-close" type="button" onClick={onClose} aria-label="关闭">×</button></div>
+      <div className="dialog-heading"><h2 id={titleId}>{title}</h2><button className="dialog-close" type="button" onClick={onClose} aria-label={t('common.close')}>×</button></div>
       {children}
     </div>
   </div>

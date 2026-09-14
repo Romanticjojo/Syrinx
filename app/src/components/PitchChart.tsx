@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { NoteScore } from '../pitch/compare'
 import type { PitchPoint } from '../types'
+import { zh } from '../i18n/zh'
+import { useT } from '../i18n'
 import './PitchChart.css'
 
 interface Props {
@@ -9,6 +11,8 @@ interface Props {
   track: PitchPoint[]
   durationSec: number
   accent?: string
+  /** 无数据时 canvas 内的占位文案（由调用方注入当前语言，缺省中文） */
+  noDataText?: string
 }
 
 const ML = 40 // 左侧音名轴宽
@@ -76,10 +80,12 @@ function missPattern(g: CanvasRenderingContext2D): CanvasPattern | string {
  * 偏音暖红、漏音（无实测）红斜纹+hairline 描边；实测轨迹命中段 accent 加粗、
  * 超差偏红、谱外灰。DPR 适配 + ResizeObserver。
  */
-export default function PitchChart({ notes, track, durationSec, accent = '#3ddfae' }: Props) {
+export default function PitchChart({ notes, track, durationSec, accent = '#3ddfae', noDataText = zh['pitchChart.noData'] }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
+  // 订阅语言：切换后同一尺寸内重绘占位文案
+  useT()
 
   useEffect(() => {
     const wrap = wrapRef.current
@@ -100,8 +106,8 @@ export default function PitchChart({ notes, track, durationSec, accent = '#3ddfa
     cv.height = size.h * dpr
     const g = cv.getContext('2d')!
     g.setTransform(dpr, 0, 0, dpr, 0, 0)
-    draw(g, size.w, size.h, { notes, track, durationSec, accent })
-  }, [size, notes, track, durationSec, accent])
+    draw(g, size.w, size.h, { notes, track, durationSec, accent, noDataText })
+  }, [size, notes, track, durationSec, accent, noDataText])
 
   return (
     <div className="pitch-chart" ref={wrapRef}>
@@ -116,7 +122,7 @@ function draw(
   g: CanvasRenderingContext2D,
   w: number,
   h: number,
-  { notes, track, durationSec, accent = '#3ddfae' }: DrawArgs,
+  { notes, track, durationSec, accent = '#3ddfae', noDataText = zh['pitchChart.noData'] }: DrawArgs,
 ) {
   g.clearRect(0, 0, w, h)
 
@@ -135,7 +141,7 @@ function draw(
   if (!Number.isFinite(lo) || !Number.isFinite(hi)) {
     g.fillStyle = '#7a7a7a'
     g.font = '13px system-ui'
-    g.fillText('暂无可对比的音高数据', ML, h / 2)
+    g.fillText(noDataText, ML, h / 2)
     return
   }
   lo = Math.floor(lo - 1.5)

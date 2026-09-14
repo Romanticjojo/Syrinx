@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import About from '../components/About'
 import Dialog from '../components/Dialog'
+import LangSwitch from '../components/LangSwitch'
 import HeroCarousel from './HeroCarousel'
-import { DIFFICULTY_LABEL, SONGS } from '../songs'
+import { SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
+import { pickSongText, useT } from '../i18n'
 import type { SongManifest } from '../types'
 import { useAppStore } from '../store'
 import './HomePage.css'
@@ -27,6 +29,7 @@ const PREVIEW_DELAY_MS = 200
 
 /** Netflix 式单卡：hover 放大提亮 + 停留后静音视频预览 + 迷你播放按钮 */
 function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) {
+  const t = useT()
   const [previewing, setPreviewing] = useState(false)
   // 首次预览后 <video> 保留预热（暂停而非销毁），再次 hover 直接续播，避免重新拉流
   const [warmed, setWarmed] = useState(false)
@@ -117,7 +120,7 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
       onMouseLeave={stopPreview}
       onFocus={startPreview}
       onBlur={stopPreview}
-      title={`${song.title} · ${song.composer}`}
+      title={`${pickSongText(song, 'title')} · ${pickSongText(song, 'composer')}`}
     >
       <div
         className="art"
@@ -160,10 +163,10 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
         </span>
       </div>
       <div className="card-info">
-        <div className="t">{song.title}</div>
-        <div className="a">{song.composer}</div>
+        <div className="t">{pickSongText(song, 'title')}</div>
+        <div className="a">{pickSongText(song, 'composer')}</div>
         <div className="diff">
-          <span>{DIFFICULTY_LABEL[song.difficulty]}</span>
+          <span>{t(`difficulty.${song.difficulty}`)}</span>
           <span className="dur">{song.durationLabel}</span>
         </div>
       </div>
@@ -172,6 +175,7 @@ function SongCard({ song, onOpen }: { song: SongManifest; onOpen: () => void }) 
 }
 
 export default function HomePage() {
+  const t = useT()
   const go = useAppStore((s) => s.go)
   const featured = SONGS[0]
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -188,24 +192,25 @@ export default function HomePage() {
           Syrinx
         </div>
         <nav className="home-nav">
-          <button className="nav-pill on">曲库</button>
+          <button className="nav-pill on">{t('home.navLibrary')}</button>
           <button className="nav-pill" onClick={() => setAboutOpen(true)}>
-            关于
+            {t('home.navAbout')}
           </button>
+          <LangSwitch />
         </nav>
       </header>
 
-      <div className="catalog-tabs-bar"><div className="catalog-tabs" role="tablist" aria-label="乐谱分类">
-        <button role="tab" aria-selected={!personalOpen} className={!personalOpen ? 'selected' : ''} onClick={() => setLibraryTab('featured')}>精选乐谱</button>
-        <button role="tab" aria-selected={personalOpen} className={personalOpen ? 'selected' : ''} onClick={() => { if (PersonalLibrary) setLibraryTab('personal'); else setEditionNotice(true) }}>个人仓库{!PersonalLibrary && <span className="edition-tab-mark">开发中</span>}</button>
+      <div className="catalog-tabs-bar"><div className="catalog-tabs" role="tablist" aria-label={t('home.catalogTabsLabel')}>
+        <button role="tab" aria-selected={!personalOpen} className={!personalOpen ? 'selected' : ''} onClick={() => setLibraryTab('featured')}>{t('home.tabFeatured')}</button>
+        <button role="tab" aria-selected={personalOpen} className={personalOpen ? 'selected' : ''} onClick={() => { if (PersonalLibrary) setLibraryTab('personal'); else setEditionNotice(true) }}>{t('home.tabPersonal')}{!PersonalLibrary && <span className="edition-tab-mark">{t('home.devBadge')}</span>}</button>
       </div></div>
 
-      {personalOpen && PersonalLibrary ? <Suspense fallback={<div className="route-loading" role="status">正在打开个人仓库…</div>}><PersonalLibrary /></Suspense> : <>
+      {personalOpen && PersonalLibrary ? <Suspense fallback={<div className="route-loading" role="status">{t('home.personalLoading')}</div>}><PersonalLibrary /></Suspense> : <>
       {/* 首发英雄位：三曲 Netflix 式轮播，点击任意广告页进入预览 */}
       {featured && <HeroCarousel onOpen={(song) => go('preview', song.id)} />}
 
       <section className="home-section">
-        <h3>为你精选</h3>
+        <h3>{t('home.featured')}</h3>
         {SONGS.length > 0 ? (
           <div className="song-grid">
             {SONGS.map((s) => (
@@ -214,18 +219,18 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="catalog-empty" role="status">
-            <b>当前没有可用曲目</b>
-            <span>这个版本尚未包含所选曲目，请检查曲目配置或稍后重试。</span>
+            <b>{t('home.emptyTitle')}</b>
+            <span>{t('home.emptyBody')}</span>
           </div>
         )}
       </section>
       </>}
-      {editionNotice && <Dialog title="个人仓库" onClose={() => setEditionNotice(false)}>
+      {editionNotice && <Dialog title={t('home.personalDialogTitle')} onClose={() => setEditionNotice(false)}>
         <div className="edition-notice-copy">
-          <p>导入自己的 MusicXML 乐谱，编辑曲名、作者和封面，再用文件夹整理曲目。乐谱保存在设备本地，无需注册，离线也能查看和练习。</p>
-          <p>个人仓库仍在开发中，将随本地应用一同提供。网页体验版暂不开放导入，您可以先在精选乐谱中选择曲目，体验演奏功能。</p>
+          <p>{t('home.personalDialogP1')}</p>
+          <p>{t('home.personalDialogP2')}</p>
         </div>
-        <div className="dialog-actions"><button className="btn-pill" onClick={() => setEditionNotice(false)}>知道了</button></div>
+        <div className="dialog-actions"><button className="btn-pill" onClick={() => setEditionNotice(false)}>{t('common.gotIt')}</button></div>
       </Dialog>}
       {aboutOpen && <About onClose={() => setAboutOpen(false)} />}
     </div>

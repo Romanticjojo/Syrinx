@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './Intro.css'
 import { assetUrl } from '../lib/assetUrl'
+import { useT } from '../i18n'
 
 interface Props {
   onDone: () => void
@@ -11,6 +12,7 @@ interface Props {
  * 「下次不再播放」写 localStorage，App 启动时读取直接跳过。
  */
 export default function Intro({ onDone }: Props) {
+  const t = useT()
   const [leaving, setLeaving] = useState(false)
   const doneRef = useRef(false)
 
@@ -33,7 +35,7 @@ export default function Intro({ onDone }: Props) {
   }, [])
 
   return (
-    <div className={`intro${leaving ? ' leaving' : ''}`} role="dialog" aria-label="Syrinx 入场">
+    <div className={`intro${leaving ? ' leaving' : ''}`} role="dialog" aria-label={t('intro.dialogLabel')}>
       <div className="intro-beam" aria-hidden="true" />
       <div className="intro-center">
         <img className="intro-emblem" src={assetUrl("/brand/syrinx-logo-dark.jpg")} alt="" aria-hidden="true" />
@@ -41,7 +43,7 @@ export default function Intro({ onDone }: Props) {
       </div>
       <div className="intro-actions">
         <button className="intro-enter" onClick={close}>
-          进入应用 ›
+          {t('intro.enter')}
         </button>
       </div>
     </div>

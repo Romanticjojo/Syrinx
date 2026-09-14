@@ -8,6 +8,7 @@ import PitchChart from '../components/PitchChart'
 import { extractPitchTrackAsync, scoreAgainst, timelineInRange, type ScoreResult } from '../pitch/compare'
 import { getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
+import { pickSongText, useLangStore, useT } from '../i18n'
 import { useAppStore } from '../store'
 import type { PerformanceSegment, Timeline } from '../types'
 import './ResultPage.css'
@@ -21,18 +22,24 @@ type Analysis =
 const fmt = (sec: number): string =>
   `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`
 
-function segmentRangeLabel(timeline: Timeline, segment: PerformanceSegment): string {
+function segmentRangeLabel(
+  timeline: Timeline,
+  segment: PerformanceSegment,
+  t: (key: 'result.measure' | 'result.measureRange', params?: Record<string, string | number>) => string,
+): string {
   const anchors = timeline.measureTimes.filter((item) => !item.end)
   const start = [...anchors].reverse().find((item) => item.time <= segment.startSec)
   const endTime = Math.max(segment.startSec, segment.stopSec - 0.000_001)
   const end = [...anchors].reverse().find((item) => item.time <= endTime)
   if (!start || !end) return `${fmt(segment.startSec)}–${fmt(segment.stopSec)}`
   return start.measure === end.measure
-    ? `第 ${start.measure} 小节`
-    : `第 ${start.measure}–${end.measure} 小节`
+    ? t('result.measure', { m: start.measure })
+    : t('result.measureRange', { a: start.measure, b: end.measure })
 }
 
 export default function ResultPage() {
+  const t = useT()
+  const lang = useLangStore((s) => s.lang)
   const session = useAppStore((s) => s.performanceSession)
   const segments = useMemo<PerformanceSegment[]>(() => {
     if (session?.status !== 'completed') return []
@@ -59,7 +66,7 @@ export default function ResultPage() {
   const [mixing, setMixing] = useState(false)
   const [accMix, setAccMix] = useState<{ status: 'loading' | 'ready' | 'unavailable'; buffer: AudioBuffer | null }>({ status: 'loading', buffer: null })
   const [rangeTimeline, setRangeTimeline] = useState<{ songId: string; timeline: Timeline } | null>(null)
-  const rangeFor = (segment: PerformanceSegment) => rangeTimeline?.songId === segment.songId ? segmentRangeLabel(rangeTimeline.timeline, segment) : `${fmt(segment.startSec)}–${fmt(segment.stopSec)}`
+  const rangeFor = (segment: PerformanceSegment) => rangeTimeline?.songId === segment.songId ? segmentRangeLabel(rangeTimeline.timeline, segment, t) : `${fmt(segment.startSec)}–${fmt(segment.stopSec)}`
   const rangeLabel = take ? rangeFor(take) : ''
   const audioRef = useRef<HTMLAudioElement>(null)
   const syncEnabledRef = useRef(false)
@@ -387,15 +394,15 @@ export default function ResultPage() {
     const failed = session?.status === 'failed'
     const saving = session?.status === 'saving'
     const title = noRecording
-      ? '本次没有录音'
+      ? t('result.emptyNoRecording')
       : failed
-        ? '录音保存失败'
+        ? t('result.emptyFailed')
         : saving
-          ? '正在保存录音'
-          : '还没有演奏记录'
+          ? t('result.emptySaving')
+          : t('result.emptyNoSession')
     const message = session?.message ?? (saving
-      ? '保存完成后即可查看回放与音准分析。'
-      : '完成一次演奏后来这里查看回放与音准分析。')
+      ? t('result.emptySavingHint')
+      : t('result.emptyHint'))
     return (
       <main className="result empty">
         <div className="empty-card">
@@ -404,7 +411,7 @@ export default function ResultPage() {
           <p>{message}</p>
           <div className="empty-actions">
             <button className="btn-pill" onClick={() => go('home')}>
-              去曲库选曲
+              {t('result.goLibrary')}
             </button>
           </div>
         </div>
@@ -418,7 +425,7 @@ export default function ResultPage() {
   return (
     <main className="result" style={{ '--song-accent': song.accent } as React.CSSProperties}>
       <header className="result-topbar">
-        <button className="back-ghost" onClick={() => go('home')} aria-label="返回曲库">
+        <button className="back-ghost" onClick={() => go('home')} aria-label={t('common.backToLibrary')}>
           <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
             <path
               d="M10 3 5 8l5 5"
@@ -437,24 +444,24 @@ export default function ResultPage() {
       </header>
 
       <section className="result-hero">
-        <div className="kicker">演奏回放 · REPLAY</div>
-        <h1>{song.title}</h1>
+        <div className="kicker">{t('result.replayKicker')}</div>
+        <h1>{pickSongText(song, 'title')}</h1>
         <div className="result-meta">
-          {new Date(take.startedAt).toLocaleString('zh-CN')} · 录音时长 {fmt(take.durationSec)} ·{' '}
-          采集位置 {fmt(take.startSec)}–{fmt(take.stopSec)} · {rangeLabel}
-          {takeRate !== 1 && ` · ${Math.round(takeRate * 100)}% 速度`}
+          {new Date(take.startedAt).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN')} · {t('result.recDuration', { time: fmt(take.durationSec) })} ·{' '}
+          {t('result.captureRange', { range: `${fmt(take.startSec)}–${fmt(take.stopSec)}` })} · {rangeLabel}
+          {takeRate !== 1 && ` · ${t('result.tempoPct', { pct: Math.round(takeRate * 100) })}`}
         </div>
         {session.message && <p className="result-save-warning" role="alert">{session.message}</p>}
-        {segments.length > 1 && <label className="segment-selector">录音分段
-          <select aria-label="选择录音段" value={take.id} onChange={(event) => selectSegment(event.target.value)}>
-            {segments.map((segment, index) => <option key={segment.id} value={segment.id}>第 {index + 1} 段 · {rangeFor(segment)} · {fmt(segment.durationSec)}</option>)}
-          </select><span>共 {segments.length} 段</span>
+        {segments.length > 1 && <label className="segment-selector">{t('result.segments')}
+          <select aria-label={t('result.segmentSelect')} value={take.id} onChange={(event) => selectSegment(event.target.value)}>
+            {segments.map((segment, index) => <option key={segment.id} value={segment.id}>{t('result.segmentOption', { n: index + 1, range: rangeFor(segment), dur: fmt(segment.durationSec) })}</option>)}
+          </select><span>{t('result.segmentsTotal', { n: segments.length })}</span>
         </label>}
       </section>
 
       <section className="result-grid">
         <div className="playback-card">
-          <h3>录音回放</h3>
+          <h3>{t('result.playbackCard')}</h3>
           <div className="pdeck-area">
             {/* 伴奏滑杆只在对照播放开启时出现（t_5957a725）：只回听录音不需要，
                 且伴奏增益与演奏页共用，不该在回放页随手可动 */}
@@ -472,43 +479,43 @@ export default function ResultPage() {
               className="btn-pill sync"
               onClick={() => void toggleSyncPlay()}
               disabled={audioEngine.duration === 0}
-              title="录音与伴奏从同一时刻起播，对照听辨"
+              title={t('result.syncTitle')}
             >
-              {syncEnabled ? '❚❚ 停止对照' : '♫ 对照伴奏播放'}
+              {syncEnabled ? t('result.syncStop') : t('result.syncPlay')}
             </button>
             <button
               className="btn-pill"
               onClick={() => void downloadTake()}
               disabled={downloading}
-              title="下载本段录音（32kHz 单声道 WAV）"
+              title={t('result.downloadTitle')}
             >
-              {downloading ? '下载中…' : '⤓ 下载录音'}
+              {downloading ? t('result.downloading') : t('result.downloadRec')}
             </button>
             <button
               className="btn-pill"
               onClick={() => void downloadMix()}
               disabled={accMix.status !== 'ready' || mixing}
-              title={accMix.status === 'unavailable' ? '本曲伴奏不可用，无法混音' : '录音+伴奏混合（WAV）'}
+              title={accMix.status === 'unavailable' ? t('result.mixUnavailableTitle') : t('result.mixTitle')}
             >
-              {mixing ? '混音中…' : '⤓ 下载混音'}
+              {mixing ? t('result.mixing') : t('result.downloadMix')}
             </button>
           </div>
         </div>
 
         <div className="stats-card">
-          <h3>音准统计</h3>
+          <h3>{t('result.statsCard')}</h3>
           {analysis.status === 'analyzing' && <div className="stats-state" role="status">
-            <span>{analysis.progress === undefined ? '正在读取录音…' : `音高分析 ${Math.round(analysis.progress * 100)}%`}</span>
-            <progress className="analysis-progress" aria-label="音高分析进度" max={1} value={analysis.progress} />
-            <small>可以先回听录音，分析会在后台完成。</small>
+            <span>{analysis.progress === undefined ? t('result.readingRec') : t('result.analyzing', { pct: Math.round(analysis.progress * 100) })}</span>
+            <progress className="analysis-progress" aria-label={t('result.analysisProgress')} max={1} value={analysis.progress} />
+            <small>{t('result.analysisBg')}</small>
           </div>}
           {analysis.status === 'unsupported' && (
             <div className="stats-state warn">
-              该浏览器暂不支持录音音高分析（{analysis.message.slice(0, 80)}），回放不受影响。
+              {t('result.unsupported', { message: analysis.message.slice(0, 80) })}
             </div>
           )}
           {analysis.status === 'error' && (
-            <div className="stats-state warn">分析出错：{analysis.message.slice(0, 120)}</div>
+            <div className="stats-state warn">{t('result.analysisError', { message: analysis.message.slice(0, 120) })}</div>
           )}
           {analysis.status === 'done' && stats && (
             <>
@@ -517,22 +524,22 @@ export default function ResultPage() {
                 <b style={{ color: stats.inTuneRatio >= 0.7 ? song.accent : 'var(--rec)' }}>
                   {Math.round(stats.inTuneRatio * 100)}%
                 </b>
-                <span>已测音符音准率（±50 音分）</span>
+                <span>{t('result.statInTune')}</span>
               </div>
               <div className="stat">
                 <b>{stats.avgAbsCents.toFixed(0)}</b>
-                <span>平均偏差（音分）</span>
+                <span>{t('result.statAvgDev')}</span>
               </div>
               <div className="stat">
                 <b>
                   {Math.round(stats.coverageRatio * 100)}%
-                  <i className="miss"> / {stats.missedNoteCount ? `漏 ${stats.missedNoteCount}` : '无漏音'}</i>
+                  <i className="miss"> / {stats.missedNoteCount ? t('result.statMiss', { n: stats.missedNoteCount }) : t('result.statNoMiss')}</i>
                 </b>
-                <span>音符覆盖率（已测 {stats.noteCount} / {stats.totalNoteCount}）</span>
+                <span>{t('result.statCoverage', { measured: stats.noteCount, total: stats.totalNoteCount })}</span>
               </div>
               <div className="stat">
                 <b>{fmt(take.durationSec)}</b>
-                <span>实际录音时长</span>
+                <span>{t('result.statDuration')}</span>
               </div>
             </div>
             </>
@@ -540,7 +547,7 @@ export default function ResultPage() {
         </div>
       </section>
 
-      <section className="chart-section" aria-label="音高对比图">
+      <section className="chart-section" aria-label={t('result.chartAria')}>
         {analysis.status === 'done' && chartData ? (
           <>
             <PitchChart
@@ -548,32 +555,33 @@ export default function ResultPage() {
               track={chartData.track}
               durationSec={chartData.durationSec}
               accent={song.accent}
+              noDataText={t('pitchChart.noData')}
             />
             <div className="chart-legend">
               <span>
-                <i className="sw hit" /> 命中（±50 音分内）
+                <i className="sw hit" /> {t('result.legendHit')}
               </span>
               <span>
-                <i className="sw off" /> 偏音（超 ±50 音分）
+                <i className="sw off" /> {t('result.legendOff')}
               </span>
               <span>
-                <i className="sw miss" /> 漏音
+                <i className="sw miss" /> {t('result.legendMiss')}
               </span>
             </div>
           </>
         ) : (
           <div className="chart-placeholder">
-            {analysis.status === 'analyzing' ? '音高轨迹将在分析完成后显示' : '音高对比图不可用'}
+            {analysis.status === 'analyzing' ? t('result.chartPending') : t('result.chartUnavailable')}
           </div>
         )}
       </section>
 
       <footer className="result-actions">
         <button className="btn-pill primary" style={{ background: song.accent, color: '#06130d', borderColor: 'transparent' }} onClick={() => go('perform', song.id)}>
-          ↺ 重新演奏
+          {t('result.replay')}
         </button>
         <button className="btn-pill" onClick={() => go('home')}>
-          返回曲库
+          {t('common.backToLibrary')}
         </button>
       </footer>
     </main>

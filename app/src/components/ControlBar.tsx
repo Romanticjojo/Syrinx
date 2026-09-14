@@ -1,5 +1,6 @@
 import './ControlBar.css'
 import TempoControl from './TempoControl'
+import { useT } from '../i18n'
 
 export type CaptureIndicator = 'idle' | 'waiting' | 'preparing' | 'ready' | 'error'
 
@@ -46,20 +47,21 @@ export default function ControlBar({
   onVolume,
   onExit,
 }: Props) {
+  const t = useT()
   const recording = recOn && captureIndicator === 'ready' && playing
-  const recAction = recOn ? '关闭录音' : '开启录音'
-  const recStatus = captureIndicator === 'error' ? '录音不可用'
-    : recOn && captureIndicator === 'waiting' ? '等待麦克风授权'
-    : recOn && captureIndicator === 'preparing' ? '正在准备录音'
+  const recAction = recOn ? t('control.recOff') : t('control.recOn')
+  const recStatus = captureIndicator === 'error' ? t('control.recUnavailable')
+    : recOn && captureIndicator === 'waiting' ? t('control.recWaiting')
+    : recOn && captureIndicator === 'preparing' ? t('control.recPreparing')
     : ''
   return (
-    <div className="control-bar" role="toolbar" aria-label="演奏控制">
+    <div className="control-bar" role="toolbar" aria-label={t('control.toolbar')}>
       <button
         className={`ctl main${playing ? ' pause' : ''}`}
         onClick={onToggle}
         disabled={ended || tempoPending}
-        aria-label={playing ? '暂停' : '播放'}
-        title={playing ? '暂停（空格）' : '播放（空格）'}
+        aria-label={playing ? t('control.pause') : t('control.play')}
+        title={playing ? t('control.pauseTitle') : t('control.playTitle')}
       >
         {playing ? '❚❚' : '▶'}
       </button>
@@ -67,9 +69,9 @@ export default function ControlBar({
         className={`ctl rec${recording ? ' on' : ''}`}
         onClick={onRecToggle}
         disabled={ended || tempoPending}
-        aria-label={recStatus ? `${recStatus}，${recAction}` : recAction}
+        aria-label={recStatus ? t('control.recAriaCombo', { status: recStatus, action: recAction }) : recAction}
         aria-pressed={recOn}
-        title={recStatus ? `${recStatus}，尚未录音；${recAction}` : recOn ? (recording ? '正在录音，关闭后保留当前段' : '录音已开启，播放后继续采集') : '开启录音，从当前位置录制新段'}
+        title={recStatus ? t('control.recTitleWaiting', { status: recStatus, action: recAction }) : recOn ? (recording ? t('control.recTitleRecording') : t('control.recTitleOn')) : t('control.recTitleOff')}
       >
         <svg className="rec-mic" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path
@@ -89,15 +91,15 @@ export default function ControlBar({
         </svg>
         {recording && <span className="rec-badge">REC</span>}
       </button>
-      <button className="ctl" onClick={onRestart} aria-label="回开头" title="回开头">
+      <button className="ctl" onClick={onRestart} aria-label={t('control.restart')} title={t('control.restart')}>
         ↺
       </button>
       <button
         className="ctl stop"
         onClick={onStop}
         disabled={ended || !active}
-        aria-label="停止演奏"
-        title="停止演奏并进入回放"
+        aria-label={t('control.stop')}
+        title={t('control.stopTitle')}
       >
         ■
       </button>
@@ -107,7 +109,7 @@ export default function ControlBar({
 
       <TempoControl bpm={bpm} recommended={recommendedBpm} disabled={tempoDisabled} pending={tempoPending} onChange={onTempo} />
 
-      <label className="ctl-volume" aria-label="伴奏音量">
+      <label className="ctl-volume" aria-label={t('control.volume')}>
         <span className="vol-icon">♪</span>
         <input
           type="range"
@@ -123,8 +125,8 @@ export default function ControlBar({
       <button
         className="ctl exit"
         onClick={onExit}
-        aria-label={playing ? '停止并保存，进入回放' : '退出演奏'}
-        title={playing ? '停止并保存，进入回放' : '退出演奏'}
+        aria-label={playing ? t('control.exitPlaying') : t('control.exit')}
+        title={playing ? t('control.exitPlaying') : t('control.exit')}
       >
         ✕
       </button>

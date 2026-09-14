@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { audioEngine } from '../audio/AudioEngine'
 import { ensureRecGain } from '../audio/recGraph'
 import { volToGain } from '../audio/volCurve'
+import { useT } from '../i18n'
 
 interface Props {
   src: string
@@ -27,6 +28,7 @@ const fmt = (sec: number): string => {
  * MediaRecorder webm 在 <audio> 里 duration 常为 Infinity，
  * loadedmetadata 后用「先 seek 大时间再归零」逼出真实时长。 */
 export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSec = 0, showAccVol = false }: Props) {
+  const t = useT()
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(fallbackDurationSec)
@@ -149,7 +151,7 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
           className="pdeck-btn"
           style={playing ? { background: accent, color: '#06130d', borderColor: 'transparent' } : undefined}
           onClick={toggle}
-          aria-label={playing ? '暂停录音' : '播放录音'}
+          aria-label={playing ? t('pdeck.pauseRec') : t('pdeck.playRec')}
         >
           {playing ? '❚❚' : '▶'}
         </button>
@@ -157,7 +159,7 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
           ref={trackRef}
           className="pdeck-track"
           role="slider"
-          aria-label="录音进度"
+          aria-label={t('pdeck.progress')}
           aria-valuemin={0}
           aria-valuemax={Math.round(duration)}
           aria-valuenow={Math.round(time)}
@@ -177,7 +179,7 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
               <path d="M4 7v1a4 4 0 0 0 8 0V7" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
               <path d="M8 12v2.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
             </svg>
-            录音
+            {t('pdeck.rec')}
           </span>
           <input
             type="range"
@@ -186,8 +188,8 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
             step={0.01}
             value={recVol}
             onChange={(e) => setRecVol(Number(e.target.value))}
-            aria-label="录音音量"
-            title="录音音量（含增益补偿）"
+            aria-label={t('pdeck.recVol')}
+            title={t('pdeck.recVolTitle')}
           />
         </label>
         {showAccVol && (
@@ -198,7 +200,7 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
                 <circle cx="4" cy="12.5" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
                 <circle cx="11" cy="11" r="2" fill="none" stroke="currentColor" strokeWidth="1.2" />
               </svg>
-              伴奏
+              {t('pdeck.acc')}
             </span>
             <input
               type="range"
@@ -207,8 +209,8 @@ export default function PlaybackDeck({ src, accent, audioRef, fallbackDurationSe
               step={0.01}
               value={accVol}
               onChange={(e) => setAccVol(Number(e.target.value))}
-              aria-label="伴奏音量"
-              title="伴奏音量（对照播放时生效）"
+              aria-label={t('pdeck.accVol')}
+              title={t('pdeck.accVolTitle')}
             />
           </label>
         )}

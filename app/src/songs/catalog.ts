@@ -25,7 +25,12 @@ export function isSongManifest(value: unknown): value is SongManifest {
   if (![1, 2, 3].includes(value.difficulty as number)) return false
   if (!['lumiere', 'aurora', 'ember'].includes(value.backgroundTheme as string)) return false
   if (typeof value.bpm !== 'number' || !Number.isFinite(value.bpm) || value.bpm <= 0) return false
-  return Array.isArray(value.tags) && value.tags.every((tag) => typeof tag === 'string')
+  if (!Array.isArray(value.tags) || !value.tags.every((tag) => typeof tag === 'string')) return false
+  // 双语展示字段（可选）：存在则类型必须正确（字符串非空 / 字符串数组）
+  const optionalStrings = ['titleEn', 'composerEn', 'descriptionEn', 'keyLabelEn']
+  if (!optionalStrings.every((key) => value[key] === undefined || (typeof value[key] === 'string' && (value[key] as string).length > 0))) return false
+  if (value.tagsEn !== undefined && (!Array.isArray(value.tagsEn) || !value.tagsEn.every((tag) => typeof tag === 'string'))) return false
+  return true
 }
 
 const unwrapManifest = (module: ManifestModule): unknown =>

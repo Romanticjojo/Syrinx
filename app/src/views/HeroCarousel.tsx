@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { DIFFICULTY_LABEL, SONGS } from '../songs'
+import { SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
+import { pickSongText, useT } from '../i18n'
 import type { SongManifest } from '../types'
 import './HeroCarousel.css'
 
@@ -30,6 +31,7 @@ const positionOf = (s: SongManifest): React.CSSProperties =>
 
 /** 曲库英雄位 Netflix 式轮播：三曲广告页 crossfade 切换 + 自动轮播 + 键盘可达 */
 export default function HeroCarousel({ onOpen }: { onOpen: (song: SongManifest) => void }) {
+  const t = useT()
   const [active, setActive] = useState(0)
   // crossfade 中的离场张（-1 = 无）：只在切换的 600ms 内存在，避免多张全叠文字重影
   const [leaving, setLeaving] = useState(-1)
@@ -90,7 +92,7 @@ export default function HeroCarousel({ onOpen }: { onOpen: (song: SongManifest) 
           onOpen(current)
         }
       }}
-      aria-label={`轮播推荐，当前 ${current.title}，第 ${active + 1} / ${n} 曲`}
+      aria-label={t('hero.regionLabel', { title: pickSongText(current, 'title'), index: active + 1, total: n })}
     >
       {/* 仅渲染当前张 + 切换中的离场张（版式类 hero-bg/shade/body 等沿用 HomePage.css） */}
       {HERO_SONGS.map((song, i) =>
@@ -111,17 +113,17 @@ export default function HeroCarousel({ onOpen }: { onOpen: (song: SongManifest) 
             )}
             <div className="hero-shade" />
             <div className="hero-body">
-              <div className="kicker">{song.tags.join(' · ')}</div>
-              <h1>{song.title}</h1>
+              <div className="kicker">{pickSongText(song, 'tags').join(' · ')}</div>
+              <h1>{pickSongText(song, 'title')}</h1>
               <div className="meta">
-                <b>{song.composer}</b> · {DIFFICULTY_LABEL[song.difficulty]} · {song.durationLabel}
+                <b>{pickSongText(song, 'composer')}</b> · {t(`difficulty.${song.difficulty}`)} · {song.durationLabel}
               </div>
-              <p className="desc">{song.description}</p>
+              <p className="desc">{pickSongText(song, 'description')}</p>
               <div className="hero-play">
                 <button
                   className="btn-play-big"
                   style={{ background: song.accent }}
-                  aria-label={`开始预览 ${song.title}`}
+                  aria-label={t('hero.startPreview', { title: pickSongText(song, 'title') })}
                   onClick={(e) => {
                     e.stopPropagation()
                     onOpen(song)
@@ -138,7 +140,7 @@ export default function HeroCarousel({ onOpen }: { onOpen: (song: SongManifest) 
       {/* 左右切换：贴边垂直居中，点击不触发进详情 */}
       <button
         className="hero-arrow prev"
-        aria-label="上一首"
+        aria-label={t('hero.prev')}
         onClick={(e) => {
           e.stopPropagation()
           show(active - 1)
@@ -148,7 +150,7 @@ export default function HeroCarousel({ onOpen }: { onOpen: (song: SongManifest) 
       </button>
       <button
         className="hero-arrow next"
-        aria-label="下一首"
+        aria-label={t('hero.next')}
         onClick={(e) => {
           e.stopPropagation()
           show(active + 1)
@@ -164,7 +166,7 @@ export default function HeroCarousel({ onOpen }: { onOpen: (song: SongManifest) 
             key={song.id}
             className={`hero-dot${i === active ? ' on' : ''}`}
             style={i === active ? { ['--dot' as string]: song.accent } : undefined}
-            aria-label={`切到 ${song.title}`}
+            aria-label={t('hero.goTo', { title: pickSongText(song, 'title') })}
             aria-current={i === active}
             onClick={(e) => {
               e.stopPropagation()
