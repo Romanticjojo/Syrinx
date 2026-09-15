@@ -1,0 +1,1430 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { audioEngine } from '../audio/AudioEngine'
+import { applyBeats, type BeatsFile } from '../score/anchors'
+import { OSMDScore } from '../score/OSMDScore'
+import { expandRepeats, parseMusicXml } from '../score/musicxml'
+import { assetUrl } from '../lib/assetUrl'
+import { getSong, SONGS } from '../songs'
+import { resolveSyncRoute, syncTunePath, syncTuneHomePath } from '../synctune/route'
+import SongSwitcher from './SongSwitcher'
+import {
+  buildBeatsExport,
+  buildSyncNotes,
+  fmtTime,
+  makeQ2T,
+  midiName,
+  type CtrlPoint,
+  type SyncNote,
+} from '../synctune/logic'
+import { selectedNoteView, tunedCount, useSyncTuneStore, visibleNotes } from '../synctune/store'
+import { computeRmsEnvelope, sampleBlockMeans } from '../synctune/waveform'
+import './SyncTunePage.css'
+
+/**
+ * 同步调试页（/sync-tune/:songId，独立于曲库导航）：
+ * 三栏（音符列表 / OSMD 谱面 / 属性面板）+ 底部伴奏波形总览。
+ * 微调 beats.json 的 beatAnchors 控制点使光标节奏与伴奏逐音对齐；
+ * diff 只在本页内存中，导出 JSON 由用户覆盖 beats.json 后才影响演奏页。
+ * 时间唯一来源 audioEngine（不新起时钟）；q↔t 换算走局部段速率（logic.ts）。
+ * R2（T1）：AudioEngine.play() 改 async——AudioContext suspended 时先 resume 再建源
+ * （修 fire-and-forget 静音根因，resume 失败返回 false 不置 playing）；顶栏音频状态
+ * 徽标（suspended/running）事件驱动显示。
+ * R2（T2）：顶栏播放控制条（⏮⏯⏭ + 进度条 + 时间/小节）、波形图例/可折叠、
+ * 右栏「? 操作说明」面板；进度/时间走 rAF 帧直写 DOM，不进每帧 React 渲染。
+ * R2（T3）：三向选中（谱面/列表/波形）谱面 notehead 染色（OSMDScore
+ * .highlightNoteAt，单音符 setColor）；播放/选中变化自动滚动聚焦当前小节
+ * （scrollToMeasure），谱面手动 wheel/pointerdown 后 5 秒内不抢滚动；
+ * 谱面点击命中距离 >120px 时右栏提示「已选最近音符」。
+ * R2（T3b）：选中音染橙 #ff9f43（与播放光标 accent 视觉分离），谱面点击命中
+ * 走「行内音符头绘制 x 最近邻 + y tie-break」精确档（点 A 选 A）。
+ * R2（T3c）：微调工作流重排——删试听 A/B 与重置，右栏「撤销上一步/保存修改」；
+ * 保存即热切换显示时间轴（setTimeline 不重渲谱面），光标跨时值高亮启用。
+ * R2（T3d）：列表全量展示（去小节 ±2 窗口）+ 行元数据 memo 查表；帮助按钮
+ * 「? 操作说明」文字恢复（绿色 ？ 保留）。
+ * R2（T4）：标记层局部化——微调/选中只 patchMarker 改受影响标记的色/title
+ * （元素池差异更新），全量重建仅在 q 键集/基线变化时走；rowMeta 单 q2t 闭包
+ * （去逐音符 makeQ2T 重排序）、波形刻度 q→t 查表（去 baseline.some 嵌套）。
+ * R2（T6）：波形可读性——min/max 包络改 RMS 能量包络（waveform.ts 纯函数，
+ * TDD 单测）：滑动平均抹平相邻桶跳变、峰值归一化把低电平伴奏拉到 85% 高度
+ * （不再趴 mid 线像毛刺）、视口按像素列聚合桶 RMS 最大值（宽视图能量视角）；
+ * 交互与 dirty+rAF 按需重绘预算不变。
+ * R2（T6b）：波形降级为能量块进度条——连续包络（RMS/平滑/归一/最大值采样）
+ * 退役，预计算改 ~0.5s 块宽桶 RMS，drawWave 画底部锚定圆角竖条（0..38px 单
+ * 色）；滚轮缩放整体移除（卡顿源），图例行加「＋/－/⤢复位」三按钮（×1.5/
+ * ÷1.5 以视口中心、复位全曲）；拖拽平移/点刻度选中/点空白 seek 保留。
+ * R3（切换器）：顶栏加「歌曲切换器」下拉（SongSwitcher），全曲库可同步曲目
+ * （有 beatsUrl）即选即切——装配 effect 依赖 [song, currentId] 换曲重跑，
+ * cleanup 中断旧装配与播放、store.load() 重置为干净态；pushState 同步 URL
+ * （popstate 回退跟随），裸 /sync-tune 由 main.tsx 重定向默认曲；dirty 时
+ * 切曲先挂轻量确认条（.st-confirm，不弹原生 confirm）；未知曲 id 显示
+ * 装配失败态（不再静默回落 SONGS[0]）。
+ */
+
+type Phase = 'loading' | 'ready' | 'error'
+
+/** [T6b] 能量块进度条：预计算块宽 ~0.5s（桶 RMS）+ 视口均分块数 */
+const ENERGY_BLOCK_SEC = 0.5
+const ENERGY_VIEW_BLOCKS = 200
+
+export default function SyncTunePage({ songId }: { songId: string }) {
+  // 当前曲 id：首挂载取路由参数，此后由切曲（pushState）/popstate 本地推进——
+  // 本页独立渲染树，props 只在挂载时读一次。song 不再回落 SONGS[0]：未知曲
+  // id 走装配失败态（R3 决策 1），顶栏切换器仍可选有效曲自救
+  const [currentId, setCurrentId] = useState(songId)
+  const song = getSong(currentId)
+  // 未导出微调的切曲确认（R3）：dirty 时先挂确认条，确认后才丢改动
+  const [pendingId, setPendingId] = useState<string | null>(null)
+  // accent 派生：song 可能 undefined（未知曲），谱面/标记/波形用色取回落值
+  const accent = song?.accent ?? '#5fb8a8'
+  const [phase, setPhase] = useState<Phase>('loading')
+  const [errorMsg, setErrorMsg] = useState('')
+  const [xml, setXml] = useState<string | null>(null)
+  const [markersReady, setMarkersReady] = useState(false)
+  // 命中距离提示（T3 决策 4）：点谱面 120px 内无音符仍选最近时在右栏提示（5s 自动消隐）
+  const [nearHint, setNearHint] = useState<string | null>(null)
+  const nearHintTimerRef = useRef(0)
+  // 音频状态徽标（T1）：仅事件驱动更新（启用/播放尝试后 set），不进 rAF 帧路径
+  const [audioState, setAudioState] = useState<AudioContextState>(() => audioEngine.state)
+  const audioBadgeRef = useRef<HTMLButtonElement>(null)
+  // 波形按需重绘（t_perf_sync_tune）：store 变化/视口变化置脏，rAF 循环只在
+  // 播放中或脏时重绘（旧实现无条件 60fps 全量重绘，空闲时也吃满一核）；
+  // q2t 闭包/刻度表/选中 q 由 store 订阅预构建缓存，绘制帧只读 refs；
+  // 页脚刻度文本由 drawWave 直写 DOM（拖拽/缩放不再触发 React 重渲染）
+  const waveDirtyRef = useRef(true)
+  const q2tWorkRef = useRef<((q: number) => { t: number }) | null>(null)
+  const q2tBaseRef = useRef<((q: number) => { t: number }) | null>(null)
+  const ticksRef = useRef<{ t: number; q: number; tuned: boolean }[]>([])
+  const notesRef = useRef<SyncNote[]>([])
+  const selQRef = useRef<number | null>(null)
+  const waveHintRef = useRef<HTMLSpanElement>(null)
+  /** rAF 唤醒器：主循环空闲（未播放）时置脏后必须 kick 一次才会重绘 */
+  const waveKickRef = useRef<() => void>(() => {})
+  // 播放控制条（T2）：进度/时间/小节号由 rAF 帧直写 DOM（ref），不进每帧 React 渲染；
+  // ⏯ 图标仅在播放态翻转时 setState；拖拽进度条期间暂停 rAF 直写，松手才 seek
+  const [playingUi, setPlayingUi] = useState(false)
+  const playingUiRef = useRef(false)
+  const fillRef = useRef<HTMLDivElement>(null)
+  const timeLabelRef = useRef<HTMLSpanElement>(null)
+  const measureLabelRef = useRef<HTMLSpanElement>(null)
+  const scrubbingRef = useRef(false)
+  /** 小节起始时间表（基线网格 t）：⏮/⏭ 换算与小节号显示共用，随 baseline 重建 */
+  const measureStartsRef = useRef<{ m: number; t: number }[]>([])
+  // 波形面板折叠（T2）：localStorage 记忆；图例常驻折叠条
+  const [waveCollapsed, setWaveCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('st-wave-collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+
+  // store 快照（渲染用）；rAF/事件回调里一律 getState() 取最新
+  const working = useSyncTuneStore((s) => s.working)
+  const baseline = useSyncTuneStore((s) => s.baseline)
+  const selectedIdx = useSyncTuneStore((s) => s.selectedIdx)
+  const filter = useSyncTuneStore((s) => s.filter)
+  const undoStack = useSyncTuneStore((s) => s.undoStack)
+  const dirty = useSyncTuneStore((s) => s.dirty)
+  const tuned = useSyncTuneStore((s) => tunedCount(s))
+  const selView = useSyncTuneStore(useShallow(selectedNoteView))
+
+  const scoreRef = useRef<OSMDScore | null>(null)
+  const scoreDivRef = useRef<HTMLDivElement>(null)
+  // 谱面滚动容器（.st-score，overflow:auto）：T3 让位时间戳监听挂这里
+  const scoreSectionRef = useRef<HTMLElement>(null)
+  /** 谱面手动滚动时间戳（T3 决策 6）：wheel/pointerdown 后 5 秒内暂停自动跟随 */
+  const lastUserScrollRef = useRef(0)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const beatsRef = useRef<BeatsFile | null>(null)
+  /** [T6b] 能量块缓存：~0.5s 块宽桶 RMS（粗粒度进度条，不再平滑/归一） */
+  const blockRmsRef = useRef<Float32Array | null>(null)
+  const blockSecRef = useRef(0)
+  /** 包络峰值（9/3 波形可读性）：钢琴伴奏 RMS 绝对值远低于 1，直方条按峰值归一 */
+  const peakRmsRef = useRef(1)
+  const durationRef = useRef(0)
+  const displayTlRef = useRef<ReturnType<typeof parseMusicXml> | null>(null)
+  /** [T3c] 恒速解析谱（parseMusicXml 结果，q 换算基准）：保存修改时以原 beats
+   *  的 anchors/bpm + 新 working 重建显示时间轴（applyBeats），供 setTimeline 热切换 */
+  const baseTlRef = useRef<ReturnType<typeof parseMusicXml> | null>(null)
+  const measureTableRef = useRef<{ m: number; quarters: number }[]>([])
+  const viewRef = useRef({ t0: 0, t1: 1 })
+
+  const st = useSyncTuneStore
+
+  /** 徽标闪动（播放被自动播放策略挡下时）：直接操作 DOM 重启动画，避免定时 setState */
+  const flashAudioBadge = useCallback(() => {
+    const el = audioBadgeRef.current
+    if (!el) return
+    el.classList.remove('st-audio-flash')
+    void el.offsetWidth // 强制回流，重启动画
+    el.classList.add('st-audio-flash')
+  }, [])
+
+  /** 用户手势内解锁音频：resume 后刷新徽标（仍失败则闪动提示） */
+  const enableAudio = useCallback(async () => {
+    try {
+      await audioEngine.resume()
+    } catch {
+      // resume 抛错保持 suspended，徽标仍提示
+    }
+    setAudioState(audioEngine.state)
+    if (audioEngine.state !== 'running') flashAudioBadge()
+  }, [flashAudioBadge])
+
+  /** q → 所在播放序小节（quarters ≤ q 的最后一个非终点小节） */
+  const measureForQ = useCallback(
+    (q: number): { m: number; quarters: number } => {
+      const mt = measureTableRef.current
+      let best = mt[0] ?? { m: 1, quarters: 0 }
+      for (const e of mt) {
+        if (e.quarters <= q) best = e
+        else break
+      }
+      return best
+    },
+    [],
+  )
+
+  /** 小节自动聚焦（T3 决策 6）：滚动到第 m 小节所在行；谱面手动 wheel/拖动后
+   *  5 秒内让位不抢滚动（点击音符的 pointerdown 也会记时间戳——点哪儿哪儿就
+   *  在视口里，本就无需跟随）。稳定回调，rAF/回调路径可直接引用 */
+  const followMeasure = useCallback((m: number) => {
+    if (Date.now() - lastUserScrollRef.current < 5000) return
+    scoreRef.current?.scrollToMeasure(m)
+  }, [])
+
+  // —— 装配：曲谱解析（恒速系，q 换算基准）+ beats.json + 伴奏解码 ——
+  //  R3：依赖 [song, currentId]——切曲即重跑装配；cleanup 的 alive 标志 +
+  //  audioEngine.pause() 中断旧装配与播放，store 由 load() 重置（选中清空/
+  //  已调计数归零/未导出标记消失）
+  useEffect(() => {
+    let alive = true
+    // 换曲重置：phase 回 loading（旧谱面容器随条件渲染卸载，重装配拿新 div）、
+    // 标记层等新谱就绪再全量重绘；波形/时间轴 refs 清零，装配中途失败不残留上一曲
+    setPhase('loading')
+    setErrorMsg('')
+    setXml(null)
+    setMarkersReady(false)
+    setNearHint(null)
+    beatsRef.current = null
+    baseTlRef.current = null
+    displayTlRef.current = null
+    blockRmsRef.current = null
+    peakRmsRef.current = 1
+    durationRef.current = 0
+    viewRef.current = { t0: 0, t1: 1 }
+    lastSelQRef.current = null
+    if (!song) {
+      // 未知曲 id（R3 决策 1）：显示装配失败信息，顶栏切换器仍可选有效曲自救
+      setErrorMsg(`未知曲目：${currentId}（不在内置曲库中）`)
+      setPhase('error')
+      return
+    }
+    ;(async () => {
+      try {
+        const res = await fetch(assetUrl(song.scoreUrl))
+        if (!res.ok) throw new Error(`曲谱加载失败：HTTP ${res.status}`)
+        const xmlExp = expandRepeats(await res.text())
+        const pre = parseMusicXml(xmlExp)
+        if (!song.beatsUrl) throw new Error('该曲目没有 beatsUrl，无需同步微调')
+        const bres = await fetch(assetUrl(song.beatsUrl))
+        if (!bres.ok) throw new Error(`beats.json 加载失败：HTTP ${bres.status}`)
+        const beats = (await bres.json()) as BeatsFile
+        const ba = beats.beatAnchors
+        if (!Array.isArray(ba) || ba.length < 2)
+          throw new Error('beats.json 无有效 beatAnchors（需 ≥2 个控制点）')
+        if (!alive) return
+        measureTableRef.current = pre.measureTimes
+          .filter((e) => !e.end)
+          .map((e) => ({ m: e.measure, quarters: e.quarters }))
+        beatsRef.current = beats
+        st.getState().load(song.id, buildSyncNotes(pre), ba.map((p) => ({ ...p })))
+        // 小节起始时间表（订阅前兜底）：⏮/⏭ 与小节号显示用
+        const q2tB0 = makeQ2T(st.getState().baseline)
+        measureStartsRef.current = measureTableRef.current.map((e) => ({
+          m: e.m,
+          t: q2tB0(e.quarters).t,
+        }))
+        setXml(xmlExp)
+        // 恒速解析谱存 ref（保存修改时重建显示时间轴用，T3c）
+        baseTlRef.current = pre
+        // 演奏显示时间轴：基线锚点应用后的时间轴（光标语义同演奏页）
+        displayTlRef.current = applyBeats(pre, beats)
+        // 伴奏解码 → 峰值包络
+        if (song.accompanimentUrl) {
+          try {
+            const ab = await fetch(assetUrl(song.accompanimentUrl))
+            if (!ab.ok) throw new Error(`HTTP ${ab.status}`)
+            const buf = await audioEngine.decode(await ab.arrayBuffer())
+            // 装载为 play() 数据源：decode 只解码不装载，缺这行冷启动 play() 恒 false
+            await audioEngine.load(buf)
+            const ch = buf.getChannelData(0)
+            // [T6b] 能量块缓存：~0.5s 块宽桶 RMS（连续包络与平滑/归一链退役）
+            const blockSamples = Math.max(1, Math.round(buf.sampleRate * ENERGY_BLOCK_SEC))
+            blockRmsRef.current = computeRmsEnvelope(ch, blockSamples)
+            blockSecRef.current = blockSamples / buf.sampleRate
+            // 波形只保留主旋律频段（9/3 钦定）：OfflineAudioContext 带通
+            // 200–2000Hz（滤掉低音伴奏与高频打击嘶声）后重算包络；失败退全频段
+            try {
+              const off = new OfflineAudioContext(1, buf.length, buf.sampleRate)
+              const src = off.createBufferSource()
+              src.buffer = buf
+              const hp = off.createBiquadFilter()
+              hp.type = 'highpass'
+              hp.frequency.value = 200
+              const lp = off.createBiquadFilter()
+              lp.type = 'lowpass'
+              lp.frequency.value = 2000
+              src.connect(hp)
+              hp.connect(lp)
+              lp.connect(off.destination)
+              src.start()
+              const filtered = await off.startRendering()
+              blockRmsRef.current = computeRmsEnvelope(filtered.getChannelData(0), blockSamples)
+            } catch {
+              /* 滤波不可用：保留全频段包络 */
+            }
+            // 峰值归一基准：包络最大值（全 0 时保持 1 防除零）
+            let pk = 0
+            for (const v of blockRmsRef.current) if (v > pk) pk = v
+            peakRmsRef.current = pk > 1e-4 ? pk : 1
+            durationRef.current = buf.duration
+            viewRef.current = { t0: 0, t1: buf.duration }
+          } catch (e: unknown) {
+            console.warn(
+              `[sync-tune] 伴奏解码失败（波形不可用）：${e instanceof Error ? e.message : e}`,
+            )
+          }
+        }
+        if (!alive) return
+        setPhase('ready')
+      } catch (e: unknown) {
+        if (alive) {
+          setErrorMsg(e instanceof Error ? e.message : String(e))
+          setPhase('error')
+        }
+      }
+    })()
+    return () => {
+      alive = false
+      window.clearTimeout(nearHintTimerRef.current)
+      audioEngine.pause()
+    }
+    // 切曲（song 引用变化）即重跑装配；currentId 供未知曲错误信息
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [song, currentId])
+
+  // —— 谱面：ready 后挂载（容器已渲染），StrictMode 重挂载由 disposed 标志兜底 ——
+  useEffect(() => {
+    if (phase !== 'ready' || !xml) return
+    const div = scoreDivRef.current
+    const tl = displayTlRef.current
+    if (!div || !tl) return
+    // 橙色选中（T3b）：与播放光标 accent 分离，「我点的」一眼可辨；
+    // 光标跨时值高亮（T3c）：光标宽度覆盖正在响的音的完整时值
+    const osmd = new OSMDScore(div, accent, undefined, undefined, '#ff9f43', true)
+    scoreRef.current = osmd
+    // 小节号显示 + 播放中自动聚焦当前小节（T3 决策 6：rAF 回调路径，不 setState）
+    osmd.onMeasureChange = (m) => {
+      if (audioEngine.playing) followMeasure(m)
+    }
+    let cancelled = false
+    osmd
+      .load(xml, tl)
+      .then(() => {
+        if (cancelled) return
+        osmd.showCursor()
+        setMarkersReady(true) // 触发标记层首绘
+      })
+      .catch((e: unknown) => {
+        console.warn(`[sync-tune] 谱面渲染失败：${e instanceof Error ? e.message : e}`)
+      })
+    return () => {
+      cancelled = true
+      osmd.onMeasureChange = undefined
+      osmd.dispose()
+      if (scoreRef.current === osmd) scoreRef.current = null
+    }
+    // accent/xml 随曲目变化时重建（followMeasure 为稳定回调）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, xml, accent, followMeasure])
+
+  // —— 谱面手动滚动让位（T3 决策 6）：滚动容器上的 wheel/pointerdown 记时间戳，
+  //  followMeasure 5 秒内据此跳过自动跟随，避免抢用户的滚动条 ——
+  useEffect(() => {
+    if (phase !== 'ready') return
+    const el = scoreSectionRef.current
+    if (!el) return
+    const mark = () => {
+      lastUserScrollRef.current = Date.now()
+    }
+    el.addEventListener('wheel', mark, { passive: true })
+    el.addEventListener('pointerdown', mark)
+    return () => {
+      el.removeEventListener('wheel', mark)
+      el.removeEventListener('pointerdown', mark)
+    }
+  }, [phase])
+
+  // —— 控制点标记层（T4 局部化）：三条链分离 ——
+  //  a) 布局（低频）：q 键集/基线变化（load、插入/移除控制点、saveBaseline）才
+  //     全量 setMarkers（元素增删 + 定位 + 全量色/title），并重置微调 diff 基准；
+  //  b) 选中 patch（高频）：只 patch 旧/新选中两个 marker 的色；
+  //  c) 微调 patch（高频）：working 与上次快照逐 q diff（O(N) Map 比较，微秒级），
+  //     通常仅选中 1 点——patch 其色/title；基准变化（saveBaseline）时全量重刷。
+  //  微调 t 不改 q → 标记位置永不变，高频路径零定位写（决策 8：不重建标记层）。
+  const structureKey = useMemo(() => working.map((p) => p.q).join(','), [working])
+  /** 微调 diff 基准：上次全量/patch 后的 {q→t} 快照与基线引用 */
+  const tByQRef = useRef<Map<number, number> | null>(null)
+  const baseRef = useRef<CtrlPoint[] | null>(null)
+  const lastSelQRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const score = scoreRef.current
+    if (!score || !markersReady) return
+    const selQ = selView.note?.q
+    const q2tBase = makeQ2T(baseline)
+    const markers = working.map((p) => {
+      const m = measureForQ(p.q)
+      const isSel = selQ !== undefined && p.q === selQ
+      const tunedHere = Math.abs(p.t - q2tBase(p.q).t) > 1e-6
+      return {
+        measure: m.m,
+        rvInMeasure: (p.q - m.quarters) / 4,
+        color: isSel ? accent : tunedHere ? '#ff9f43' : 'rgba(255,255,255,0.28)',
+        title: `q=${p.q} t=${p.t.toFixed(3)}${tunedHere ? '（已调）' : ''}`,
+      }
+    })
+    score.setMarkers(markers)
+    // 重置 diff 基准：c) 首次进入时 prevT 就位 → 零 patch
+    tByQRef.current = new Map(working.map((p) => [p.q, p.t]))
+    baseRef.current = baseline
+    // 依赖 structureKey（working 派生）而非 working：微调只改 t，q 键集不变 →
+    // 不重定位；选中变化走 b) patch。selView.note 同理不订阅（eslint 抑制见下）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [structureKey, baseline, markersReady, measureForQ, accent])
+
+  // b) 选中 patch：旧选中恢复 tuned 色、新选中染 accent——两个 marker
+  useEffect(() => {
+    const score = scoreRef.current
+    if (!score || !markersReady) return
+    const next = selView.note?.q ?? null
+    const prev = lastSelQRef.current
+    lastSelQRef.current = next
+    if (prev === next) return
+    const q2tBase = makeQ2T(baseline)
+    for (const q of [prev, next]) {
+      if (q === null) continue
+      const cp = working.find((p) => p.q === q)
+      const tunedHere = cp ? Math.abs(cp.t - q2tBase(q).t) > 1e-6 : false
+      const m = measureForQ(q)
+      score.patchMarker(m.m, (q - m.quarters) / 4, {
+        color: q === next ? accent : tunedHere ? '#ff9f43' : 'rgba(255,255,255,0.28)',
+      })
+    }
+  }, [selView.note, working, baseline, markersReady, measureForQ, accent])
+
+  // c) 微调 patch：t 变化的 q（通常仅选中 1 点）patch 色+title；基准变则全量重刷
+  useEffect(() => {
+    const score = scoreRef.current
+    if (!score || !markersReady) return
+    const prevT = tByQRef.current
+    const baseChanged = baseRef.current !== baseline
+    let targets: number[]
+    if (baseChanged || !prevT) {
+      targets = working.map((p) => p.q)
+    } else {
+      targets = []
+      for (const p of working) {
+        const old = prevT.get(p.q)
+        if (old === undefined || old !== p.t) targets.push(p.q)
+      }
+    }
+    if (targets.length) {
+      const selQ = selView.note?.q ?? null
+      const q2tBase = makeQ2T(baseline)
+      for (const q of targets) {
+        const cp = working.find((p) => p.q === q)
+        if (!cp) continue
+        const tunedHere = Math.abs(cp.t - q2tBase(q).t) > 1e-6
+        const m = measureForQ(q)
+        score.patchMarker(m.m, (q - m.quarters) / 4, {
+          color: q === selQ ? accent : tunedHere ? '#ff9f43' : 'rgba(255,255,255,0.28)',
+          title: `q=${q} t=${cp.t.toFixed(3)}${tunedHere ? '（已调）' : ''}`,
+        })
+      }
+    }
+    tByQRef.current = new Map(working.map((p) => [p.q, p.t]))
+    baseRef.current = baseline
+  }, [working, baseline, selView.note, markersReady, measureForQ, accent])
+
+  // —— 三向选中染色 + 小节聚焦（T3 决策 3/6）：谱面点击/列表/波形三入口都走
+  //  store 选中，此单一 effect 收口——选中变化 -> notehead 染 accent + 聚焦
+  //  所在小节；单音符 setColor，不重建标记层，无每帧 React 渲染 ——
+  useEffect(() => {
+    const score = scoreRef.current
+    if (!score || !markersReady) return
+    const n = selView.note
+    if (!n) {
+      score.highlightNoteAt(null)
+      return
+    }
+    const entry = measureTableRef.current.find((x) => x.m === n.measure)
+    if (!entry) return
+    score.highlightNoteAt(n.measure, (n.q - entry.quarters) / 4)
+    followMeasure(n.measure)
+  }, [selView.note, markersReady, followMeasure])
+
+  // —— 波形派生缓存：working/baseline/选中变化时重建（订阅级，渲染外） ——
+  useEffect(() => {
+    const unsub = useSyncTuneStore.subscribe((s0) => {
+      q2tWorkRef.current = makeQ2T(s0.working)
+      const q2tB = makeQ2T(s0.baseline)
+      q2tBaseRef.current = q2tB
+      measureStartsRef.current = measureTableRef.current.map((e) => ({
+        m: e.m,
+        t: q2tB(e.quarters).t,
+      }))
+      // T4：q→t 查表替代 baseline.some 嵌套（601×601 → O(N+M)）；
+      // 语义保持：baseline 存在同 q 点且 t 偏离 >1µs 才算已调（新插入点在
+      // baseline 无同 q 项 → 未调），与标记层 tunedHere 的插值口径各自独立
+      const baseByQ = new Map(s0.baseline.map((b) => [b.q, b.t]))
+      ticksRef.current = s0.working.map((p) => {
+        const bt = baseByQ.get(p.q)
+        return { t: p.t, q: p.q, tuned: bt !== undefined && Math.abs(bt - p.t) > 1e-6 }
+      })
+      notesRef.current = s0.notes
+      selQRef.current =
+        s0.selectedIdx === null
+          ? null
+          : (s0.notes.find((n) => n.idx === s0.selectedIdx)?.q ?? null)
+      waveDirtyRef.current = true
+      waveKickRef.current()
+    })
+    return unsub
+  }, [])
+
+  // —— 主循环：唯一时钟 audioEngine.time → 光标推进 + 波形按需重绘。
+  //  空闲（未播放且不脏）时完全停掉 rAF 循环，零空转；置脏方负责 kick 唤醒 ——
+  useEffect(() => {
+    if (phase !== 'ready') return
+    let raf = 0
+    let running = false
+    const step = () => {
+      const t = audioEngine.time
+      const playing = audioEngine.playing
+      if (playing) scoreRef.current?.syncToTime(t)
+      // 播放中每帧重绘波形（播放头/指针实时跟随音乐）；暂停/空闲态仍按需
+      // （置脏才画一次），保持 T6 的空闲零空转预算
+      if (playing || waveDirtyRef.current) {
+        drawWave(t, playing)
+        waveDirtyRef.current = false
+      }
+      // 控制条（T2）：进度/时间/小节号直写 DOM；拖拽中让位给指针回调
+      if (!scrubbingRef.current) updateTransport(t)
+      // ⏯ 图标：仅播放态翻转时 setState（非每帧）
+      if (playingUiRef.current !== playing) {
+        playingUiRef.current = playing
+        setPlayingUi(playing)
+      }
+      if (playing) {
+        raf = requestAnimationFrame(step)
+      } else {
+        running = false // 空闲休眠：直到 kick/播放恢复
+      }
+    }
+    waveKickRef.current = () => {
+      if (!running) {
+        running = true
+        raf = requestAnimationFrame(step)
+      }
+    }
+    // 首绘一次后休眠
+    waveKickRef.current()
+    return () => {
+      cancelAnimationFrame(raf)
+      running = false
+      waveKickRef.current = () => {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase])
+
+  /** 波形绘制：[T6b] 能量块进度条（视口均分块、每块桶 RMS 均值、底部锚定
+   *  圆角竖条）+ 基线/工作期望线 + 控制点刻度 + 播放头
+   *  性能（t_perf_sync_tune）：q2t 闭包/刻度表/选中 q 全部来自缓存 refs
+   *  （store 订阅预构建，绘制帧零 getState/零 Map 构建），期望线两遍循环
+   *  各合并单 path；页脚刻度文本直写 DOM，拖拽/缩放不再触发 React 重渲染；
+   *  [T6b] 块聚合（sampleBlockMeans O(blocks+视口桶数)）仍在 dirty+rAF 按
+   *  需重绘路径内，播放头每帧零波形重算 */
+  const drawWave = (playT: number, playing: boolean) => {
+    const canvas = canvasRef.current
+    const env = blockRmsRef.current
+    if (!canvas) return
+    const dpr = window.devicePixelRatio || 1
+    const w = canvas.clientWidth
+    const h = canvas.clientHeight
+    if (w === 0 || h === 0) return
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr)
+      canvas.height = Math.round(h * dpr)
+    }
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.fillStyle = '#10151a'
+    ctx.fillRect(0, 0, w, h)
+    const dur = durationRef.current
+    if (!env || dur <= 0) {
+      ctx.fillStyle = '#5a6a72'
+      ctx.font = '12px sans-serif'
+      ctx.fillText('波形不可用（伴奏解码失败）', 12, h / 2)
+      return
+    }
+    const { t0, t1 } = viewRef.current
+    const span = Math.max(t1 - t0, 1e-6)
+    const xOf = (t: number) => ((t - t0) / span) * w
+    // 能量块进度条（T6b）：视口均分 ENERGY_VIEW_BLOCKS 块、每块桶 RMS 均值，
+    // 底部锚定圆角竖条 0..38px 单色（静音块 ≤0.5px 跳过；roundRect 无实现时
+    // 降级直角矩形）；期望线/刻度/播放头在其上层照旧
+    const bars = sampleBlockMeans(
+      env,
+      blockSecRef.current || ENERGY_BLOCK_SEC,
+      t0,
+      t0 + span,
+      ENERGY_VIEW_BLOCKS,
+    )
+    const bw = w / bars.length
+    ctx.fillStyle = 'rgba(61,90,99,0.55)'
+    ctx.beginPath()
+    // 语音条样式（9/3 钦定）：条形从画布垂直中心向上下对称伸展，
+    // 上限 = h/2 - 4（上下各留 4px 呼吸边）
+    const maxH = Math.max(2, h / 2 - 4)
+    const mid = h / 2
+    for (let i = 0; i < bars.length; i++) {
+      const bh = Math.min(bars[i] / peakRmsRef.current, 1) * maxH
+      if (bh <= 0.5) continue
+      const x = i * bw
+      const bwid = Math.max(1, bw - 1) // 块间 1px 间隙（窄视口退化到 1px）
+      const r = Math.min(2, bwid / 2, bh / 2)
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(x, mid - bh, bwid, bh * 2, r)
+      else ctx.rect(x, mid - bh, bwid, bh * 2)
+    }
+    ctx.fill()
+    // 期望线（9/4 重构）：逐音全高竖线在总览缩放下是 736 条 2~4px 间距的
+    // 「线毯」，改为按视口密度自适应——
+    //  - 稀疏（相邻控制点 ≥12px，放大到乐句级）：逐音期望线保留（微调逐音
+    //    对位仍需要）
+    //  - 密集（总览/粗缩放）：只留小节定位线（更淡）+ 小节头当前网格青刻度
+    //    （顶部 8px；已调小节青刻度偏离白线即微调量），线毯消失
+    const q2tW = q2tWorkRef.current
+    const q2tBase = q2tBaseRef.current
+    if (q2tW && q2tBase) {
+      ctx.lineWidth = 1
+      const visible = notesRef.current.filter((n) => {
+        const t = q2tW(n.q).t
+        return t >= t0 && t <= t1
+      }).length
+      const minGap = w / Math.max(visible, 1) // 视口内相邻控制点平均像素间距
+      if (minGap >= 12) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.13)'
+        ctx.beginPath()
+        for (const n of notesRef.current) {
+          const t = q2tBase(n.q).t
+          if (t < t0 || t > t1) continue
+          const x = xOf(t)
+          ctx.moveTo(x + 0.5, 0)
+          ctx.lineTo(x + 0.5, h)
+        }
+        ctx.stroke()
+        ctx.strokeStyle = 'rgba(95,184,168,0.45)'
+        ctx.beginPath()
+        for (const n of notesRef.current) {
+          const t = q2tW(n.q).t
+          if (t < t0 || t > t1) continue
+          const x = xOf(t)
+          ctx.moveTo(x + 0.5, 0)
+          ctx.lineTo(x + 0.5, h)
+        }
+        ctx.stroke()
+      } else {
+        // 总览模式：小节线（基线位，白 0.07）+ 小节头当前网格刻度（青 0.55）
+        ctx.strokeStyle = 'rgba(255,255,255,0.07)'
+        ctx.beginPath()
+        for (const m of measureStartsRef.current) {
+          if (m.t < t0 || m.t > t1) continue
+          const x = xOf(m.t)
+          ctx.moveTo(x + 0.5, 0)
+          ctx.lineTo(x + 0.5, h)
+        }
+        ctx.stroke()
+        ctx.strokeStyle = 'rgba(95,184,168,0.55)'
+        ctx.beginPath()
+        for (const e of measureTableRef.current) {
+          const t = q2tW(e.quarters).t
+          if (t < t0 || t > t1) continue
+          const x = xOf(t)
+          ctx.moveTo(x + 0.5, 0)
+          ctx.lineTo(x + 0.5, 8)
+        }
+        ctx.stroke()
+      }
+    }
+    // 选中期望线（9/4 交互定版）：橙色 #ff9f43（与「已调」刻度同色系）、
+    // 2.5px 全高——用户点波形/列表/谱面选中的音，在波形上一眼可辨
+    const selQ = selQRef.current
+    if (selQ !== null && q2tW) {
+      const x = xOf(q2tW(selQ).t)
+      if (x >= 0 && x <= w) {
+        ctx.strokeStyle = '#ff9f43'
+        ctx.lineWidth = 2.5
+        ctx.beginPath()
+        ctx.moveTo(x, 0)
+        ctx.lineTo(x, h)
+        ctx.stroke()
+        ctx.lineWidth = 1
+      }
+    }
+    // 控制点刻度（底部）：已调橙 / 未调灰 / 选中 accent——缓存刻度表
+    for (const p of ticksRef.current) {
+      if (p.t < t0 || p.t > t1) continue
+      const x = xOf(p.t)
+      const isSel = selQ === p.q
+      ctx.strokeStyle = isSel ? accent : p.tuned ? '#ff9f43' : 'rgba(255,255,255,0.35)'
+      ctx.lineWidth = isSel ? 2 : 1
+      ctx.beginPath()
+      ctx.moveTo(x + 0.5, h - (isSel ? 14 : 8))
+      ctx.lineTo(x + 0.5, h)
+      ctx.stroke()
+      ctx.lineWidth = 1
+    }
+    // 播放头（9/4 交互定版）：播放中白线随音乐走；暂停时若已有选中音，橙色
+    // 播放头驻留选中位（=「从选中播放」的起点提示），未选中则不画
+    if (playing) {
+      if (playT >= t0 && playT <= t1) {
+        ctx.strokeStyle = '#e8e8e2'
+        ctx.beginPath()
+        ctx.moveTo(xOf(playT) + 0.5, 0)
+        ctx.lineTo(xOf(playT) + 0.5, h)
+        ctx.stroke()
+      }
+    } else if (selQRef.current !== null && q2tWorkRef.current) {
+      const selX = xOf(q2tWorkRef.current(selQRef.current).t)
+      if (selX >= 0 && selX <= w) {
+        ctx.strokeStyle = '#ff9f43'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(selX, 0)
+        ctx.lineTo(selX, h)
+        ctx.stroke()
+        ctx.lineWidth = 1
+      }
+    }
+    // 页脚刻度文本：直写 DOM（T2 起仅显示视口时间范围，交互说明移入图例/帮助面板）
+    const hint = waveHintRef.current
+    if (hint) {
+      hint.textContent = `${fmtTime(t0)} – ${fmtTime(t1)}`
+    }
+  }
+
+  // —— 波形交互：拖拽平移 / 滚轮缩放 / 点击命中刻度或 seek ——
+  const dragRef = useRef<{ x: number; t0: number; t1: number; moved: boolean } | null>(null)
+  const onWavePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragRef.current = { x: e.clientX, t0: viewRef.current.t0, t1: viewRef.current.t1, moved: false }
+  }
+  const onWavePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const d = dragRef.current
+    if (!d) return
+    const w = e.currentTarget.clientWidth
+    const span = d.t1 - d.t0
+    const dx = e.clientX - d.x
+    if (Math.abs(dx) > 3) d.moved = true
+    if (!d.moved) return
+    const dur = durationRef.current
+    let t0 = d.t0 - (dx / w) * span
+    t0 = Math.max(0, Math.min(t0, dur - span))
+    viewRef.current = { t0, t1: t0 + span }
+    waveDirtyRef.current = true // 页脚文本由 drawWave 直写，rAF 帧内重绘
+    waveKickRef.current()
+  }
+  const onWavePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const d = dragRef.current
+    dragRef.current = null
+    if (!d || d.moved) return
+    // 点击（9/4 交互定版）：只选中最近音符，不再 seek——播放入口统一收敛到
+    // 图例「从选中播放」按钮。点击 x → 时间 → 最近控制点（working 自带 t）→
+    // 其 q → selectByQ；注意 selectByQ 吃 quarters，不能把秒直接喂进去
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const { t0, t1 } = viewRef.current
+    const span = t1 - t0
+    const clickT = t0 + (x / rect.width) * span
+    const st0 = st.getState()
+    let bestQ: number | null = null
+    let bestD = Infinity
+    for (const p of st0.working) {
+      const dT = Math.abs(p.t - clickT)
+      if (dT < bestD) {
+        bestD = dT
+        bestQ = p.q
+      }
+    }
+    if (bestQ !== null) st0.selectByQ(bestQ)
+  }
+
+  // —— 缩放（T6b）：滚轮缩放移除（卡顿源），图例「＋/－/⤢」按钮承接 ——
+  const zoomWave = (k: number) => {
+    const dur = durationRef.current
+    const { t0, t1 } = viewRef.current
+    const span = t1 - t0
+    const tc = (t0 + t1) / 2 // 以视口中心
+    let ns = Math.max(0.5, span * k)
+    if (dur > 0) ns = Math.min(ns, dur)
+    let nt0 = tc - (tc - t0) * (ns / span)
+    nt0 = dur > 0 ? Math.max(0, Math.min(nt0, dur - ns)) : Math.max(0, nt0)
+    viewRef.current = { t0: nt0, t1: nt0 + ns }
+    waveDirtyRef.current = true // 同拖拽：按需重绘
+    waveKickRef.current()
+  }
+  const resetWaveView = () => {
+    const dur = durationRef.current
+    if (dur <= 0) return
+    viewRef.current = { t0: 0, t1: dur }
+    waveDirtyRef.current = true
+    waveKickRef.current()
+  }
+
+  // —— 播放控制条（T2）：时间/小节号/进度填充直写 DOM（refs），供 rAF 帧与指针回调共用 ——
+  const updateTransport = useCallback((t: number) => {
+    const dur = durationRef.current
+    if (fillRef.current) {
+      const frac = dur > 0 ? Math.max(0, Math.min(1, t / dur)) : 0
+      fillRef.current.style.width = `${(frac * 100).toFixed(2)}%`
+    }
+    if (timeLabelRef.current) timeLabelRef.current.textContent = fmtTime(t)
+    if (measureLabelRef.current) {
+      const ms = measureStartsRef.current
+      let m = ms[0]?.m ?? 1
+      for (const e of ms) {
+        if (e.t <= t) m = e.m
+        else break
+      }
+      measureLabelRef.current.textContent = `m ${m} / ${ms.length ? ms[ms.length - 1].m : m}`
+    }
+  }, [])
+
+  /** seek 到 t（进度条/⏮/⏭ 共用）：暂停态同步推进光标；波形与控制条即刻刷新 */
+  const doSeek = useCallback(
+    (t: number) => {
+      audioEngine.seek(t)
+      scoreRef.current?.resetCursor()
+      if (!audioEngine.playing) scoreRef.current?.syncToTime(t, false, true)
+      updateTransport(audioEngine.time)
+      waveDirtyRef.current = true
+      waveKickRef.current()
+    },
+    [updateTransport],
+  )
+
+  /** 当前 t 所在小节序（measureStarts 单调递增，线性足够） */
+  const measureIdxAt = (t: number): number => {
+    const ms = measureStartsRef.current
+    let i = 0
+    for (let k = 0; k < ms.length; k++) {
+      if (ms[k].t <= t) i = k
+      else break
+    }
+    return i
+  }
+
+  /** ⏮：距小节头 >1s 回本小节头，否则退上一小节；首小节回开头 */
+  const seekPrevMeasure = useCallback(() => {
+    const ms = measureStartsRef.current
+    if (!ms.length) return
+    const i = measureIdxAt(audioEngine.time)
+    const target = audioEngine.time - ms[i].t > 1 ? ms[i].t : i > 0 ? ms[i - 1].t : 0
+    doSeek(Math.max(0, target))
+  }, [doSeek])
+
+  /** ⏭：下一小节头；末小节到曲尾 */
+  const seekNextMeasure = useCallback(() => {
+    const ms = measureStartsRef.current
+    if (!ms.length) return
+    const i = measureIdxAt(audioEngine.time)
+    const target = i + 1 < ms.length ? ms[i + 1].t : durationRef.current
+    doSeek(Math.min(target, durationRef.current))
+  }, [doSeek])
+
+  // —— 进度条：拖拽中只直写视觉（updateTransport），松手才 audioEngine.seek（避免反复重启音频）——
+  const fracOfProgress = (e: React.PointerEvent<HTMLDivElement>): number => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(rect.width, 1)))
+  }
+  const onProgressPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (durationRef.current <= 0) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    scrubbingRef.current = true
+    updateTransport(fracOfProgress(e) * durationRef.current)
+  }
+  const onProgressPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubbingRef.current) return
+    updateTransport(fracOfProgress(e) * durationRef.current)
+  }
+  const onProgressPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubbingRef.current) return
+    scrubbingRef.current = false
+    doSeek(fracOfProgress(e) * durationRef.current)
+  }
+
+  // —— 波形面板折叠（T2）：localStorage 记忆；展开后画布尺寸恢复需置脏重绘 ——
+  const toggleWaveCollapsed = useCallback(() => {
+    setWaveCollapsed((c) => {
+      const nc = !c
+      try {
+        localStorage.setItem('st-wave-collapsed', nc ? '1' : '0')
+      } catch {
+        // 存储不可用时仅内存态生效
+      }
+      return nc
+    })
+  }, [])
+  useEffect(() => {
+    if (waveCollapsed) return
+    waveDirtyRef.current = true
+    waveKickRef.current()
+  }, [waveCollapsed])
+
+  // —— 播放/暂停 与 保存修改（T3c 工作流）——
+  const togglePlay = useCallback(async () => {
+    if (audioEngine.playing) {
+      audioEngine.pause()
+    } else {
+      // play 是 async：先解锁 AudioContext 再 start；await 后 playing 才为真，
+      // 需再 kick 一次唤醒 rAF 循环（同步 kick 已在未播放态休眠）
+      const ok = await audioEngine.play()
+      setAudioState(audioEngine.state)
+      if (!ok) {
+        flashAudioBadge()
+      } else {
+        scoreRef.current?.showCursor()
+        waveDirtyRef.current = true
+        waveKickRef.current()
+      }
+    }
+    waveDirtyRef.current = true
+    waveKickRef.current()
+  }, [flashAudioBadge])
+
+  /** 未选中时的一次性操作提示（toast）：3s 自动消隐 */
+  const [waveToast, setWaveToast] = useState<string | null>(null)
+  const waveToastTimerRef = useRef(0)
+  const flashWaveToast = useCallback((msg: string) => {
+    window.clearTimeout(waveToastTimerRef.current)
+    setWaveToast(msg)
+    waveToastTimerRef.current = window.setTimeout(() => setWaveToast(null), 3000)
+  }, [])
+
+  /** 从选中音播放（9/4 交互定版）：波形点击只负责选中，播放入口收敛到
+   *  图例「从选中播放」按钮——q→t 用工作网格，seek 后 showCursor 起播；
+   *  播放中再按 = 暂停（停在当前处）；未选中音时闪提示引导 */
+  const playFromSelected = useCallback(async () => {
+    if (audioEngine.playing) {
+      audioEngine.pause()
+      waveDirtyRef.current = true
+      waveKickRef.current()
+      return
+    }
+    const selQ = selQRef.current
+    if (selQ === null || !q2tWorkRef.current) {
+      flashWaveToast('先在下方波形（或列表/谱面）点一个音符，再从这里播放')
+      return
+    }
+    const t = q2tWorkRef.current(selQ).t
+    audioEngine.seek(t)
+    scoreRef.current?.resetCursor()
+    const ok = await audioEngine.play()
+    setAudioState(audioEngine.state)
+    if (!ok) {
+      flashAudioBadge()
+      return
+    }
+    scoreRef.current?.showCursor()
+    waveDirtyRef.current = true
+    waveKickRef.current()
+  }, [flashAudioBadge, flashWaveToast])
+
+  /** 保存修改（T3c）：working 应用为新基线（store.saveBaseline），显示时间轴
+   *  按新锚点热切换（setTimeline，谱面不重渲）——播放光标/波形期望线即刻切到
+   *  新节奏；波形置脏重绘（store 订阅亦会重建 q2t/刻度缓存） */
+  const saveChanges = useCallback(() => {
+    const st0 = st.getState()
+    if (!st0.dirty) return
+    st0.saveBaseline()
+    const beats = beatsRef.current
+    const baseTl = baseTlRef.current
+    if (beats && baseTl) {
+      displayTlRef.current = applyBeats(baseTl, {
+        ...beats,
+        beatAnchors: st0.working.map((p) => ({ ...p })),
+      })
+      scoreRef.current?.setTimeline(displayTlRef.current)
+    }
+    waveDirtyRef.current = true
+    waveKickRef.current()
+  }, [])
+
+  // —— 切曲（R3）：dirty 先挂确认条，确认才丢改动；切换 = pushState 留回退
+  //  路径 + 推进 currentId（装配 effect 随 song 重跑，cleanup 已 pause 音频，
+  //  store.load 重置为干净态）——
+  const doSwitchSong = (id: string) => {
+    setPendingId(null)
+    if (id === currentId) return
+    window.history.pushState(null, '', syncTunePath(id))
+    setCurrentId(id)
+  }
+  const requestSwitchSong = (id: string) => {
+    if (id === currentId) return
+    if (st.getState().dirty) {
+      setPendingId(id)
+      return
+    }
+    doSwitchSong(id)
+  }
+
+  // —— URL 同步（R3）：浏览器回退/前进跟随路径切曲；只消费本页路径——
+  //  退到非 /sync-tune 路径时不动作（本页独立渲染树，无 App 可回）
+  useEffect(() => {
+    const onPop = () => {
+      const r = resolveSyncRoute(window.location.pathname, window.location.search)
+      if (r) setCurrentId(r.songId)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // —— 快捷键：[/]=±50ms、{/}=±200ms、空格、Ctrl+Z ——
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') {
+        e.preventDefault()
+        st.getState().undo()
+        return
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      switch (e.key) {
+        case '[':
+          e.preventDefault()
+          st.getState().adjust(-50)
+          break
+        case ']':
+          e.preventDefault()
+          st.getState().adjust(50)
+          break
+        case '{':
+          e.preventDefault()
+          st.getState().adjust(-200)
+          break
+        case '}':
+          e.preventDefault()
+          st.getState().adjust(200)
+          break
+        case ' ':
+          e.preventDefault()
+          void togglePlay()
+          break
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [togglePlay])
+
+  // —— 导出：beats.json（version+1）+ manual_offsets.json ——
+  const download = (data: unknown, filename: string) => {
+    const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+  const saveAll = () => {
+    const st0 = st.getState()
+    const beats = beatsRef.current
+    if (!beats) return
+    const date = new Date().toISOString().slice(0, 10)
+    download(buildBeatsExport(beats, st0.working, tunedCount(st0), date), 'beats.json')
+    if (st0.log.length) download(st0.log, 'manual_offsets.json')
+  }
+
+  // —— 渲染 ——
+  // 列表全量展示（T3d）：去掉小节 ±2 窗口，滚轮可浏览全谱；chips 过滤作用于全量，
+  // 选中行自动 scrollIntoView 保留（下方 effect）
+  const listNotes = visibleNotes(st.getState())
+  // 行元数据（T3d 全量列表 + T4 算法修正）：q→{控制点, 偏差ms} 随 working/baseline
+  // 一次构建——单个 makeQ2T 闭包复用（顺序 fast path），替代逐音符 deltaMsAt 内部
+  // 每次 makeQ2T(baseline) 重排序（601×O(N log N) 是微调链路卡顿源，T4 修正）
+  const rowMeta = useMemo(() => {
+    const cpByQ = new Map(working.map((p) => [p.q, p]))
+    const baseQ2T = makeQ2T(baseline)
+    const meta = new Map<number, { cp?: CtrlPoint; delta: number }>()
+    for (const n of st.getState().notes) {
+      const cp = cpByQ.get(n.q)
+      // deltaMsAt 语义保持：无控制点 0，有则 (t-基线插值)×1000 四舍五入
+      meta.set(n.q, {
+        cp,
+        delta: cp ? Math.round((cp.t - baseQ2T(n.q).t) * 1000) : 0,
+      })
+    }
+    return meta
+  }, [working, baseline])
+  useEffect(() => {
+    listRef.current?.querySelector('[data-sel="1"]')?.scrollIntoView({ block: 'nearest' })
+  }, [selectedIdx, filter])
+
+  /** 谱面点音符（三向同步之一）：noteAtPoint（T3b 强化：音符头绘制 x 对齐 +
+   *  行阈值收紧）→ 小节+小节内拍位 → 最近音符。nearHint 三档（T3b 决策 3）：
+   *  精确命中（音符头半宽内）无提示 / 附近音符（半宽外 120px 内）/ 超距最近
+   *  （>120px）；行外无效点击不选不误触、也给出提示。提示 5s 自动消隐，
+   *  离散点击路径不进帧渲染 */
+  const onScoreClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const hit = scoreRef.current?.noteAtPoint(e.clientX, e.clientY)
+    window.clearTimeout(nearHintTimerRef.current)
+    if (!hit) {
+      // 无效点击（T3b 行判定收紧）：点击处离谱行过远（超行高一半），不选不误触
+      setNearHint('点击处离谱行过远，未选中（无效点击）')
+      nearHintTimerRef.current = window.setTimeout(() => setNearHint(null), 5000)
+      return
+    }
+    const entry = measureTableRef.current.find((x) => x.m === hit.measure)
+    if (!entry) return
+    if (hit.dist > 120) {
+      setNearHint('已选最近音符（点击处附近无音符）')
+      nearHintTimerRef.current = window.setTimeout(() => setNearHint(null), 5000)
+    } else if (!hit.precise) {
+      // 半个音符头宽度外但 120px 内：始终告知选中的是附近音符（T3b 决策 3；
+      // T3c 文案不带 px 数字，仅语义提示）
+      setNearHint('已选附近音符（距点击处稍远）')
+      nearHintTimerRef.current = window.setTimeout(() => setNearHint(null), 5000)
+    } else {
+      setNearHint(null) // 精确命中：无提示
+    }
+    st.getState().selectByQ(entry.quarters + hit.rvInMeasure * 4)
+  }
+
+  return (
+    <div className="st-page" style={{ '--song-accent': accent } as React.CSSProperties}>
+      <div className="st-topwrap">
+        <header className="st-topbar">
+        <a className="st-back" href={syncTuneHomePath()}>
+          ← 返回
+        </a>
+        {/* 歌曲切换器（R3）：全曲库下拉（无 beats 的曲在列但禁用），选中即重跑装配 */}
+        <SongSwitcher songs={SONGS} currentId={currentId} onSelect={requestSwitchSong} />
+        {audioState === 'running' ? (
+          <span className="st-audio ok" title="音频已启用">
+            ●
+          </span>
+        ) : (
+          <button
+            ref={audioBadgeRef}
+            className="st-audio"
+            onClick={() => void enableAudio()}
+            title="浏览器自动播放策略挂起了音频，点击解锁"
+          >
+            🔊 点击启用音频
+          </button>
+        )}
+        <span className="st-meta">
+          beats v{beatsRef.current?.version ?? '—'} · 控制点 {working.length} · 已调{' '}
+          <em className={tuned ? 'on' : ''}>{tuned}</em>
+          {dirty && <i className="st-dirty">未导出</i>}
+        </span>
+        <span className="st-flex" />
+        <button className="st-btn primary" onClick={saveAll} disabled={!dirty}>
+          导出 beats.json
+        </button>
+      </header>
+        {/* 未导出微调的切换确认（R3）：轻量确认条，不弹原生 confirm；确认才丢改动 */}
+        {pendingId && (
+          <div className="st-confirm">
+            <span>
+              当前曲目有未导出的微调，切换到「{getSong(pendingId)?.title ?? pendingId}」将丢弃。
+            </span>
+            <span className="st-flex" />
+            <button className="st-btn" onClick={() => setPendingId(null)}>
+              取消
+            </button>
+            <button className="st-btn primary" onClick={() => doSwitchSong(pendingId)}>
+              放弃微调并切换
+            </button>
+          </div>
+        )}
+        {phase === 'ready' && (
+          <div className="st-transport">
+            <button
+              className="st-tbtn"
+              onClick={seekPrevMeasure}
+              title="回小节头（小节头附近再按退上一小节）"
+            >
+              ⏮
+            </button>
+            <button className="st-tbtn" onClick={() => void togglePlay()} title="播放/暂停（空格）">
+              {playingUi ? '⏸' : '▶'}
+            </button>
+            <button className="st-tbtn" onClick={seekNextMeasure} title="下一小节">
+              ⏭
+            </button>
+            <span className="st-pos" ref={measureLabelRef}>
+              m 1 / -
+            </span>
+            <div
+              className="st-progress"
+              onPointerDown={onProgressPointerDown}
+              onPointerMove={onProgressPointerMove}
+              onPointerUp={onProgressPointerUp}
+              title="进度条：点击/拖拽 seek（松手生效）"
+            >
+              <div className="st-progress-fill" ref={fillRef} />
+            </div>
+            <span className="st-time" ref={timeLabelRef}>
+              {fmtTime(0)}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {phase === 'loading' && <div className="st-status">正在装配曲谱 / 伴奏 / 锚点…</div>}
+      {phase === 'error' && <div className="st-status err">装配失败：{errorMsg}</div>}
+
+      {phase === 'ready' && (
+        <div className="st-main">
+          <aside className="st-list">
+            <div className="st-list-head">
+              <span>
+                {filter === 'all' ? '全部' : filter === 'tuned' ? '已调' : '未调'} {listNotes.length}{' '}
+                音符
+              </span>
+              {(['all', 'tuned', 'untuned'] as const).map((f) => (
+                <button
+                  key={f}
+                  className={`st-chip${filter === f ? ' on' : ''}`}
+                  onClick={() => st.getState().setFilter(f)}
+                >
+                  {f === 'all' ? '全部' : f === 'tuned' ? '已调' : '未调'}
+                </button>
+              ))}
+            </div>
+            <div className="st-list-body" ref={listRef}>
+              {listNotes.map((n) => {
+                const isSel = n.idx === selectedIdx
+                const { cp, delta } = rowMeta.get(n.q) ?? { cp: undefined, delta: 0 }
+                return (
+                  <button
+                    key={n.idx}
+                    className={`st-row${isSel ? ' sel' : ''}`}
+                    data-sel={isSel ? '1' : undefined}
+                    onClick={() => st.getState().select(n.idx)}
+                  >
+                    <span className="m">m{n.measure}</span>
+                    <span className="p">{midiName(n.midi)}</span>
+                    <span className="q">q{n.q.toFixed(2)}</span>
+                    <span className="t">{cp ? `${cp.t.toFixed(2)}s` : '—'}</span>
+                    {delta !== 0 && (
+                      <span className={`delta${delta > 0 ? ' pos' : ' neg'}`}>
+                        {delta > 0 ? '+' : ''}
+                        {delta}ms
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+              {listNotes.length === 0 && <div className="st-empty">无此状态音符</div>}
+            </div>
+          </aside>
+
+          <section className="st-score" ref={scoreSectionRef} onClick={onScoreClick}>
+            <div ref={scoreDivRef} className="st-score-container" />
+          </section>
+
+          <aside className="st-props">
+            {/* 命中提示提到顶层（T3b）：无效点击/无选中时右栏也可见 */}
+            {nearHint && <p className="st-near-hint">{nearHint}</p>}
+            {selView.note ? (
+              <>
+                <h3>
+                  m{selView.note.measure} · {midiName(selView.note.midi)}
+                </h3>
+                <dl>
+                  <dt>q（四分音符位）</dt>
+                  <dd>{selView.note.q.toFixed(3)}</dd>
+                  <dt>当前 t（基线）</dt>
+                  <dd>{selView.baselineT.toFixed(3)}s</dd>
+                  <dt>修正 t（工作）</dt>
+                  <dd>
+                    {selView.currentT.toFixed(3)}s{' '}
+                    {!selView.hasCp && <i className="st-tag">无控制点，微调时插入</i>}
+                  </dd>
+                  <dt>偏差</dt>
+                  <dd className={selView.deltaMs !== 0 ? (selView.deltaMs > 0 ? 'pos' : 'neg') : ''}>
+                    {selView.deltaMs === 0
+                      ? '0 ms'
+                      : `${selView.deltaMs > 0 ? '+' : ''}${selView.deltaMs.toFixed(0)} ms`}
+                  </dd>
+                </dl>
+                <div className="st-btn-grid">
+                  {[-200, -100, -50, -10, 10, 50, 100, 200].map((d) => (
+                    <button key={d} className="st-btn" onClick={() => st.getState().adjust(d)}>
+                      {d > 0 ? `+${d}` : d}ms
+                    </button>
+                  ))}
+                </div>
+                <div className="st-btn-row">
+                  <button
+                    className="st-btn"
+                    onClick={() => st.getState().undo()}
+                    disabled={undoStack.length === 0}
+                  >
+                    撤销上一步
+                  </button>
+                  <button className="st-btn primary" onClick={saveChanges} disabled={!dirty}>
+                    保存修改
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="st-empty">在左侧列表、谱面或波形上选中一个音符开始微调</p>
+            )}
+            {/* 操作说明（T2）：默认收起、展开不持久化；T3d 起「?」与「操作说明」并排显示
+                （T3c 曾只留绿色 ？，用户要求文字留着），aria-label 保持不变 */}
+            <details className="st-help">
+              <summary aria-label="操作说明">操作说明</summary>
+              <div className="st-help-body">
+                <p className="st-help-sec">快捷键</p>
+                <ul>
+                  <li>
+                    <kbd>[</kbd> / <kbd>]</kbd>：选中音符 −50 / +50 ms
+                  </li>
+                  <li>
+                    <kbd>{'{'}</kbd> / <kbd>{'}'}</kbd>：−200 / +200 ms
+                  </li>
+                  <li>
+                    <kbd>空格</kbd>：播放 / 暂停
+                  </li>
+                  <li>
+                    <kbd>Ctrl</kbd>+<kbd>Z</kbd>：撤销
+                  </li>
+                </ul>
+                <p className="st-help-sec">鼠标操作</p>
+                <ul>
+                  <li>列表点行 / 谱面点音符 / 波形点任意处：选中音符（橙竖线高亮）</li>
+                  <li>波形拖拽：平移；＋/－/⤢ 按钮：缩放 / 复位全曲</li>
+                  <li>波形面板 ▶ 按钮：从选中音播放；播放中再按=暂停（停在当前处）</li>
+                  <li>⏯ 按钮：从上次停止处继续 / 暂停</li>
+                  <li>进度条点 / 拖：seek（松手生效）</li>
+                  <li>⏮ / ⏭：回小节头 / 下一小节</li>
+                </ul>
+              </div>
+            </details>
+          </aside>
+        </div>
+      )}
+
+      <footer className={`st-wave${waveCollapsed ? ' collapsed' : ''}`}>
+        <div
+          className="st-wave-head"
+          onClick={toggleWaveCollapsed}
+          title={waveCollapsed ? '展开波形面板' : '收起波形面板'}
+        >
+          <span className={`st-wave-caret${waveCollapsed ? ' closed' : ''}`}>▾</span>
+          <span className="st-wave-title">伴奏波形</span>
+          {/* 从选中播放（9/4 交互定版）：波形点击只选中，播放从这里发起；
+              播放中翻转为 ⏸（暂停在当前处）；stopPropagation——头行点击是折叠开关 */}
+          <button
+            className={`st-zbtn st-play-sel${playingUi ? ' on' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              void playFromSelected()
+            }}
+            title={playingUi ? '暂停（停在当前处）' : '从选中的音符播放'}
+          >
+            {playingUi ? '⏸' : '▶'}
+          </button>
+          <div className="st-legend">
+            <span>
+              <i className="sw h" style={{ background: 'rgba(255,255,255,0.13)' }} />
+              白细线=小节线（放大后为逐音基线）
+            </span>
+            <span>
+              <i className="sw h" style={{ background: 'rgba(95,184,168,0.45)' }} />
+              青线=当前网格（放大后逐音）
+            </span>
+            <span>
+              <i className="sw v" style={{ background: '#ff9f43' }} />
+              橙刻度=已调
+            </span>
+            <span>
+              <i className="sw v" style={{ background: 'var(--song-accent)' }} />
+              亮刻度=选中
+            </span>
+            <span>
+              <i className="sw h" style={{ background: '#e8e8e2' }} />
+              白竖线=播放头
+            </span>
+            <span>
+              <i className="sw h" style={{ background: '#ff9f43' }} />
+              橙竖线=选中/暂停起点
+            </span>
+            {/* 缩放按钮组（T6b）：替代滚轮缩放；stopPropagation——头行点击是折叠开关 */}
+            <span className="st-zoom">
+              <button
+                className="st-zbtn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  zoomWave(1 / 1.5)
+                }}
+                title="放大 ×1.5（以视口中心）"
+              >
+                ＋
+              </button>
+              <button
+                className="st-zbtn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  zoomWave(1.5)
+                }}
+                title="缩小 ÷1.5（以视口中心）"
+              >
+                －
+              </button>
+              <button
+                className="st-zbtn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  resetWaveView()
+                }}
+                title="复位（显示全曲）"
+              >
+                ⤢
+              </button>
+            </span>
+          </div>
+          <span className="st-flex" />
+          <span className="st-wave-hint" ref={waveHintRef}>
+            {fmtTime(viewRef.current.t0)} – {fmtTime(viewRef.current.t1)}
+          </span>
+        </div>
+        <canvas
+          ref={canvasRef}
+          onPointerDown={onWavePointerDown}
+          onPointerMove={onWavePointerMove}
+          onPointerUp={onWavePointerUp}
+        />
+        {waveToast && <div className="st-wave-toast">{waveToast}</div>}
+      </footer>
+    </div>
+  )
+}

@@ -1,0 +1,33 @@
+{
+  "id": "alicia",
+  "title": "Alicia",
+  "composer": "[from Clair Obscur: Expedition 33] - Lorien Testard / Alice Duport-Percier",
+  "difficulty": 3,
+  "durationLabel": "2:31",
+  "keyLabel": "c 小调（3 个降号）",
+  "keyLabelEn": "C minor (3 flats)",
+  "description": "《Alicia》，选自游戏《Clair Obscur: Expedition 33》原声带，Lorien Testard 与 Alice Duport-Percier 作曲，本曲为长笛改编版。c 小调的抒情旋律在 3/4 与 4/4 交替的律动中蜿蜒起伏，音域横跨三个八度，rubato 气息绵长，适合练习长乐句的歌唱性与力度层次。",
+  "descriptionEn": "\"Alicia\", from the soundtrack of Clair Obscur: Expedition 33, composed by Lorien Testard and Alice Duport-Percier, arranged for flute. A lyrical C-minor melody winds through alternating 3/4 and 4/4 motion, spanning three octaves with long, rubato breath — rewarding practice for singing long lines and shaping dynamics.",
+  "tags": [
+    "长笛",
+    "游戏音乐",
+    "抒情"
+  ],
+  "tagsEn": [
+    "Flute",
+    "Game Music",
+    "Lyrical"
+  ],
+  "scoreUrl": "/songs/alicia/score.musicxml",
+  "pianoScoreUrl": "/songs/alicia/piano.musicxml",
+  "accompanimentUrl": "/songs/alicia/accompaniment.mp3",
+  "accent": "#d8a8b9",
+  "backgroundTheme": "ember",
+  "bpm": 77,
+  "anchorOffsetMs": 0,
+  "beatsUrl": "/songs/alicia/beats.json",
+  "backgroundVideoUrl": "/songs/alicia/background.mp4",
+  "backgroundPadColor": "rgb(50, 57, 66)",
+  "coverUrl": "/songs/alicia/cover.jpg",
+  "hoverVideoUrl": "/songs/alicia/hover-square.mp4"
+}

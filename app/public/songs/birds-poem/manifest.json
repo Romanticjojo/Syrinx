@@ -1,0 +1,21 @@
+{
+  "id": "birds-poem",
+  "title": "鸟之诗",
+  "composer": "Key Sounds Label（折戸伸治）",
+  "difficulty": 2,
+  "durationLabel": "6:21",
+  "keyLabel": "2 个升号起调，中段多次转调",
+  "description": "《AIR》主题曲《鸟之诗》的长笛改编。旋律舒展明亮，如翱翔般层层推进，中后段渐次推向高潮。全曲采用 Lumière 钢琴母谱合成伴奏，与配套长笛谱逐小节精确同步。",
+  "tags": [
+    "长笛",
+    "动漫经典",
+    "抒情"
+  ],
+  "scoreUrl": "/songs/birds-poem/score.musicxml",
+  "beatsUrl": "/songs/birds-poem/beats.json",
+  "accompanimentUrl": "/songs/birds-poem/accompaniment.mp3",
+  "accent": "#d8a2b8",
+  "backgroundTheme": "lumiere",
+  "bpm": 122,
+  "anchorOffsetMs": 0
+}

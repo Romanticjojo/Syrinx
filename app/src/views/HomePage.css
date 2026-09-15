@@ -1,0 +1,374 @@
+/* 曲库首页：Explore 面 —— 顶栏 + 首发英雄位 + 卡片网格 */
+.home {
+  min-height: 100%;
+  overflow-y: auto;
+}
+
+/* dev-only：同步调试页入口（不进曲库导航） */
+.debug-link {
+  display: block;
+  margin: 24px auto 40px;
+  width: max-content;
+  font-size: 12px;
+  color: #5c6c73;
+  text-decoration: none;
+  border-bottom: 1px dashed #2a3942;
+}
+.debug-link:hover {
+  color: #8fb8ae;
+}
+
+.home-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 16px 32px;
+  background: linear-gradient(var(--scrim-top), var(--scrim-mid) 70%, transparent);
+}
+
+.home-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: 0.02em;
+}
+.home-logo img {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--circ);
+  border: 1px solid var(--line-strong);
+  object-fit: cover;
+  display: block;
+}
+
+.home-nav {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.catalog-tabs-bar { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin: 4px 32px 24px; border-bottom: 1px solid var(--line); }
+.catalog-tabs { display: flex; gap: 30px; }
+.catalog-tabs button { display: flex; align-items: center; gap: 8px; min-height: 52px; position: relative; border: 0; padding: 0 2px; background: transparent; color: var(--ink-dim); font: 600 14px var(--sans); cursor: pointer; }
+.catalog-tabs button.selected { color: var(--ink); }
+.catalog-tabs button.selected::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: var(--accent); }
+.catalog-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.catalog-caption { font-size: 12px; color: var(--ink-faint); letter-spacing: .06em; }
+.edition-tab-mark { font-size: 9px; font-weight: 400; padding: 3px 5px; border: 1px solid var(--line-strong); border-radius: 3px; color: var(--ink-dim); }
+.edition-notice-copy { display: grid; gap: 14px; }
+.edition-notice-copy p { margin: 0; }
+.nav-pill {
+  background: transparent;
+  color: var(--ink-dim);
+  border: 1px solid transparent;
+  padding: 8px 16px;
+  border-radius: var(--pill);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.nav-pill.on,
+.nav-pill:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+/* 功能位（主题切换/关于）：更弱的视觉层级 */
+.nav-pill.ghost {
+  font-size: 12px;
+}
+
+/* 首发英雄位：横幅式推荐（Netflix 首屏精选） */
+.home-hero {
+  position: relative;
+  margin: 8px 32px 40px;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 340px;
+  display: flex;
+  align-items: flex-end;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  transition: transform 0.2s ease;
+}
+.home-hero:hover {
+  transform: scale(1.006);
+}
+.home-hero .hero-bg {
+  position: absolute;
+  inset: 0;
+  transition: transform 8s ease;
+}
+.home-hero:hover .hero-bg {
+  transform: scale(1.04);
+}
+/* 封面图（Song Pack cover 字段）铺满 hero，缩放动画与渐变占位一致 */
+.home-hero .hero-bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 8s ease;
+}
+.home-hero:hover .hero-bg-img {
+  transform: scale(1.04);
+}
+.home-hero .hero-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--media-shade) 0%, rgba(8, 9, 9, 0.25) 55%, transparent),
+    linear-gradient(transparent 55%, var(--media-shade));
+}
+/* hero 文字浮于封面之上：使用媒体层专用白，不随主题翻转 */
+.home-hero .hero-body {
+  position: relative;
+  z-index: 2;
+  padding: 40px;
+  max-width: 620px;
+  color: var(--on-media);
+}
+.home-hero .kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--on-media-dim);
+}
+.home-hero h1 {
+  font-family: var(--serif);
+  font-size: clamp(34px, 4.6vw, 58px);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  margin: 10px 0 8px;
+}
+.home-hero .meta {
+  font-size: 14px;
+  color: var(--on-media-dim);
+}
+.home-hero .meta b {
+  color: var(--on-media);
+}
+.home-hero .desc {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--on-media-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.home-hero .hero-play {
+  margin-top: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.home-hero .btn-play-big {
+  width: 60px;
+  height: 60px;
+  border-radius: var(--circ);
+  border: none;
+  cursor: pointer;
+  background: var(--song-accent, var(--accent));
+  color: var(--accent-ink);
+  font-size: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s ease;
+}
+.home-hero .btn-play-big:hover {
+  transform: scale(1.06);
+}
+
+/* 卡片流（Netflix 编辑感）：横向卡 + hover 放大提亮 + 预览片段 */
+.home-section {
+  padding: 0 32px 44px;
+}
+.home-section h3 {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+.song-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 22px;
+}
+.song-card {
+  position: relative;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  border: none;
+  color: inherit;
+  border-radius: 10px;
+  transition: transform 0.25s ease;
+}
+/* Netflix 式整卡放大：浮出网格层级压过邻卡 */
+.song-card:hover,
+.song-card:focus-visible {
+  transform: scale(1.05);
+  z-index: 2;
+}
+.song-card:hover .art,
+.song-card:focus-visible .art {
+  box-shadow: var(--shadow-md);
+}
+.song-card .art {
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  background: var(--surface-2);
+}
+.song-card .art .art-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: filter 0.25s ease, transform 0.25s ease;
+}
+.song-card:hover .art-img,
+.song-card:focus-visible .art-img {
+  filter: brightness(1.12);
+}
+/* 预览片段：淡入盖过封面静帧（muted 自动播放策略已满足） */
+.song-card .art .art-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* 方形视频 + 方形容器：零裁切零缩放，构图与封面一致 */
+  animation: preview-in 0.25s ease both;
+}
+@keyframes preview-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* 悬停暗角：为迷你播放按钮与视频预览提供对比度 */
+.song-card .art .art-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 62%, rgba(8, 8, 8, 0.55));
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.song-card:hover .art-veil,
+.song-card:focus-visible .art-veil {
+  opacity: 1;
+}
+.song-card .art .mini-play {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--circ);
+  border: none;
+  cursor: pointer;
+  color: var(--accent-ink);
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+.song-card:hover .mini-play,
+.song-card:focus-visible .mini-play {
+  opacity: 1;
+  transform: translateY(0);
+}
+.song-card .card-info {
+  padding: 0 2px;
+}
+.song-card .t {
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.song-card .a {
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin-top: 3px;
+}
+.song-card .diff {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-top: 6px;
+  letter-spacing: 0.04em;
+}
+
+.catalog-empty {
+  display: grid;
+  gap: 8px;
+  padding: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--ink);
+}
+.catalog-empty span {
+  color: var(--ink-dim);
+}
+
+@media (max-width: 720px) {
+  .catalog-tabs-bar { margin: 0 20px 20px; }
+  .catalog-caption { display: none; }
+  .catalog-tabs { gap: 26px; }
+  .home-topbar,
+  .home-hero,
+  .home-section {
+    margin-left: 16px;
+    margin-right: 16px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .home-topbar {
+    padding: 14px 0;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .home-hero {
+    margin: 8px 16px 32px;
+  }
+  .home-section {
+    padding: 0 16px 36px;
+  }
+  .home-nav {
+    gap: 2px;
+  }
+  .home-nav .nav-pill {
+    padding: 8px 9px;
+    min-height: 44px;
+  }
+  .home-hero .hero-body {
+    padding: 24px;
+  }
+}

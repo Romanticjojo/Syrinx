@@ -1,0 +1,650 @@
+/* 同步调试页（/sync-tune）：三栏 + 底部波形。仅开发/调试用，视觉从简 */
+
+.st-page {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100vh;
+  background: #0b0f12;
+  color: #d7d7cf;
+  font: 13px/1.5 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  overflow: hidden;
+}
+
+/* 顶栏容器（T2）：topbar + 播放控制条两行 */
+.st-topwrap {
+  background: #0e1317;
+  border-bottom: 1px solid #1d262c;
+}
+.st-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+}
+.st-back {
+  color: #8fb8ae;
+  text-decoration: none;
+}
+.st-meta {
+  color: #7a8a90;
+}
+/* 音频状态徽标（T1）：suspended 时为可点按钮（用户手势内 resume），running 时为绿点 */
+.st-audio {
+  font: inherit;
+  font-size: 12px;
+  color: #ffb26b;
+  background: #18222a;
+  border: 1px solid #6b4a26;
+  border-radius: 8px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.st-audio:hover {
+  border-color: #ff9f43;
+}
+.st-audio.ok {
+  color: #5fb8a8;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+}
+/* 播放被自动播放策略挡下时的闪动提示 */
+.st-audio-flash {
+  animation: st-audio-blink 1.2s ease;
+}
+@keyframes st-audio-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  25%,
+  75% {
+    opacity: 0.2;
+  }
+}
+
+/* 播放控制条（T2）：⏮ ⏯ ⏭ + 小节号 + 进度条 + m:ss.t 时间 */
+.st-transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 8px;
+}
+.st-tbtn {
+  background: #18222a;
+  color: #cfd8d4;
+  border: 1px solid #2a3942;
+  border-radius: 6px;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  font: 14px/1 'Segoe UI Symbol', 'Segoe UI', sans-serif;
+}
+.st-tbtn:hover {
+  border-color: var(--song-accent, #5fb8a8);
+}
+.st-pos {
+  color: #7a8a90;
+  font-variant-numeric: tabular-nums;
+  min-width: 72px;
+}
+.st-time {
+  color: #9aa8ad;
+  font-variant-numeric: tabular-nums;
+  min-width: 56px;
+  text-align: right;
+}
+.st-progress {
+  flex: 1;
+  min-width: 120px;
+  height: 8px;
+  position: relative;
+  background: #18222a;
+  border: 1px solid #2a3942;
+  border-radius: 5px;
+  cursor: pointer;
+  touch-action: none;
+}
+.st-progress-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: var(--song-accent, #5fb8a8);
+  border-radius: 4px;
+  opacity: 0.85;
+  pointer-events: none;
+}
+.st-meta em {
+  font-style: normal;
+  color: #7a8a90;
+}
+.st-meta em.on {
+  color: #ff9f43;
+}
+.st-dirty {
+  margin-left: 8px;
+  font-style: normal;
+  font-size: 11px;
+  color: #ffb26b;
+  border: 1px solid #6b4a26;
+  border-radius: 8px;
+  padding: 0 6px;
+}
+.st-flex {
+  flex: 1;
+}
+
+.st-btn {
+  background: #18222a;
+  color: #cfd8d4;
+  border: 1px solid #2a3942;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.st-btn:hover:not(:disabled) {
+  border-color: var(--song-accent, #5fb8a8);
+}
+.st-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.st-btn.primary {
+  border-color: var(--song-accent, #5fb8a8);
+  color: var(--song-accent, #5fb8a8);
+}
+
+.st-status {
+  padding: 24px;
+  color: #7a8a90;
+}
+.st-status.err {
+  color: #ff8d7a;
+}
+
+.st-main {
+  display: grid;
+  grid-template-columns: 300px 1fr 300px;
+  min-height: 0;
+}
+
+/* 左栏：音符列表 */
+.st-list {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #1d262c;
+  min-height: 0;
+}
+.st-list-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #1d262c;
+  color: #7a8a90;
+}
+.st-list-head span {
+  margin-right: auto;
+}
+.st-chip {
+  background: transparent;
+  border: 1px solid #2a3942;
+  border-radius: 10px;
+  color: #7a8a90;
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.st-chip.on {
+  color: var(--song-accent, #5fb8a8);
+  border-color: var(--song-accent, #5fb8a8);
+}
+.st-list-body {
+  overflow: auto;
+  min-height: 0;
+}
+.st-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #141b20;
+  color: inherit;
+  font: inherit;
+  padding: 5px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.st-row:hover {
+  background: #131b21;
+}
+.st-row.sel {
+  background: #17242a;
+  box-shadow: inset 2px 0 0 var(--song-accent, #5fb8a8);
+}
+.st-row .m {
+  color: #7a8a90;
+  width: 34px;
+  flex: none;
+}
+.st-row .p {
+  color: #e8e8e2;
+  width: 38px;
+  flex: none;
+}
+.st-row .q {
+  color: #5c6c73;
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+.st-row .t {
+  color: #9aa8ad;
+  font-variant-numeric: tabular-nums;
+}
+.st-row .delta {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.delta.pos {
+  color: #ff9f43;
+}
+.delta.neg {
+  color: #6ec3ff;
+}
+
+/* 中栏：谱面 */
+.st-score {
+  overflow: auto;
+  min-height: 0;
+  background: #0b0f12;
+}
+.st-score-container {
+  position: relative; /* 控制点标记层（sync-marker-layer）定位基准 */
+  min-width: max-content;
+  padding: 8px 12px;
+}
+
+/* OSMDScore.setMarkers 注入的标记层 */
+.st-score-container .sync-marker-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+.st-score-container .sync-marker {
+  position: absolute;
+  width: 0;
+  border-left: 2px solid;
+  opacity: 0.9;
+}
+
+/* 右栏：属性面板（flex 列使操作说明钉底） */
+.st-props {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #1d262c;
+  padding: 12px 14px;
+  min-height: 0;
+  overflow: auto;
+}
+.st-props h3 {
+  margin: 0 0 10px;
+  color: #e8e8e2;
+}
+.st-props dl {
+  margin: 0 0 12px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+}
+.st-props dt {
+  color: #7a8a90;
+}
+.st-props dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.st-props dd.pos {
+  color: #ff9f43;
+}
+.st-props dd.neg {
+  color: #6ec3ff;
+}
+.st-tag {
+  font-style: normal;
+  font-size: 11px;
+  color: #ffb26b;
+}
+/* 命中距离提示（T3）：点谱面 120px 内无音符、仍选最近时右栏提示 */
+.st-near-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #ffb26b;
+}
+.st-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.st-btn-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.st-empty {
+  color: #5c6c73;
+  padding: 16px 4px;
+}
+
+/* 操作说明面板（T2）：默认收起、展开不持久化 */
+.st-help {
+  margin-top: auto; /* 内容不足时钉在右栏底部 */
+  border: 1px solid #2a3942;
+  border-radius: 6px;
+  background: #0e1317;
+  flex: none;
+}
+.st-help summary {
+  cursor: pointer;
+  padding: 6px 10px;
+  color: #9aa8ad;
+  list-style: none;
+  user-select: none;
+}
+.st-help summary::-webkit-details-marker {
+  display: none;
+}
+.st-help summary::before {
+  /* T3d：绿色 ？ 与「操作说明」白字并排（T3c 曾只留 ？） */
+  content: '?';
+  color: var(--song-accent, #5fb8a8);
+  font-weight: 700;
+  margin-right: 6px;
+}
+.st-help[open] summary {
+  border-bottom: 1px solid #1d262c;
+}
+.st-help-body {
+  padding: 4px 10px 10px;
+  font-size: 12px;
+  color: #8a99a0;
+}
+.st-help-sec {
+  margin: 6px 0 2px;
+  color: #7a8a90;
+  font-weight: 600;
+}
+.st-help-body ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.st-help-body li {
+  margin: 2px 0;
+}
+.st-help kbd {
+  font-family: Consolas, monospace;
+  background: #18222a;
+  border: 1px solid #2a3942;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: #cfd8d4;
+}
+
+/* 底部：伴奏波形总览（T2：头行 = 折叠开关 + 图例 + 视口时间范围） */
+.st-wave {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #1d262c;
+  height: 160px;
+}
+.st-wave.collapsed {
+  height: 32px;
+  position: relative;
+}
+.st-wave {
+  position: relative;
+}
+.st-wave.collapsed canvas {
+  display: none;
+}
+.st-wave-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  cursor: pointer;
+  color: #7a8a90;
+  user-select: none;
+}
+.st-wave-head:hover {
+  color: #9aa8ad;
+}
+.st-wave-caret {
+  flex: none;
+  color: #5c6c73;
+  transition: transform 0.15s;
+}
+.st-wave-caret.closed {
+  transform: rotate(-90deg);
+}
+.st-wave-title {
+  flex: none;
+  color: #9aa8ad;
+  font-weight: 600;
+}
+.st-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  min-width: 0;
+}
+.st-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.st-legend .sw {
+  display: inline-block;
+  flex: none;
+  border-radius: 1px;
+}
+.st-legend .sw.h {
+  width: 12px;
+  height: 2px;
+}
+.st-legend .sw.v {
+  width: 3px;
+  height: 10px;
+}
+/* 缩放按钮组（T6b）：滚轮缩放移除后由图例行三按钮承接（＋/－/⤢复位） */
+.st-zoom {
+  display: inline-flex;
+  gap: 4px;
+}
+.st-zbtn {
+  background: #18222a;
+  color: #cfd8d4;
+  border: 1px solid #2a3942;
+  border-radius: 5px;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+  cursor: pointer;
+  font: 12px/1 'Segoe UI', sans-serif;
+}
+.st-zbtn:hover {
+  border-color: var(--song-accent, #5fb8a8);
+}
+/* 从选中播放（9/4 交互定版）：复用 st-zbtn 形状，主操作强调色 */
+.st-play-sel {
+  width: 26px;
+  color: #ffb861;
+  border-color: #6b5335;
+  font-size: 11px;
+}
+.st-play-sel:hover {
+  border-color: #ff9f43;
+}
+.st-play-sel.on {
+  background: #ff9f43;
+  color: #10151a;
+  border-color: #ff9f43;
+}
+/* 未选中就点播放的一次性提示（toast）：3s 自动消隐 */
+.st-wave-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  background: rgba(24, 34, 42, 0.95);
+  border: 1px solid #3a4a54;
+  border-radius: 6px;
+  color: #e8e8e2;
+  font-size: 12px;
+  padding: 6px 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+}
+.st-wave canvas {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+.st-wave-hint {
+  flex: none;
+  font-size: 11px;
+  color: #5c6c73;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* —— 歌曲切换器（R3）：顶栏下拉。同源设计语言：#18222a 面板、#2a3942 边框、
+    5-8px 圆角、11-12px 字号；focus 用 accent 描边替代默认 outline —— */
+.st-sw {
+  position: relative;
+}
+.st-sw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #18222a;
+  color: #e8e8e2;
+  border: 1px solid #2a3942;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+.st-sw-btn:hover,
+.st-sw-btn:focus-visible,
+.st-sw-item:focus-visible {
+  border-color: var(--song-accent, #5fb8a8);
+  outline: none;
+}
+.st-sw-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.st-sw-caret {
+  color: #7a8a90;
+  font-size: 10px;
+}
+.st-sw-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  min-width: 240px;
+  max-height: 70vh;
+  overflow: auto;
+  background: #18222a;
+  border: 1px solid #2a3942;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  padding: 4px;
+}
+.st-sw-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: inherit;
+  font: inherit;
+  padding: 6px 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.st-sw-item:hover {
+  background: #131b21;
+}
+.st-sw-item.cur {
+  background: #17242a;
+  box-shadow: inset 2px 0 0 var(--song-accent, #5fb8a8);
+}
+.st-sw-item-title {
+  flex: 1;
+  color: #e8e8e2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.st-sw-diff {
+  color: #ffb26b;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.st-sw-item.off {
+  opacity: 0.4;
+  cursor: default;
+}
+.st-sw-item.off .st-sw-item-title {
+  color: #7a8a90;
+}
+.st-sw-nobeats {
+  font-size: 11px;
+  color: #5c6c73;
+  border: 1px solid #2a3942;
+  border-radius: 8px;
+  padding: 0 6px;
+  white-space: nowrap;
+}
+
+/* 切换确认条（R3）：有未导出微调时挂在顶栏下方，轻量确认、不弹原生 confirm */
+.st-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #ffb26b;
+  background: #141b21;
+  border-bottom: 1px solid #1d262c;
+}

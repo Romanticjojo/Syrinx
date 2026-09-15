@@ -1,0 +1,32 @@
+{
+  "id": "flower-dance",
+  "title": "Flower Dance",
+  "composer": "DJ OKAWARI",
+  "difficulty": 3,
+  "durationLabel": "4:27",
+  "keyLabel": "A 小调（无升降号）",
+  "keyLabelEn": "A minor (no sharps/flats)",
+  "description": "DJ OKAWARI 的名曲长笛改编。十六分音符连绵不断，旋律在快速律动中穿行，中段速度提升、织体更密，对手指灵活性与气息稳定都是扎实的考验。",
+  "descriptionEn": "A celebrated DJ OKAWARI piece arranged for flute. Sixteenth notes flow without pause as the melody threads through quick figuration, and the mid-section lifts in tempo and texture — a solid test of finger agility and steady breath.",
+  "tags": [
+    "长笛",
+    "快速",
+    "名曲改编"
+  ],
+  "tagsEn": [
+    "Flute",
+    "Fast",
+    "Arrangement"
+  ],
+  "scoreUrl": "/songs/flower-dance/score.musicxml",
+  "beatsUrl": "/songs/flower-dance/beats.json",
+  "accompanimentUrl": "/songs/flower-dance/accompaniment.mp3",
+  "coverUrl": "/songs/flower-dance/cover.jpg",
+  "backgroundVideoUrl": "/songs/flower-dance/background.mp4",
+  "backgroundPadColor": "rgb(243, 198, 35)",
+  "hoverVideoUrl": "/songs/flower-dance/hover-square.mp4",
+  "accent": "#e0a878",
+  "backgroundTheme": "aurora",
+  "bpm": 100,
+  "anchorOffsetMs": 0
+}

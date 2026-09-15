@@ -1,0 +1,34 @@
+{
+  "id": "expedition-33",
+  "title": "Lumière",
+  "composer": "[from Clair Obscur: Expedition 33] - Lorien Testard",
+  "difficulty": 2,
+  "durationLabel": "3:14",
+  "keyLabel": "D 大调／B 小调（2 个升号）",
+  "keyLabelEn": "D major / B minor (2 sharps)",
+  "description": "《Lumière》，Lorien Testard 作曲，选自游戏《Clair Obscur: Expedition 33》原声带，本曲为长笛改编版。旋律温柔抒情，和声在明亮与幽暗间流转，长乐句气息绵长，适合练习歌唱性表达与力度的层次控制。",
+  "descriptionEn": "\"Lumière\" by Lorien Testard, from the soundtrack of Clair Obscur: Expedition 33, arranged here for flute. The melody is tender and lyrical, its harmonies drifting between light and shadow; the long phrases ask for generous breath — fine practice for singing tone and layered control of dynamics.",
+  "tags": [
+    "长笛",
+    "游戏音乐",
+    "抒情"
+  ],
+  "tagsEn": [
+    "Flute",
+    "Game Music",
+    "Lyrical"
+  ],
+  "scoreUrl": "/songs/expedition-33/score.musicxml",
+  "pianoScoreUrl": "/songs/expedition-33/piano.musicxml",
+  "beatsUrl": "/songs/expedition-33/beats.json",
+  "accompanimentUrl": "/songs/expedition-33/accompaniment.mp3",
+  "coverUrl": "/songs/expedition-33/cover.jpg",
+  "backgroundVideoUrl": "/songs/expedition-33/background.mp4",
+  "backgroundPadColor": "rgb(1, 1, 0)",
+  "hoverVideoUrl": "/songs/expedition-33/hover-square.mp4",
+  "hoverPlayOnce": true,
+  "accent": "#b9a0d8",
+  "backgroundTheme": "ember",
+  "bpm": 84,
+  "anchorOffsetMs": 0
+}

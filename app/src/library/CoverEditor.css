@@ -1,0 +1,24 @@
+.cover-editor { padding: 0 0 24px; margin-bottom: 22px; border-bottom: 1px solid var(--line); }
+.cover-editor-main { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 22px; align-items: center; }
+.cover-editor-preview { aspect-ratio: 4 / 5; min-width: 0; border: 1px solid var(--line-strong); border-radius: 4px 9px 9px 4px; overflow: hidden; background: var(--surface-2); padding: 13px; color: var(--ink); display: flex; flex-direction: column; }
+.cover-editor-preview.has-image { padding: 0; }
+.cover-editor-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.cover-editor-preview > span { color: var(--ink-faint); font-size: 7px; letter-spacing: .2em; }
+.cover-editor-preview > strong { font: 17px/1.5 var(--serif); overflow-wrap: anywhere; margin-top: 17px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cover-editor-lines { display: grid; gap: 4px; margin-top: auto; padding-top: 15px; }
+.cover-editor-lines i { height: 1px; background: var(--line-strong); }
+.cover-editor-controls h3 { font: 19px var(--serif); margin-bottom: 5px; }
+.cover-editor-controls p { font-size: 12px; line-height: 1.7; }
+.cover-editor-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin: 12px 0 8px; }
+.cover-editor-actions button { min-height: 44px; }
+.cover-editor-remove { border: none; background: transparent; color: var(--ink-dim); cursor: pointer; font: 12px var(--sans); }
+.cover-editor-remove:hover { color: var(--ink); }
+.cover-editor-controls .cover-editor-hint { font-size: 10px; color: var(--ink-faint); }
+.cover-editor-status { color: var(--accent); font-size: 12px; margin-top: 8px; }
+@media (max-width: 420px) {
+  .cover-editor-main { grid-template-columns: 92px minmax(0, 1fr); gap: 15px; align-items: start; }
+  .cover-editor-controls h3 { font-size: 17px; }
+  .cover-editor-preview { padding: 10px; }
+  .cover-editor-actions { gap: 5px 9px; }
+  .cover-editor-actions .btn-pill { padding-left: 14px; padding-right: 14px; }
+}

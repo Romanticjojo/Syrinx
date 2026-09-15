@@ -1,0 +1,325 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Syrinx Architecture",
+    "locale": "en",
+    "subtitle": "Vite + React 19 · browser-only closed loop · zero backend API",
+    "output": "syrinx-architecture-en.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1050,
+      510
+    ],
+    "views": [
+      {
+        "id": "perform-loop",
+        "label": "Perform loop",
+        "focus": [
+          "web",
+          "views",
+          "score",
+          "audio",
+          "rec",
+          "pitch",
+          "store"
+        ],
+        "note": "Load, parse, perform, capture, analyze, then feed stats back — all in the browser."
+      },
+      {
+        "id": "score-assets",
+        "label": "Score & assets",
+        "focus": [
+          "songpack",
+          "synctune",
+          "score",
+          "audio"
+        ],
+        "note": "How the Song Pack and the anchor tuning workbench feed the score and audio engines."
+      },
+      {
+        "id": "immersion",
+        "label": "Immersion & feedback",
+        "focus": [
+          "audio",
+          "bg",
+          "pitch",
+          "store",
+          "views"
+        ],
+        "note": "Low-band energy drives the background; YIN stats flow into global state."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "web",
+      "type": "cloud",
+      "label": "Static Site",
+      "sublabel": "Vite build output",
+      "tag": "static hosting",
+      "pos": [
+        40,
+        70
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "views",
+      "type": "frontend",
+      "label": "Views",
+      "sublabel": "React 19 · 5 pages",
+      "tag": "src/views",
+      "pos": [
+        250,
+        70
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "store",
+      "type": "frontend",
+      "label": "Global State",
+      "sublabel": "zustand · store.ts",
+      "pos": [
+        880,
+        70
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "score",
+      "type": "backend",
+      "label": "Score Engine",
+      "sublabel": "MusicXML → timeline",
+      "tag": "TDD",
+      "pos": [
+        250,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "audio",
+      "type": "backend",
+      "label": "Audio Engine",
+      "sublabel": "Live playback clock",
+      "tag": "BPM · seek",
+      "pos": [
+        460,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "rec",
+      "type": "backend",
+      "label": "Recorder",
+      "sublabel": "AudioWorklet capture",
+      "pos": [
+        670,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "pitch",
+      "type": "backend",
+      "label": "YIN Pitch Analysis",
+      "sublabel": "Background Worker",
+      "tag": "pure TS · TDD",
+      "pos": [
+        880,
+        240
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "synctune",
+      "type": "backend",
+      "label": "Anchor Workbench",
+      "sublabel": "/sync-tune page",
+      "tag": "TDD",
+      "pos": [
+        40,
+        410
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "songpack",
+      "type": "database",
+      "label": "Song Pack",
+      "sublabel": "songs/<id>/ assets",
+      "tag": "not in repo",
+      "pos": [
+        250,
+        410
+      ],
+      "size": [
+        130,
+        64
+      ]
+    },
+    {
+      "id": "bg",
+      "type": "frontend",
+      "label": "Live Background",
+      "sublabel": "three.js breathing",
+      "tag": "audio-reactive",
+      "pos": [
+        460,
+        410
+      ],
+      "size": [
+        130,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Syrinx · in-browser closed loop (zero backend API)",
+      "wraps": [
+        "web",
+        "views",
+        "store",
+        "score",
+        "audio",
+        "rec",
+        "pitch",
+        "synctune",
+        "songpack",
+        "bg"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "web-views",
+      "from": "web",
+      "to": "views",
+      "label": "loads SPA"
+    },
+    {
+      "id": "views-store",
+      "from": "views",
+      "to": "store",
+      "label": "read/write"
+    },
+    {
+      "id": "views-score",
+      "from": "views",
+      "to": "score",
+      "label": "parse song",
+      "labelAt": [
+        328,
+        185
+      ]
+    },
+    {
+      "id": "score-audio",
+      "from": "score",
+      "to": "audio",
+      "label": "timeline",
+      "variant": "emphasis"
+    },
+    {
+      "id": "audio-rec",
+      "from": "audio",
+      "to": "rec",
+      "label": "arm / stop"
+    },
+    {
+      "id": "rec-pitch",
+      "from": "rec",
+      "to": "pitch",
+      "label": "PCM frames",
+      "variant": "emphasis"
+    },
+    {
+      "id": "pitch-store",
+      "from": "pitch",
+      "to": "store",
+      "label": "pitch stats",
+      "variant": "emphasis"
+    },
+    {
+      "id": "songpack-score",
+      "from": "songpack",
+      "to": "score",
+      "label": "5 assets"
+    },
+    {
+      "id": "synctune-songpack",
+      "from": "synctune",
+      "to": "songpack",
+      "label": "write anchors",
+      "variant": "dashed"
+    },
+    {
+      "id": "audio-bg",
+      "from": "audio",
+      "to": "bg",
+      "label": "bass energy",
+      "labelAt": [
+        538,
+        355
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Frontend-only",
+      "items": [
+        "Closed loop in the browser: no backend API — static hosting plus Web APIs is the whole runtime",
+        "Vite build deployed as static assets; Song Packs plug in without touching the repo",
+        "Per-song accent color and theme declared by each Song Pack manifest"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Playback & Recording",
+      "items": [
+        "Live audio position aligns the score cursor and recording",
+        "Tempo changes and seeks save the take, then count in a new segment",
+        "Segments retain start and speed; rAF updates the cursor"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Quality built in",
+      "items": [
+        "score / audio / pitch / synctune core domains are Vitest TDD green",
+        "YIN implemented in pure TypeScript, interface-ready for a CREPE swap",
+        "Missing backing track? OfflineAudioContext synthesizes a nocturne-style fallback"
+      ]
+    }
+  ]
+}

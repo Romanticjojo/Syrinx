@@ -1,0 +1,41 @@
+/* 谱面容器：无框谱面（定稿方向 B），上下渐变 mask 保可读 */
+.score-sheet {
+  position: relative;
+  width: 100%;
+}
+
+.sheet-container {
+  width: 100%;
+  overflow: auto;
+  max-height: 100%;
+  -webkit-mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(transparent, #000 6%, #000 94%, transparent);
+  /* 隐藏滚动条（横竖都藏）：滚动能力保留（滚轮/触摸/键盘），位置提示交给
+     上下渐变 mask；触屏 overscroll 链隔断，防谱面滚到头带跑整页 */
+  scrollbar-width: none; /* Firefox */
+  overscroll-behavior: contain;
+}
+.sheet-container::-webkit-scrollbar {
+  display: none; /* Chromium / WebKit */
+}
+
+/* [t_1d124051] fit 模式缩放层：OSMD 在 .sheet-virtual（固定 1280px 虚拟宽）里
+   渲染，本层 transform 等比缩到实际宽。origin 取 top left——wrapper 块宽即
+   容器宽（= 1280·k），视觉左缘对齐容器左缘，无需居中换算；transform 不改布局
+   占位，滚动区高度由组件按 H·k 直写补偿（见 ScoreSheet.tsx） */
+.sheet-scale {
+  transform-origin: top left;
+}
+
+/* [t_1d124051] fit 模式 OSMD 渲染容器：固定虚拟宽（与页面 CSS min(1280px,100%)
+   上限同值），布局与桌面 1280px 完全一致；实际宽度交由父层 scale 折算 */
+.sheet-virtual {
+  width: 1280px;
+}
+
+.sheet-error {
+  color: var(--rec);
+  font-size: 13px;
+  padding: 12px;
+  text-align: center;
+}

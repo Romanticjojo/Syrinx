@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Syrinx · 长笛演奏辅助——曲谱跟随、伴奏同步、动态背景、录音回放" />
+    <meta name="theme-color" content="#0e0f0f" />
+    <title>Syrinx</title>
+    <style>
+      /* 启动占位：JS 就绪前纯深色底防白屏（React 挂载后整体替换，不再放品牌位，
+         避免 Intro 登场前闪现一张缩放 logo） */
+      .boot {
+        height: 100%;
+        background: #0e0f0f;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot"></div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

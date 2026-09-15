@@ -1,0 +1,153 @@
+/* ============================================================
+   Syrinx 设计 token —— 定稿方案 A「夜航晨光」单点缀色体系
+   灰阶基色 + 晨光青单点缀 + 暖金品牌辅助（logo 极简语言）
+   深浅双主题：:root 暗色为默认，html[data-theme='light'] 切换浅色
+   详见 docs/设计/style-tokens.md
+   ============================================================ */
+:root {
+  /* —— 灰阶基色（层级面）—— */
+  --bg: #0e0f0f;
+  --surface: #161818;
+  --surface-2: #1e2020;
+  --ink: #f5f4f0;
+  --ink-dim: #a9aba8;
+  --ink-faint: #70736f;
+
+  /* 细线：唯一描边语言（去装饰化：禁粗边框、禁重阴影） */
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.2);
+
+  /* —— 单点缀色：晨光青（全局唯一强调色，曲目层由 --song-accent 覆盖）—— */
+  --accent: #5fb8a8;
+  --accent-ink: #06130d; /* 点缀色之上的文字/图形 */
+  --brand-gold: #d9a441; /* 暖金：仅品牌位（字标分隔点/关于页）克制使用 */
+  --rec: #f3727f;
+
+  /* —— 页面级纱罩（暗色主题）—— */
+  --scrim-top: rgba(11, 12, 12, 0.94);
+  --scrim-mid: rgba(11, 12, 12, 0.4);
+  /* 全屏媒体背景上的整页纱罩基色（透明度由使用处 color-mix 控制） */
+  --page-scrim: #090c0b;
+
+  /* —— 媒体之上文字：封面/视频上的白色文字不随主题翻转 —— */
+  --on-media: #ffffff;
+  --on-media-dim: rgba(255, 255, 255, 0.72);
+  --media-shade: rgba(8, 9, 9, 0.82);
+
+  /* 字体：标题衬线（曲名诗意）+ UI 无衬线（紧凑功能） */
+  --serif: Georgia, 'Songti SC', 'Noto Serif SC', serif;
+  --sans: 'DM Sans', system-ui, -apple-system, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', sans-serif;
+
+  /* 几何 */
+  --pill: 9999px;
+  --circ: 9999px; /* 兼容别名 */
+  --radius: 10px;
+
+  /* 阴影：仅两档弱阴影（hover 抬升用），不做常驻投影 */
+  --shadow-sm: rgba(0, 0, 0, 0.2) 0 4px 12px;
+  --shadow-md: rgba(0, 0, 0, 0.32) 0 10px 28px;
+  --shadow-lg: var(--shadow-md); /* 兼容别名（旧三档收敛为两档） */
+}
+
+/* —— 浅色主题（token 层完备；曲库/预览已适配，沉浸页锁定暗色）—— */
+[data-theme='light'] {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --surface-2: #edeae3;
+  --ink: #191b1a;
+  --ink-dim: #585c59;
+  --ink-faint: #8c908c;
+  --line: rgba(22, 24, 23, 0.1);
+  --line-strong: rgba(22, 24, 23, 0.22);
+  --accent: #3d8d7e;
+  --accent-ink: #ffffff;
+  --scrim-top: rgba(247, 246, 242, 0.94);
+  --scrim-mid: rgba(247, 246, 242, 0.4);
+  --page-scrim: #f1f0ea;
+  --shadow-sm: rgba(32, 36, 34, 0.1) 0 4px 12px;
+  --shadow-md: rgba(32, 36, 34, 0.16) 0 10px 28px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: var(--sans);
+}
+
+a {
+  color: inherit;
+}
+
+/* 滚动条：细条、随主题 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-faint);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 通用按钮形态：细线药丸（去装饰化：无填充、无渐变、hover 细线提亮） */
+.btn-pill {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  border-radius: var(--pill);
+  padding: 11px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.btn-pill:hover {
+  border-color: var(--ink);
+  transform: scale(1.03);
+}
+.btn-pill.added {
+  color: var(--song-accent, var(--accent));
+  border-color: var(--song-accent, var(--accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* Page chunks load only when their route is opened. */
+.route-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  color: var(--ink-dim);
+  background: var(--bg);
+}

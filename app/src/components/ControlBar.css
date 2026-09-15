@@ -1,0 +1,163 @@
+/* 演奏页控制条：悬浮胶囊，idle 时随整层淡出 */
+.control-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(16, 16, 18, 0.72);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+}
+.ctl {
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.ctl:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+}
+.ctl:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ctl.main {
+  background: var(--song-accent, var(--accent));
+  color: #06130d;
+  font-size: 16px;
+}
+.ctl.main:hover {
+  background: var(--song-accent, var(--accent));
+  filter: brightness(1.12);
+}
+/* 停止演奏：方块图标小于文字按钮基线，hover 转警示色提示「收束本段」 */
+.ctl.stop {
+  font-size: 13px;
+}
+.ctl.stop:not(:disabled):hover {
+  color: var(--rec);
+  background: rgba(243, 114, 127, 0.12);
+}
+/* 录音开关：麦克风图标，开着时红色呼吸 + REC 徽标 */
+.ctl.rec {
+  width: auto;
+  min-width: 40px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.ctl.rec .rec-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.ctl.rec.on {
+  color: var(--rec);
+}
+.ctl.rec.on svg {
+  animation: rec-pulse 1.6s ease-in-out infinite;
+}
+@keyframes rec-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.ctl.rec.on:hover {
+  background: rgba(243, 114, 127, 0.14);
+}
+.ctl.exit:hover {
+  color: var(--rec);
+}
+/* 光标数据源切换按钮已删（9/8 用户钦定）：loadSong 的 cursorMode 能力保留给
+   T3 评估脚本（运行时覆盖），UI 入口移除。预览页 .score-switch 沿用本文件原
+   .ctl.cursor-mode 的分段控件语言，样式自含不受影响。 */
+/* 运输组与音量/✕ 的视觉分隔：细竖线把「停止」和「退出」隔开不同分组，
+   降低 ✕ 被误认成停止键的概率（t_c10d648d） */
+.ctl-sep {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+.ctl-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+.vol-icon {
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+.ctl-volume input[type='range'] {
+  width: 90px;
+  accent-color: var(--song-accent, var(--accent));
+  cursor: pointer;
+}
+@media (max-width: 760px) {
+  .ctl-volume input[type='range'] {
+    width: 56px;
+  }
+}
+
+/* 触屏紧凑档（含折叠屏展开 ~910px，输入方式判定同 PitchMeter.css 的流内档）：
+   控制条自然宽 ~530px，360px 视口截断溢出——按钮 40→34px、音量条 90→44px、
+   间距收紧（9/8 用户实测「底部进度条、按钮等显示不全，没有等比例缩放」）。
+   桌面 hover 设备保持胶囊不缩。 */
+@media (hover: none) and (pointer: coarse) {
+  .control-bar {
+    gap: 6px;
+    padding: 8px 10px;
+    max-width: calc(100vw - 24px);
+  }
+  .ctl {
+    width: 34px;
+    height: 34px;
+    font-size: 13px;
+  }
+  .ctl.rec {
+    min-width: 34px;
+    padding: 0 8px;
+  }
+  .ctl-sep {
+    margin: 0;
+  }
+  .ctl-volume {
+    gap: 5px;
+    padding: 0 2px;
+  }
+  .ctl-volume input[type='range'] {
+    width: 44px;
+  }
+}
+
+/* Keep controls reachable by width even when a tablet has a mouse attached. */
+.control-bar { max-width: calc(100% - 24px); }
+.ctl { min-width: 44px; min-height: 44px; }
+.ctl.rec { min-width: 44px; }
+.ctl-volume { min-height: 44px; }
+@media (max-width: 760px) {
+  .control-bar { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); width: min(100%, 380px); gap: 4px 8px; padding: 8px; border-radius: 24px; }
+  .control-bar > .ctl { justify-self: center; width: 44px; height: 44px; }
+  .control-bar .ctl.rec { padding: 0; }
+  .control-bar .rec-badge, .control-bar .ctl-sep { display: none; }
+  .control-bar .ctl.exit { grid-column: 5; grid-row: 1; }
+  .control-bar .ctl-volume { grid-column: 3 / -1; grid-row: 2; width: 100%; padding: 0 6px; gap: 8px; }
+  .control-bar .ctl-volume input[type='range'] { width: 100%; min-width: 0; height: 32px; }
+}

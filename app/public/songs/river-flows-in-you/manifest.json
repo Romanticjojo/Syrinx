@@ -1,0 +1,20 @@
+{
+  "id": "river-flows-in-you",
+  "title": "River Flows in You",
+  "composer": "Yiruma（李闰珉）",
+  "difficulty": 2,
+  "durationLabel": "3:06",
+  "keyLabel": "F♯ 小调（3 个升号）",
+  "description": "Yiruma 的代表作长笛改编。分解和弦如流水铺底，旋律深情而克制，中段情绪渐强后归于宁静。适合练习歌唱性连音与长乐句的气息分配。",
+  "tags": [
+    "长笛",
+    "抒情",
+    "治愈"
+  ],
+  "scoreUrl": "/songs/river-flows-in-you/score.musicxml",
+  "beatsUrl": "/songs/river-flows-in-you/beats.json",
+  "accompanimentUrl": "/songs/river-flows-in-you/accompaniment.mp3",
+  "accent": "#89a9d8",
+  "backgroundTheme": "lumiere",
+  "bpm": 62
+}

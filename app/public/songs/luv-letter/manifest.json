@@ -1,0 +1,34 @@
+{
+  "id": "luv-letter",
+  "title": "Luv Letter",
+  "composer": "DJ OKAWARI",
+  "difficulty": 3,
+  "durationLabel": "4:11",
+  "keyLabel": "D♭ 大调 / B♭ 小调（5 降号）",
+  "keyLabelEn": "D♭ major / B♭ minor (5 flats)",
+  "description": "DJ OKAWARI 的经典钢琴与弦乐作品。轻盈的钢琴旋律叠加温暖的节拍，飘逸而深情——Syrinx 首首正式接入曲目。全曲采用 Lumière 钢琴母谱合成伴奏，速度变化与谱面标记一致，与长笛谱逐小节精确同步。",
+  "descriptionEn": "A modern classic of piano and strings. The lilting piano melody rides warm, gentle beats — airy and heartfelt. Accompaniment is rendered from the original piano score, with every tempo change matching the sheet music and bar-accurate sync with the flute part.",
+  "tags": [
+    "钢琴",
+    "节拍",
+    "首发正式曲"
+  ],
+  "tagsEn": [
+    "Piano",
+    "Beats",
+    "Debut"
+  ],
+  "scoreUrl": "/songs/luv-letter/score.musicxml",
+  "beatsUrl": "/songs/luv-letter/beats.json",
+  "accompanimentUrl": "/songs/luv-letter/accompaniment.mp3",
+  "backgroundVideoUrl": "/songs/luv-letter/background.mp4",
+  "backgroundPadColor": "rgb(40, 186, 207)",
+  "coverUrl": "/songs/luv-letter/cover.jpg",
+  "coverPosition": "26% 40%",
+  "accent": "#5fb8a8",
+  "backgroundTheme": "lumiere",
+  "bpm": 100,
+  "anchorOffsetMs": 0,
+  "previewVideoUrl": "/songs/luv-letter/background-square.mp4",
+  "hoverVideoUrl": "/songs/luv-letter/hover-square.mp4"
+}

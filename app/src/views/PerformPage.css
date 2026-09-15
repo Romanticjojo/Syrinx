@@ -1,0 +1,557 @@
+/* 演奏页：全屏沉浸。层级：背景(任务8) < 谱面层 < HUD < 浮层
+   fixed 定位脱离文档流：谱面滚动只发生在 .sheet-container 内，OSMD 的
+   scrollIntoView 不会把整个窗口卷走（t_a857b79e：修谱面跟随错乱） */
+.perform {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* 沉浸页锁定暗色 token：背景为视频/canvas 媒体层，不随浅色主题翻转 */
+  --bg: #0e0f0f;
+  --surface: #161818;
+  --surface-2: #1e2020;
+  --ink: #f5f4f0;
+  --ink-dim: #a9aba8;
+  --ink-faint: #70736f;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.2);
+  --scrim-top: rgba(11, 12, 12, 0.94);
+  --scrim-mid: rgba(11, 12, 12, 0.4);
+  background: radial-gradient(120% 90% at 50% -10%, #141a17 0%, var(--bg) 55%);
+}
+
+/* three.js 主题背景：置于谱面层之下 */
+.perform-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+}
+/* 背景视频：contain 不裁主体；留边由视频主背景色垫底（manifest.backgroundPadColor，
+   luv-letter 缺省回落青绿），与画面融合无接缝 */
+video.perform-bg {
+  object-fit: contain;
+}
+/* playOnce 曲目的模糊垫底层：cover 铺满放大 + 高斯模糊 + 轻压暗，透在 contain 主视频后面 */
+video.perform-bg-blur {
+  object-fit: cover;
+  filter: blur(46px) saturate(1.05) brightness(0.72);
+  transform: scale(1.12); /* 吃掉 blur 边缘发虚 */
+}
+/* backgroundFit=cover 曲目（风景/星空无独占主体）：视频铺满全屏裁切，任何屏幕比例都无留边 */
+video.perform-bg-cover {
+  object-fit: cover;
+}
+
+/* ---------- HUD（顶栏 + 底部控制区，idle 时淡出） ---------- */
+.perform-hud {
+  transition: opacity 0.5s ease;
+  z-index: 3;
+}
+.perform.idle .perform-hud,
+.perform.idle .progress-rail {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hud-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 28px;
+  background: rgba(11, 12, 12, 0.82);   /* 半透黑 bar：与背景隔离但不突兀 */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+/* 可读性底座（t_bf0d76ec）：顶缘向下渐变 scrim，压住背景视频/canvas 亮部。
+   挂在 .hud-top::before（z-index:-1）——父级是 z-index:3 的 flex item，自带
+   stacking context，scrim 落在视频层(z0)之上、HUD 内容之下，且随 idle 一起淡出；
+   纯渐变不用 backdrop-filter：背景视频在动，blur 每帧重采样太贵 */
+
+/* 左组：幽灵返回钮 + 歌名/作者纵向组（t_4a4c84a0 顶栏重设计）
+   返回是导航动作不放大按钮——细线小圆钮融入顶栏；歌名层级提升（衬线加大），
+   作者弱化为 --ink-dim 小字跟随其下。
+   可读性（t_bf0d76ec）：scrim 之上再加细 text-shadow 兜底，最亮画面下仍达 AA */
+.hud-song {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.hud-song-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.hud-song-text b {
+  font-family: var(--serif);
+  font-size: 21px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+.hud-song-text span {
+  font-size: 11px;
+  color: var(--ink-dim);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+.back-ghost {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--pill);
+  background: rgba(11, 12, 12, 0.32);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.back-ghost:hover {
+  border-color: var(--ink-dim);
+  color: var(--ink);
+  background: rgba(11, 12, 12, 0.5);
+}
+.hud-stats {
+  display: flex;
+  gap: 26px;
+}
+.hud-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ink);
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+.hud-stat .num {
+  font-size: 15px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+.hud-bottom {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 24px;
+}
+
+/* ---------- 谱面舞台 ---------- */
+.perform-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  padding: 4px 28px 0;
+  position: relative;
+  z-index: 1;
+}
+.perform-stage .score-sheet {
+  flex: 1;
+  min-height: 0;
+}
+/* 印刷谱比例（t_c10d648d → t_1d124051 混合适配）：谱面上限恒 1280px（zoom 0.85，
+   谱线间距 8.5px），≥640px 视口由 ScoreSheet 以 1280px 虚拟宽渲染 + transform
+   等比缩放（k = 容器宽/1280，旋转/缩窗只改 k 不重排）；<640px 手机竖屏容器
+   自适应宽重排（min 的 100% 支路天然给出全宽，无需媒体查询分档）。旧 92vh/svh
+   上限随虚拟宽方案移除——宽度不再跟视口高走。 */
+.perform-stage .sheet-container {
+  height: 100%;
+  overflow-y: auto; /* 谱面滚动容器：OSMD 光标 scrollIntoView 只卷这里，不卷窗口 */
+  overflow-x: hidden; /* 滚动条已隐藏（ScoreSheet.css），防子像素溢出顶出横条 */
+  width: min(1280px, 100%);
+  margin-inline: auto;
+  /* 谱面半透面板：压谱可读，但背景动画必须透出来可见（t_a857b79e：0.66 压暗过重）；
+     backdrop blur 把透出的动画柔化成光影，不再与谱线打架（t_3b9cfc25） */
+  background: rgba(12, 13, 14, 0.45);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  border-radius: 14px;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.35);
+}
+
+/* ---------- 进度细轨（可点击/拖拽 seek，t_b22f5467 项 4） ---------- */
+.progress-rail {
+  position: relative;
+  height: 16px; /* 视觉仍是 3px 细线，容器加高兜住点击热区 */
+  cursor: pointer;
+  touch-action: none;
+  z-index: 3;
+  transition: opacity 0.5s ease;
+}
+.progress-rail::before {
+  content: '';
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 3px;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.08);
+}
+.progress-rail .played {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: block;
+  height: 3px;
+  width: 0;
+  background: var(--song-accent, var(--accent));
+  box-shadow: 0 0 12px var(--song-accent, var(--accent));
+  border-radius: 0 2px 2px 0;
+}
+
+/* ---------- 浮层（就绪/倒数/结束/错误） ---------- */
+.perform-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  background: rgba(9, 10, 12, 0.58);
+  backdrop-filter: blur(12px);
+  animation: ov-in 0.25s ease;
+}
+@keyframes ov-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ov-card {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  text-align: center;
+  padding: 42px 60px;
+  background: rgba(20, 21, 23, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  box-shadow: var(--shadow-lg);
+}
+.ov-glyph {
+  font-size: 34px;
+  color: var(--song-accent, var(--accent));
+  animation: glyph-float 2.4s ease-in-out infinite;
+}
+@keyframes glyph-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.ov-kicker {
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--song-accent, var(--accent));
+}
+.ov-title {
+  font-size: 17px;
+  color: var(--ink-dim);
+  letter-spacing: 0.06em;
+}
+.ov-title.big {
+  font-family: var(--serif);
+  font-size: clamp(28px, 4.4vw, 44px);
+  color: var(--ink);
+  font-weight: 500;
+}
+.ov-sub {
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+.ov-sub.err {
+  color: var(--rec);
+  max-width: 46ch;
+}
+.ov-start {
+  margin-top: 14px;
+  border: none;
+  border-radius: var(--pill);
+  padding: 15px 44px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #06130d;
+  background: var(--song-accent, var(--accent));
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.ov-start:hover {
+  transform: scale(1.04);
+  filter: brightness(1.1);
+}
+.ov-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink);
+  border-radius: var(--pill);
+  padding: 10px 26px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.ov-btn:hover {
+  border-color: var(--ink);
+}
+.ov-tips {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--ink-faint);
+  letter-spacing: 0.05em;
+}
+.ov-bar {
+  width: 190px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.ov-bar i {
+  display: block;
+  height: 100%;
+  width: 42%;
+  border-radius: 2px;
+  background: var(--song-accent, var(--accent));
+  animation: bar-sweep 1.1s ease-in-out infinite;
+}
+@keyframes bar-sweep {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(360%);
+  }
+}
+
+/* 倒数：轻遮罩 + 大数字（与节拍音同源计时） */
+.perform-overlay.countdown {
+  pointer-events: none;
+  background: rgba(8, 10, 12, 0.3);
+  backdrop-filter: none;
+  grid-template-rows: 1fr auto 1fr;
+}
+.count-num {
+  grid-row: 2;
+  font-family: var(--serif);
+  font-size: clamp(120px, 22vw, 230px);
+  line-height: 1;
+  color: var(--ink);
+  text-shadow: 0 0 70px var(--song-accent, var(--accent));
+  animation: count-pop 0.75s ease infinite;
+}
+@keyframes count-pop {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.5;
+  }
+  35% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.02);
+    opacity: 0.85;
+  }
+}
+.count-label {
+  grid-row: 3;
+  align-self: start;
+  margin-top: 18px;
+  font-size: 13px;
+  letter-spacing: 0.4em;
+  color: var(--ink-dim);
+}
+
+/* 降级提示 toast（麦克风不可用等），悬于控制条上方。
+   纯提示不吞指针事件：悬停位置恰在进度轨中央上方，挡住拖拽点击（t_b22f5467 项 5 实测） */
+.perform-toast {
+  pointer-events: none;
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 7;
+  padding: 10px 20px;
+  border-radius: var(--pill);
+  background: rgba(24, 22, 22, 0.9);
+  border: 1px solid rgba(243, 114, 127, 0.4);
+  color: var(--rec);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  box-shadow: var(--shadow-lg);
+  animation: ov-in 0.2s ease;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .hud-top {
+    padding: 12px 16px 8px;
+  }
+  .hud-song-text span {
+    display: none;
+  }
+  .hud-stats {
+    gap: 14px;
+  }
+  .perform-stage {
+    padding: 4px 10px 0;
+  }
+  /* 谱面全宽由基础规则 min(1280px, 100%) 的 100% 支路天然给出（t_1d124051），
+     旧的 width:100% 覆盖不再需要 */
+  .ov-card {
+    padding: 30px 26px;
+  }
+}
+
+/* 超窄屏（<400px）：顶栏收纳不换行不溢出——统计标签收起只留数字、
+   歌名让位给 ellipsis、间距收紧（t_b3080db9） */
+@media (max-width: 399.98px) {
+  .hud-top {
+    gap: 10px;
+    padding: 10px 12px 8px;
+  }
+  .hud-song {
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .hud-song-text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .hud-song-text b {
+    font-size: 16px;
+  }
+  .hud-stats {
+    flex: none;
+    gap: 10px;
+  }
+  /* 标签「小节/时间」竖排堆叠在数字左侧，数字保持横向可读 */
+  .hud-stat {
+    gap: 4px;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+  .hud-stat > span:first-child {
+    writing-mode: vertical-rl;
+    line-height: 1;
+  }
+  .hud-stat .num {
+    font-size: 12px;
+  }
+}
+
+/* 窄屏（手机竖屏等）：视频保持 contain 不裁人物，同色底自然延展补满留边；
+   backgroundFit=cover 曲目例外——星空无主体，铺满裁切在任何比例都成立 */
+@media (max-width: 768px) {
+  video.perform-bg {
+    object-fit: contain;
+  }
+  video.perform-bg-cover {
+    object-fit: cover;
+  }
+}
+
+/* ---------- 触屏设备：顶栏两行布局 + 控制区安全间距（9/8 二轮，折叠屏/手机） ----------
+   输入方式判定（同 PitchMeter/ControlBar 的触屏档）：折叠屏展开 ~910px 落不进
+   640px 宽度档。顶栏单行塞「返回+歌名+小节+时间」在小屏过于紧凑（用户实测）：
+   换行为两行——上行歌名左/统计右，下行谱面让出的空间归谱面。控制区底部
+   预留 iOS/Android 手势区（env(safe-area-inset-bottom)），时间数字不贴屏底。 */
+@media (hover: none) and (pointer: coarse) {
+  .hud-top {
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 10px 14px 8px;
+  }
+  .hud-song {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .hud-stats {
+    flex: none;
+    gap: 16px;
+  }
+  .hud-song-text span {
+    display: block; /* 覆写 640px 档的 display:none：两行布局有空间放回作者行 */
+  }
+  .hud-bottom {
+    padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+.hud-bottom { flex-shrink: 0; padding-bottom: max(12px, env(safe-area-inset-bottom, 0px)); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.hud-top { padding-top: max(12px, env(safe-area-inset-top, 0px)); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); flex-shrink: 0; }
+.back-ghost { min-width: 44px; min-height: 44px; }
+.perform-toast { white-space: normal; width: max-content; max-width: calc(100% - 32px); text-align: center; overflow-wrap: anywhere; }
+.perform-overlay { overflow-y: auto; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.ov-card { min-width: 0; max-width: 100%; max-height: 100%; overflow: auto; overflow-wrap: anywhere; }
+.perform-ready {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 16px;
+  margin: 0 max(16px, env(safe-area-inset-left, 0px)) 8px;
+  padding: 0;
+  color: var(--ink-dim);
+  font-size: 13px;
+}
+.perform-ready small { display: block; color: var(--ink-faint); }
+.perform-ready .ov-start { flex-shrink: 0; margin: 0 0 0 auto; min-height: 44px; padding: 10px 20px; font-size: 14px; }
+.practice-hint { display: flex; align-items: center; gap: 16px; min-width: 0; padding: 2px 8px 2px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); animation: practice-hint-in .3s ease-out both; }
+.practice-hint-steps { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px; min-width: 0; font-size: 12px; line-height: 1.5; }
+.practice-hint-steps > span { display: inline-flex; align-items: center; gap: 7px; }
+.practice-hint-steps svg, .practice-hint-bpm { flex-shrink: 0; color: var(--song-accent, var(--accent)); }
+.practice-hint-bpm { font: 500 9px/20px var(--sans); }
+.practice-hint > button { flex-shrink: 0; min-width: 52px; min-height: 44px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: 12px var(--sans); cursor: pointer; }
+.practice-hint > button:hover { background: var(--surface-2); }
+@keyframes practice-hint-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .practice-hint { animation: none; } }
+@media (max-width: 640px) {
+  .perform-ready { flex-wrap: wrap; gap: 8px; font-size: 12px; }
+  .practice-hint { width: 100%; justify-content: space-between; gap: 8px; }
+  .practice-hint-steps { gap: 5px; flex-direction: column; align-items: flex-start; padding: 6px 0; }
+  .perform-ready .ov-start { padding: 10px 14px; }
+}
+@media (max-width: 1050px), (any-pointer: coarse) {
+  .progress-rail { height: 44px; min-height: 44px; flex-shrink: 0; }
+}
+@media (max-width: 640px) {
+  .hud-top { flex-wrap: wrap; gap: 6px 12px; }
+  .hud-song { flex: 1 1 100%; }
+  .hud-stats { margin-left: 56px; }
+  .perform-toast { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-height: 500px) and (min-width: 641px) {
+  .hud-top { padding-top: max(6px, env(safe-area-inset-top, 0px)); padding-bottom: 6px; }
+  .hud-bottom { padding-top: 6px; padding-bottom: max(6px, env(safe-area-inset-bottom, 0px)); }
+  .ov-card { padding: 20px; }
+}
+

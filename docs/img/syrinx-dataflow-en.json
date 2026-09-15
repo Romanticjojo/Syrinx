@@ -1,0 +1,377 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Syrinx Performance Data Flow",
+    "locale": "en",
+    "subtitle": "The full data path from Song Pack assets to intonation feedback",
+    "output": "syrinx-dataflow-en.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1068,
+      760
+    ],
+    "views": [
+      {
+        "id": "score-pipeline",
+        "label": "Score pipeline",
+        "focus": [
+          "songpack",
+          "manifest",
+          "parser",
+          "timeline",
+          "osmd"
+        ],
+        "note": "How MusicXML becomes a score timeline."
+      },
+      {
+        "id": "perform-loop",
+        "label": "Performance loop",
+        "focus": [
+          "engine",
+          "osmd",
+          "bg",
+          "rec",
+          "yin"
+        ],
+        "note": "Live accompaniment position drives the cursor and aligns recording segments."
+      },
+      {
+        "id": "feedback-loop",
+        "label": "Replay and feedback",
+        "focus": [
+          "rec",
+          "wav",
+          "result",
+          "playback"
+        ],
+        "note": "How recordings and measured pitch become practice feedback."
+      }
+    ]
+  },
+  "stages": [
+    {
+      "label": "Assets"
+    },
+    {
+      "label": "Parse"
+    },
+    {
+      "label": "Perform"
+    },
+    {
+      "label": "Capture"
+    },
+    {
+      "label": "Feedback"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "songpack",
+      "type": "database",
+      "label": "Song Pack",
+      "sublabel": "songs/<id>/",
+      "stage": 0,
+      "row": 0,
+      "tag": "five-file pack",
+      "width": 128
+    },
+    {
+      "id": "manifest",
+      "type": "backend",
+      "label": "Song Registry",
+      "sublabel": "SONGS array",
+      "stage": 0,
+      "row": 2,
+      "tag": "src/songs"
+    },
+    {
+      "id": "parser",
+      "type": "backend",
+      "label": "Score Parser",
+      "sublabel": "repeat expand",
+      "stage": 1,
+      "row": 0,
+      "tag": "musicxml.ts"
+    },
+    {
+      "id": "timeline",
+      "type": "backend",
+      "label": "Play Timeline",
+      "sublabel": "Score tempo + anchors",
+      "stage": 1,
+      "row": 2,
+      "tag": "anchors.ts"
+    },
+    {
+      "id": "osmd",
+      "type": "frontend",
+      "label": "Score Render",
+      "sublabel": "OSMD cursor per note",
+      "stage": 2,
+      "row": 0,
+      "tag": "rAF direct DOM"
+    },
+    {
+      "id": "engine",
+      "type": "backend",
+      "label": "Master Clock",
+      "sublabel": "Live playback clock",
+      "stage": 2,
+      "row": 2,
+      "tag": "BPM · seek"
+    },
+    {
+      "id": "rec",
+      "type": "frontend",
+      "label": "Recording",
+      "sublabel": "AudioWorklet capture",
+      "stage": 3,
+      "row": 0,
+      "tag": "PCM"
+    },
+    {
+      "id": "yin",
+      "type": "backend",
+      "label": "YIN Pitch Detect",
+      "sublabel": "Live + Worker analysis",
+      "stage": 3,
+      "row": 2,
+      "tag": "pure TS · TDD"
+    },
+    {
+      "id": "bg",
+      "type": "frontend",
+      "label": "Living Background",
+      "sublabel": "three.js audio-reactive",
+      "stage": 3,
+      "row": 4,
+      "tag": "breathing"
+    },
+    {
+      "id": "wav",
+      "type": "database",
+      "label": "WAV Export",
+      "sublabel": "recording blob",
+      "stage": 4,
+      "row": 0,
+      "tag": "playback source"
+    },
+    {
+      "id": "result",
+      "type": "frontend",
+      "label": "Intonation Chart",
+      "sublabel": "hit / off / missed",
+      "stage": 4,
+      "row": 2,
+      "tag": "±50 cents"
+    },
+    {
+      "id": "playback",
+      "type": "frontend",
+      "label": "Compare Playback",
+      "sublabel": "take × accompaniment",
+      "stage": 4,
+      "row": 4,
+      "tag": "dual volume"
+    }
+  ],
+  "flows": [
+    {
+      "id": "pack-to-parser",
+      "from": "songpack",
+      "to": "parser",
+      "label": "score.musicxml",
+      "classification": "score asset",
+      "variant": "emphasis",
+      "route": "straight",
+      "labelDy": -20
+    },
+    {
+      "id": "pack-to-manifest",
+      "from": "songpack",
+      "to": "manifest",
+      "label": "asset mount",
+      "classification": "registry",
+      "labelAt": [
+        100,
+        271
+      ]
+    },
+    {
+      "id": "manifest-to-parser",
+      "from": "manifest",
+      "to": "parser",
+      "label": "manifest.json",
+      "classification": "metadata",
+      "labelAt": [
+        207,
+        271
+      ]
+    },
+    {
+      "id": "parser-to-timeline",
+      "from": "parser",
+      "to": "timeline",
+      "label": "note events",
+      "classification": "measure/beat/note",
+      "variant": "emphasis",
+      "labelAt": [
+        315,
+        200
+      ]
+    },
+    {
+      "id": "manifest-to-timeline",
+      "from": "manifest",
+      "to": "timeline",
+      "label": "beats anchors",
+      "classification": "alignment",
+      "route": "straight",
+      "labelAt": [
+        200,
+        440
+      ]
+    },
+    {
+      "id": "manifest-to-engine",
+      "from": "manifest",
+      "to": "engine",
+      "label": "accompaniment.m4a / mp3",
+      "classification": "audio asset",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          100,
+          480
+        ],
+        [
+          530,
+          480
+        ]
+      ],
+      "labelAt": [
+        315,
+        480
+      ]
+    },
+    {
+      "id": "timeline-to-osmd",
+      "from": "timeline",
+      "to": "osmd",
+      "label": "cursor position",
+      "classification": "per note",
+      "variant": "emphasis"
+    },
+    {
+      "id": "engine-to-osmd",
+      "from": "engine",
+      "to": "osmd",
+      "label": "playback time",
+      "classification": "per rAF frame",
+      "labelAt": [
+        560,
+        500
+      ]
+    },
+    {
+      "id": "engine-to-rec",
+      "from": "engine",
+      "to": "rec",
+      "label": "start/stop",
+      "classification": "control"
+    },
+    {
+      "id": "engine-to-bg",
+      "from": "engine",
+      "to": "bg",
+      "label": "low-band energy",
+      "classification": "audio-reactive",
+      "labelAt": [
+        640,
+        545
+      ]
+    },
+    {
+      "id": "rec-to-yin",
+      "from": "rec",
+      "to": "yin",
+      "label": "PCM frames",
+      "classification": "live analysis",
+      "variant": "emphasis",
+      "labelAt": [
+        745,
+        200
+      ]
+    },
+    {
+      "id": "yin-to-result",
+      "from": "yin",
+      "to": "result",
+      "label": "measured × target",
+      "classification": "pitch series",
+      "variant": "emphasis"
+    },
+    {
+      "id": "rec-to-wav",
+      "from": "rec",
+      "to": "wav",
+      "label": "encode WAV",
+      "classification": "export"
+    },
+    {
+      "id": "wav-to-playback",
+      "from": "wav",
+      "to": "playback",
+      "label": "take audio",
+      "classification": "playback",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          1040,
+          157
+        ],
+        [
+          1040,
+          613
+        ]
+      ],
+      "labelAt": [
+        1034,
+        428
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Primary Data Path",
+      "items": [
+        "The Song Pack five-file bundle is the source of everything; the manifest declares assets and accent color",
+        "Score and beat anchors converge into a single play timeline at parse time",
+        "The audio engine supplies live position; cursor and takes share score time"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Playback & Analysis",
+      "items": [
+        "Cursor is driven by rAF writing DOM directly — no reactive store, no re-render jitter",
+        "Recording and analysis share one source (AudioWorklet), keeping intonation stats trustworthy",
+        "Post-take pitch analysis runs in a Worker with progress and cancellation"
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Feedback Loop",
+      "items": [
+        "YIN measured pitch × score target pitch → hit / off / missed chart",
+        "Take WAV and accompaniment mix in the playback view with independent volumes",
+        "Segment start and speed align replay and charts with the matching score interval"
+      ]
+    }
+  ]
+}

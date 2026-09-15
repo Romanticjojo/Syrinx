@@ -1,0 +1,124 @@
+/* 实时音准表：默认隐没，有期望音时浮现；准=点缀色 / 偏=警示红 */
+.pitch-meter {
+  position: absolute;
+  top: 76px;
+  right: 24px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border-radius: var(--pill);
+  border: 1px solid var(--line);
+  background: rgba(14, 15, 15, 0.72);
+  backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease,
+    border-color 0.15s ease;
+  pointer-events: none;
+}
+.pitch-meter.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 期望音名 */
+.pm-note {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  min-width: 2.4em;
+  text-align: center;
+}
+
+/* ±50 音分量规：中线为 0，中央绿区即 ±50 音分 */
+.pm-gauge {
+  position: relative;
+  display: block;
+  width: 132px;
+  height: 6px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.pm-zone {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 90%; /* ±45% 与指针映射一致 */
+  height: 100%;
+  transform: translateX(-50%);
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.pm-needle {
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--ink);
+  transform: translateX(-50%);
+  transition: transform 0.08s linear;
+}
+
+/* 实测偏差读数 */
+.pm-cents {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+  min-width: 3.2em;
+  text-align: right;
+}
+
+/* 在准/偏两态间整体着色（音名、指针、读数联动） */
+.pitch-meter.good .pm-note,
+.pitch-meter.good .pm-cents {
+  color: var(--accent);
+}
+.pitch-meter.good .pm-needle {
+  background: var(--accent);
+}
+.pitch-meter.off .pm-note,
+.pitch-meter.off .pm-cents {
+  color: var(--rec);
+}
+.pitch-meter.off .pm-needle {
+  background: var(--rec);
+}
+.pitch-meter.off {
+  border-color: color-mix(in srgb, var(--rec) 45%, transparent);
+}
+
+/* ---------- 触屏设备：悬浮改流内，谱面零遮挡（t_e031ae5d Bug1） ---------- */
+/* 390px 实测悬浮条横向盖住谱面右 2/3（pm x:102 w:264 vs 谱面容器 y:55 全宽）。
+   .perform 是 flex column，本元素 DOM 序在进度轨与控制条之间——static 化后
+   谱面舞台 flex:1 自动收缩让位，任何视口宽下与谱面可见区布局级零交集。
+   9/8 二轮：断点由 max-width 改按输入方式判定——折叠屏展开（vivo X Fold3 /
+   Find N6 ~910px）落不进 640px 宽度档，仍走桌面悬浮档盖谱（用户实测报障）；
+   触屏判定不依赖宽度，折叠屏开合/旋转全态覆盖。窄桌面窗口保留宽度兜底。 */
+@media (max-width: 1050px), (any-pointer: coarse) {
+  .pitch-meter {
+    position: static;
+    align-self: center;
+    margin: 2px 16px 4px;
+  }
+}
+
+/* 超窄屏（<360px）：内容实测 261.6px，320px 视口可用仅 258px——量规与间距
+   紧凑一档（配色语义与桌面完全一致，仅几何收缩） */
+@media (max-width: 359.98px) {
+  .pitch-meter {
+    gap: 8px;
+    padding: 6px 10px;
+  }
+  .pm-gauge {
+    width: 112px;
+  }
+}

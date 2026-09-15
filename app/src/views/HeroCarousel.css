@@ -1,0 +1,153 @@
+/* 英雄位 Netflix 式轮播：crossfade 广告页 + 两侧箭头 + 底部指示点。
+   版式沿用 HomePage.css 的 .home-hero 体系（hero-bg/shade/body/kicker 等后代选择器直接生效）。 */
+.home-hero .hero-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  opacity: 0;
+  pointer-events: none;
+}
+.home-hero .hero-slide.is-active {
+  opacity: 1;
+  pointer-events: auto;
+  z-index: 1; /* 入场张盖在离场张之上（经典 crossfade 层序） */
+  animation: hero-in var(--hero-fade, 600ms) ease both;
+}
+.home-hero .hero-slide.is-leaving {
+  pointer-events: none;
+  animation: hero-out var(--hero-fade, 600ms) ease both;
+}
+/* 文字区让出左箭头带（44px 钮 + 14px 边距 + 10px 间隙），避免箭头压字 */
+.home-hero .hero-slide .hero-body {
+  padding: 40px 40px 40px 68px;
+}
+@keyframes hero-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes hero-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* 两侧箭头：贴边垂直居中的圆形半透明钮（媒体层白，hover 提亮） */
+.home-hero .hero-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--circ);
+  border: 1px solid var(--line-strong);
+  background: rgba(8, 9, 9, 0.62);
+  color: var(--on-media);
+  font-size: 26px;
+  line-height: 1;
+  font-family: var(--sans);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.home-hero .hero-arrow:hover {
+  background: rgba(8, 9, 9, 0.82);
+  transform: translateY(-50%) scale(1.06);
+}
+.home-hero .hero-arrow.prev {
+  left: 14px;
+}
+.home-hero .hero-arrow.next {
+  right: 14px;
+}
+
+/* 底部指示点：24px 命中区 + ::after 8px 视觉点；当前张以曲目 accent（--dot 内联注入）点亮 */
+.home-hero .hero-dots {
+  position: absolute;
+  right: 28px;
+  bottom: 26px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+}
+.home-hero .hero-dot {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--circ);
+  background: transparent;
+  cursor: pointer;
+}
+.home-hero .hero-dot::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: var(--circ);
+  background: rgba(255, 255, 255, 0.35);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.home-hero .hero-dot:hover::after {
+  transform: scale(1.3);
+}
+.home-hero .hero-dot.on::after {
+  background: var(--dot, var(--accent));
+  transform: scale(1.3);
+}
+
+@media (max-width: 720px) {
+  .home-hero .hero-arrow {
+    width: 36px;
+    height: 36px;
+    font-size: 22px;
+  }
+  .home-hero .hero-arrow.prev {
+    left: 8px;
+  }
+  .home-hero .hero-arrow.next {
+    right: 8px;
+  }
+  /* 窄屏文字占满整幅：两侧都让出箭头带（44px 箭头区 + 12px 间隙） */
+  .home-hero .hero-slide .hero-body {
+    padding: 24px 56px;
+  }
+  .home-hero .hero-dots {
+    right: 16px;
+    bottom: 16px;
+  }
+}
+
+/* 动画弱化：crossfade 退化为瞬切（离场张直接透明，避免两张全叠文字重影） */
+@media (max-width: 720px) {
+  .home-hero[role='button'] { display: grid; }
+  .home-hero .hero-slide { position: relative; inset: auto; grid-area: 1 / 1; min-width: 0; }
+  .home-hero .hero-slide .hero-body { padding: 28px 24px 78px; min-width: 0; overflow-wrap: anywhere; }
+  .home-hero .hero-arrow { top: auto; bottom: 14px; transform: none; width: 44px; height: 44px; }
+  .home-hero .hero-arrow:hover { transform: scale(1.06); }
+  .home-hero .hero-arrow.prev { left: 16px; }
+  .home-hero .hero-arrow.next { right: 16px; }
+  .home-hero .hero-dots { bottom: 14px; right: 50%; transform: translateX(50%); gap: 0; }
+  .home-hero .hero-dot { width: 44px; height: 44px; }
+  .home-hero .hero-dot::after { inset: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero .hero-slide,
+  .home-hero .hero-slide.is-active {
+    animation: none;
+  }
+  .home-hero .hero-slide.is-leaving {
+    opacity: 0;
+  }
+}

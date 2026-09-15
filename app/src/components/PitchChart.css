@@ -1,0 +1,15 @@
+/* 音高对比图容器：近黑面板内 canvas 自适应 */
+.pitch-chart {
+  position: relative;
+  width: 100%;
+  height: clamp(240px, 34vh, 380px);
+  border-radius: 10px;
+  background: rgba(12, 13, 14, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.pitch-chart canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

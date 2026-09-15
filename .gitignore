@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-desktop/
+release/
+*.zip
+
+# Logs
+*.log
+dev-server.log
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.sw?
+
+# Env / secrets（防止误提交密钥）
+.env
+.env.*
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.pyc
+
+# 调试/临时脚本
+app/scripts/tmp-*
+app/scripts/cdp-debug*.mjs
+app/scripts/dom-debug.mjs
+app/scripts/fetch-debug.mjs
+app/scripts/server-debug.mjs
+app/scripts/_*/
+app/scripts/_*.*
+.vitest-out.txt
+
+# 注意：app/public/songs/（曲库媒体）随仓库分发，不忽略

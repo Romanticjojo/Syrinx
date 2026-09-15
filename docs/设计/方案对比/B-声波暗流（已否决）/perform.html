@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向B · 声波暗流 · 演奏界面 — Syrinx</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+<style>
+  /* 立场：谱面即界面——无框全幅谱面直接浮于近黑底，仅靠上下渐变与主题色光晕保可读；
+     控制条是 Spotify now-playing 的变体（左曲卡 / 中圆键 / 右工具）。 */
+  :root{
+    --base:#0e0e0e; --surface:#181818; --surface-2:#1f1f1f;
+    --text:#ffffff; --text-dim:#b3b3b3; --text-faint:#7a7a7a;
+    --accent:#3ddfae; --rec:#f3727f;
+    --shadow-lg:rgba(0,0,0,.5) 0 8px 24px;
+    --sans:'DM Sans',system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    --bar-h:88px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--base);color:var(--text);font-family:var(--sans);overflow:hidden;user-select:none;
+    -webkit-font-smoothing:antialiased}
+
+  /* 主题色光晕：从底部渗出，音频响应感（正式实现接 AnalyserNode） */
+  #glow{position:fixed;inset:auto 0 0 0;height:46vh;z-index:1;pointer-events:none;
+    background:radial-gradient(70% 100% at 50% 100%,rgba(61,223,174,.20),transparent 70%)}
+  #bg{position:fixed;inset:0;z-index:0;opacity:.5}
+  .bg-note{position:fixed;right:16px;bottom:calc(var(--bar-h) + 10px);z-index:2;
+    font-size:11px;color:var(--text-faint);letter-spacing:.06em}
+
+  /* 顶栏：极简细条 */
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:30;height:56px;display:flex;align-items:center;
+    gap:16px;padding:0 24px;background:linear-gradient(rgba(14,14,14,.9),transparent);
+    transition:opacity .4s ease}
+  body.idle .topbar{opacity:0;pointer-events:none}
+  .back-pill{background:var(--surface-2);border:none;color:var(--text);width:38px;height:38px;
+    border-radius:50%;font-size:16px;cursor:pointer;transition:.15s}
+  .back-pill:hover{background:#2a2a2a;transform:scale(1.05)}
+  .topbar .title{font-size:15px;font-weight:700}
+  .topbar .meta{font-size:12px;color:var(--text-dim)}
+  .topbar .spacer{flex:1}
+  .measure-chip{font-size:13px;font-weight:700;color:var(--text-dim);font-variant-numeric:tabular-nums}
+  .measure-chip b{color:var(--accent);font-size:17px}
+
+  /* 谱面全幅无框 */
+  .stage{position:relative;z-index:10;height:100%;display:flex;align-items:center;justify-content:center;
+    padding:64px 40px calc(var(--bar-h) + 26px)}
+  .score-wrap{width:min(1160px,100%);max-height:100%;
+    -webkit-mask-image:linear-gradient(transparent,#000 9%,#000 91%,transparent);
+    mask-image:linear-gradient(transparent,#000 9%,#000 91%,transparent)}
+  svg#score{display:block;width:100%;height:auto}
+  .staff-line{stroke:#e6e6e6;stroke-width:1.2;opacity:.95}
+  .clef{fill:#fff;font-size:58px}
+  .timesig{fill:#fff;font:700 30px var(--sans)}
+  .notehead{fill:#fff}
+  .stem{stroke:#fff;stroke-width:1.8}
+  .measure-rect{fill:transparent}
+  .measure-rect.active{fill:rgba(61,223,174,.18);stroke:rgba(61,223,174,.8);stroke-width:1.5;rx:10px}
+  .measure-rect.played{fill:rgba(61,223,174,.06)}
+  #cursor{stroke:var(--accent);stroke-width:3;stroke-linecap:round;
+    filter:drop-shadow(0 0 8px rgba(61,223,174,.9))}
+  .lyric{fill:#b3b3b3;font:13px var(--sans)}
+
+  /* now-playing 控制条 */
+  .controlbar{position:fixed;left:0;right:0;bottom:0;z-index:30;height:var(--bar-h);
+    display:flex;flex-direction:column;justify-content:flex-end;padding:0 24px 14px;
+    background:linear-gradient(transparent,rgba(14,14,14,.92) 55%);transition:opacity .4s ease}
+  body.idle .controlbar{opacity:0;pointer-events:none;cursor:none}
+  .progress-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .time{font-size:11px;color:var(--text-dim);font-variant-numeric:tabular-nums;min-width:36px}
+  .time.right{text-align:right}
+  .progress{flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.22);position:relative;cursor:pointer}
+  .progress .played{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--accent);width:0%}
+  .now-row{display:flex;align-items:center;gap:16px}
+  .now-card{display:flex;align-items:center;gap:12px;min-width:200px}
+  .now-art{width:50px;height:50px;border-radius:6px;flex-shrink:0;
+    background:radial-gradient(80% 70% at 30% 25%,rgba(61,223,174,.45),transparent 65%),
+    linear-gradient(150deg,#123a30,#0c1512);box-shadow:var(--shadow-lg)}
+  .now-card .t{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+  .now-card .a{font-size:12px;color:var(--text-dim);margin-top:2px}
+  .now-center{flex:1;display:flex;align-items:center;justify-content:center;gap:18px}
+  .ctl-circ{width:44px;height:44px;border-radius:50%;background:var(--surface-2);border:none;
+    color:var(--text);font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:.15s}
+  .ctl-circ:hover{background:#2a2a2a;transform:scale(1.06)}
+  .ctl-circ.main{width:52px;height:52px;background:var(--accent);color:#04150e;font-size:18px}
+  .ctl-circ.main:hover{background:#54ebbd}
+  .ctl-circ.toggled{color:var(--accent);background:rgba(61,223,174,.12)}
+  .now-tools{display:flex;align-items:center;gap:10px;min-width:200px;justify-content:flex-end}
+  .tool-pill{display:flex;align-items:center;gap:8px;background:transparent;border:1px solid var(--border);
+    color:var(--text-dim);border-radius:9999px;padding:8px 16px;font-size:12px;font-weight:700;
+    cursor:pointer;font-family:var(--sans);transition:.15s;letter-spacing:.04em}
+  .tool-pill:hover{color:var(--text);border-color:var(--text)}
+  .tool-pill.rec-on{color:var(--rec);border-color:var(--rec)}
+  .tool-pill .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .tool-pill.rec-on .dot{animation:blink 1.1s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  @media (prefers-reduced-motion:reduce){.tool-pill.rec-on .dot{animation:none}}
+  @media (max-width:860px){
+    .now-card .t,.now-card .a{display:none}.now-card{min-width:auto}
+    .now-tools{min-width:auto}.tool-pill em{display:none}}
+
+  /* 倒数 */
+  #countdown{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:22px;background:rgba(10,10,10,.78);transition:opacity .5s ease}
+  #countdown.hide{opacity:0;pointer-events:none}
+  #countdown .num{font-size:140px;font-weight:700;color:var(--accent);line-height:1;
+    text-shadow:0 0 70px rgba(61,223,174,.5)}
+  #countdown .num.pulse{animation:pulse .9s ease-out}
+  @keyframes pulse{0%{transform:scale(1.3);opacity:.35}100%{transform:scale(1);opacity:1}}
+  #countdown .hint{font-size:13px;color:var(--text-dim);letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+<div id="glow"></div>
+<div class="bg-note">动态背景占位（主题色粒子）· 正式实现为每曲外部素材 / three.js</div>
+
+<header class="topbar">
+  <button class="back-pill" title="退出演奏" onclick="location.href='preview.html'">‹</button>
+  <div>
+    <div class="title">Nocturne pour Lumière</div>
+    <div class="meta">Lorien Testard · 84 BPM · bB 大调</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="measure-chip">小节 <b id="mNow">1</b> / 8</div>
+</header>
+
+<main class="stage">
+  <div class="score-wrap">
+    <svg id="score" viewBox="0 0 1200 210" role="img" aria-label="五线谱"></svg>
+  </div>
+</main>
+
+<div id="countdown">
+  <div class="num" id="cdNum">4</div>
+  <div class="hint">Ready · 跟随节拍进入</div>
+</div>
+
+<footer class="controlbar">
+  <div class="progress-row">
+    <span class="time" id="tCur">0:00</span>
+    <div class="progress"><div class="played" id="played"></div></div>
+    <span class="time right">0:42</span>
+  </div>
+  <div class="now-row">
+    <div class="now-card">
+      <div class="now-art"></div>
+      <div><div class="t">Nocturne pour Lumière</div><div class="a">Lorien Testard · 速度 1.0x</div></div>
+    </div>
+    <div class="now-center">
+      <button class="ctl-circ" id="btnBack" title="回到开头">⏮</button>
+      <button class="ctl-circ main" id="btnPlay" title="播放/暂停">❚❚</button>
+      <button class="ctl-circ toggled" id="btnMetro" title="节拍器">◍</button>
+    </div>
+    <div class="now-tools">
+      <button class="tool-pill" title="谱面缩放">A<em> 缩放</em></button>
+      <button class="tool-pill rec-on" id="btnRec" title="录制演奏"><span class="dot"></span>录音<em>中</em></button>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* 假曲谱绘制（同方向A骨架，主题色高亮） */
+const NS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('score');
+const PITCHES=[[4,5,6,5],[4,3,2,3],[4,5,7,6],[5,-1,4,-1],[6,7,8,7],[6,5,4,3],[2,3,4,5],[4,-1,2,-1]];
+const TOTAL_M=PITCHES.length,BEATS=4,TOP=70,GAP=13;
+const L=(x1,y1,x2,y2,cls)=>{const e=document.createElementNS(NS,'line');
+  e.setAttribute('x1',x1);e.setAttribute('y1',y1);e.setAttribute('x2',x2);e.setAttribute('y2',y2);
+  if(cls)e.setAttribute('class',cls);svg.appendChild(e);return e;};
+const T=(x,y,txt,cls)=>{const e=document.createElementNS(NS,'text');
+  e.setAttribute('x',x);e.setAttribute('y',y);if(cls)e.setAttribute('class',cls);
+  e.textContent=txt;svg.appendChild(e);return e;};
+for(let i=0;i<5;i++)L(40,TOP+i*GAP,1160,TOP+i*GAP,'staff-line');
+T(52,TOP+GAP*3.4,'𝄞','clef');
+T(108,TOP+GAP,'3','timesig');T(108,TOP+GAP*3,'4','timesig');
+const measW=(1160-140)/TOTAL_M,x0=140;
+const noteX=(m,b)=>x0+m*measW+16+b*((measW-32)/BEATS);
+const noteY=p=>TOP+GAP*3-p*(GAP/2);
+const rects=[];
+PITCHES.forEach((ms,m)=>{
+  const mx=x0+m*measW;
+  const r=document.createElementNS(NS,'rect');
+  r.setAttribute('x',mx+2);r.setAttribute('y',TOP-24);r.setAttribute('width',measW-4);
+  r.setAttribute('height',GAP*4+48);r.setAttribute('class','measure-rect');svg.appendChild(r);rects.push(r);
+  if(m>0)L(mx,TOP-24,mx,TOP+GAP*4+24,'staff-line');
+  ms.forEach((p,b)=>{
+    const x=noteX(m,b),y=noteY(p);
+    if(p<0){T(x-4,TOP+GAP*2,'𝄽','lyric');return;}
+    const h=document.createElementNS(NS,'ellipse');
+    h.setAttribute('cx',x);h.setAttribute('cy',y);h.setAttribute('rx',7.2);h.setAttribute('ry',5.2);
+    h.setAttribute('transform',`rotate(-18 ${x} ${y})`);h.setAttribute('class','notehead');svg.appendChild(h);
+    const up=y>TOP+GAP*2;
+    L(x+(up?6.6:-6.6),y,x+(up?6.6:-6.6),y+(up?-44:44),'stem');
+  });
+  T(mx+measW/2,TOP+GAP*4+46,['夜色落下','晨光初现','微风吹过','长笛独鸣','星光渐亮','云影游移','黎明将至','光之终章'][m],'lyric');
+});
+const cursor=L(0,TOP-24,0,TOP+GAP*4+24,'');cursor.id='cursor';
+
+const SEC_PER_BEAT=60/84,TOTAL_S=TOTAL_M*BEATS*SEC_PER_BEAT;
+let playing=false,t=0,last=performance.now();
+const $=id=>document.getElementById(id);
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  if(playing){t+=dt;if(t>=TOTAL_S){t=TOTAL_S;playing=false;$('btnPlay').textContent='▶';}}
+  const beatF=t/SEC_PER_BEAT,m=Math.min(TOTAL_M-1,Math.floor(beatF/BEATS)),bIn=beatF-m*BEATS;
+  const x=noteX(m,Math.min(BEATS-1,bIn))+((measW-32)/BEATS)*(bIn/BEATS);
+  cursor.setAttribute('x1',x);cursor.setAttribute('x2',x);
+  rects.forEach((r,i)=>r.setAttribute('class','measure-rect'+(i===m?' active':i<m?' played':'')));
+  $('mNow').textContent=m+1;
+  $('played').style.width=(t/TOTAL_S*100)+'%';
+  $('tCur').textContent=fmt(t);
+  /* 光晕呼吸（占位：正式实现由伴奏 FFT 驱动） */
+  $('glow').style.opacity=.7+.3*Math.sin(now/500);
+  requestAnimationFrame(frame);
+}
+const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+requestAnimationFrame(frame);
+$('btnPlay').onclick=()=>{playing=!playing;$('btnPlay').textContent=playing?'❚❚':'▶';};
+$('btnBack').onclick=()=>{t=0;};
+$('btnMetro').onclick=()=>$('btnMetro').classList.toggle('toggled');
+
+const cd=$('countdown'),cdNum=$('cdNum');let cdN=4;
+(function tick(){if(cdN===0){cd.classList.add('hide');playing=true;$('btnPlay').textContent='❚❚';return;}
+  cdNum.textContent=cdN;cdNum.classList.remove('pulse');void cdNum.offsetWidth;
+  cdNum.classList.add('pulse');cdN--;setTimeout(tick,900);})();
+
+let idleTimer;
+const wake=()=>{document.body.classList.remove('idle');clearTimeout(idleTimer);
+  idleTimer=setTimeout(()=>{if(playing)document.body.classList.add('idle');},3200);};
+['mousemove','mousedown','keydown','touchstart'].forEach(e=>addEventListener(e,wake));wake();
+
+/* 背景粒子（主题色，正式实现为 three.js） */
+const bg=$('bg'),bx=bg.getContext('2d');let W,H,parts=[];
+function resize(){W=bg.width=innerWidth;H=bg.height=innerHeight;
+  parts=Array.from({length:30},()=>({x:Math.random()*W,y:Math.random()*H,
+    r:Math.random()*2+.5,s:Math.random()*.3+.05,o:Math.random()*.3+.1}));}
+resize();addEventListener('resize',resize);
+(function loop(ts){bx.clearRect(0,0,W,H);
+  if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    bx.fillStyle='#3ddfae';
+    parts.forEach(p=>{p.y-=p.s;if(p.y<-4)p.y=H+4;
+      bx.globalAlpha=p.o*(.5+.5*Math.sin(ts/800+p.x));
+      bx.beginPath();bx.arc(p.x+Math.sin(ts/2600+p.y/50)*8,p.y,p.r,0,7);bx.fill();});
+    bx.globalAlpha=1;}
+  requestAnimationFrame(loop);})(0);
+</script>
+</body>
+</html>

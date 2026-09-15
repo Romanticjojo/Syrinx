@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方向A · 夜航晨光 · 演奏界面 — Syrinx</title>
+<style>
+  :root{
+    --bg:#0e0e12; --ink:#f2efe9; --ink-dim:#b9b4a9; --ink-faint:#7d786e;
+    --gold:#d9a441; --teal:#5fb8a8; --rec:#e05252;
+    --serif:Georgia,"Songti SC","Noto Serif SC",serif;
+    --sans:"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --bar-h:76px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;user-select:none}
+  #bg{position:fixed;inset:0;z-index:0}
+  .bg-note{position:fixed;right:18px;bottom:calc(var(--bar-h) + 14px);z-index:1;
+    font-size:11px;color:var(--ink-faint);letter-spacing:.08em}
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:30;height:60px;display:flex;align-items:center;
+    gap:18px;padding:0 28px;background:linear-gradient(rgba(10,10,14,.82),rgba(10,10,14,0));
+    transition:opacity .45s ease}
+  body.idle .topbar{opacity:0;pointer-events:none}
+  .exit-btn{display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--ink-dim);
+    font-size:14px;cursor:pointer;padding:8px 12px;border-radius:8px}
+  .exit-btn:hover{color:var(--ink);background:rgba(255,255,255,.08)}
+  .topbar .title{font-family:var(--serif);font-size:17px;letter-spacing:.03em}
+  .topbar .meta{font-size:12px;color:var(--ink-faint)}
+  .topbar .spacer{flex:1}
+  .tempo-chip{font-size:12px;color:var(--ink-dim);border:1px solid rgba(255,255,255,.14);
+    padding:5px 12px;border-radius:999px}
+  .tempo-chip b{color:var(--teal);font-weight:600}
+
+  .stage{position:relative;z-index:10;height:100%;display:flex;align-items:center;justify-content:center;
+    padding:76px 48px calc(var(--bar-h) + 30px)}
+  /* 谱面玻璃面板：可读性硬约束——近黑 + 模糊 + 高对比 */
+  .score-panel{position:relative;width:min(1120px,100%);max-height:100%;
+    background:rgba(12,12,17,.87);border:1px solid rgba(255,255,255,.07);border-radius:14px;
+    backdrop-filter:blur(14px);box-shadow:0 30px 80px rgba(0,0,0,.55);padding:34px 44px 26px;overflow:hidden}
+  .score-panel::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;
+    background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.55}
+  .score-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px}
+  .score-head h2{font-family:var(--serif);font-size:22px;font-weight:500;letter-spacing:.02em}
+  .measure-ind{font-size:13px;color:var(--ink-dim);font-variant-numeric:tabular-nums}
+  .measure-ind b{color:var(--gold);font-weight:600}
+  svg#score{display:block;width:100%;height:auto}
+  .staff-line{stroke:#e8e4da;stroke-width:1.1;opacity:.92}
+  .clef{fill:#f2efe9;font-size:58px}
+  .timesig{fill:#f2efe9;font:700 30px var(--serif)}
+  .notehead{fill:#fdfcf8}
+  .stem{stroke:#fdfcf8;stroke-width:1.8}
+  .measure-rect{fill:transparent}
+  .measure-rect.active{fill:rgba(217,164,65,.16);stroke:rgba(217,164,65,.75);stroke-width:1.4;rx:8px}
+  .measure-rect.played{fill:rgba(217,164,65,.05)}
+  #cursor{stroke:var(--gold);stroke-width:2.4;stroke-linecap:round;
+    filter:drop-shadow(0 0 6px rgba(217,164,65,.8))}
+  .lyric{fill:#b9b4a9;font:13px var(--sans)}
+
+  #countdown{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:26px;background:rgba(10,10,14,.72);backdrop-filter:blur(6px);transition:opacity .5s ease}
+  #countdown.hide{opacity:0;pointer-events:none}
+  #countdown .num{font-family:var(--serif);font-size:150px;color:var(--gold);line-height:1;
+    text-shadow:0 0 60px rgba(217,164,65,.45)}
+  #countdown .num.pulse{animation:pulse .95s ease-out}
+  @keyframes pulse{0%{transform:scale(1.35);opacity:.4}100%{transform:scale(1);opacity:1}}
+  #countdown .hint{font-size:14px;color:var(--ink-dim);letter-spacing:.14em}
+
+  .controlbar{position:fixed;left:0;right:0;bottom:0;z-index:30;height:var(--bar-h);
+    display:flex;flex-direction:column;justify-content:flex-end;padding:0 28px 12px;
+    background:linear-gradient(rgba(10,10,14,0),rgba(10,10,14,.88) 45%);transition:opacity .45s ease}
+  body.idle .controlbar{opacity:0;pointer-events:none;cursor:none}
+  .progress-row{display:flex;align-items:center;gap:14px;margin-bottom:10px}
+  .time{font-size:12px;color:var(--ink-dim);font-variant-numeric:tabular-nums;min-width:76px}
+  .time.right{text-align:right}
+  .progress{flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.16);position:relative;cursor:pointer}
+  .progress .played{position:absolute;left:0;top:0;bottom:0;border-radius:3px;
+    background:linear-gradient(90deg,var(--gold),#e8b95c);width:0%}
+  .controls-row{display:flex;align-items:center;gap:10px}
+  .ctl{display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--ink-dim);
+    font-size:13px;cursor:pointer;padding:9px 14px;border-radius:10px;transition:.18s}
+  .ctl:hover{color:var(--ink);background:rgba(255,255,255,.09)}
+  .ctl.play{width:48px;height:48px;border-radius:50%;justify-content:center;padding:0;
+    background:var(--ink);color:#111;font-size:19px}
+  .ctl.play:hover{transform:scale(1.06);background:#fff}
+  .ctl.toggled{color:var(--teal);background:rgba(95,184,168,.14)}
+  .rec-toggle{display:flex;align-items:center;gap:9px;margin-left:auto;border:1.5px solid rgba(224,82,82,.55);
+    color:#eb9a9a;background:none;border-radius:999px;padding:9px 18px;font-size:13px;cursor:pointer;transition:.2s}
+  .rec-toggle .dot{width:10px;height:10px;border-radius:50%;background:var(--rec)}
+  .rec-toggle.on{background:rgba(224,82,82,.16);color:#ffd9d9;border-color:var(--rec)}
+  .rec-toggle.on .dot{animation:blink 1.1s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  #beatPulse{position:fixed;left:0;right:0;top:0;height:3px;z-index:40;background:var(--teal);
+    opacity:0;transition:opacity .12s}
+  @media (prefers-reduced-motion:reduce){
+    #countdown .num.pulse{animation:none}.rec-toggle.on .dot{animation:none}}
+  @media (max-width:760px){
+    .stage{padding:70px 14px calc(var(--bar-h) + 18px)}
+    .score-panel{padding:20px 16px 14px}.tempo-chip{display:none}.ctl span.txt{display:none}}
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+<div class="bg-note">动态背景占位 · 正式素材为每曲外部视频 / three.js 场景</div>
+<div id="beatPulse"></div>
+
+<header class="topbar">
+  <button class="exit-btn" onclick="location.href='preview.html'">‹ 退出演奏</button>
+  <div>
+    <div class="title">Nocturne pour Lumière</div>
+    <div class="meta">Lorien Testard · 夜曲 · 84 BPM</div>
+  </div>
+  <div class="spacer"></div>
+  <div class="tempo-chip">速度 <b>1.0x</b></div>
+</header>
+
+<main class="stage">
+  <section class="score-panel" aria-label="曲谱区域">
+    <div class="score-head">
+      <h2>Nocturne pour Lumière</h2>
+      <div class="measure-ind">小节 <b id="mNow">1</b> / <span id="mTotal">8</span></div>
+    </div>
+    <svg id="score" viewBox="0 0 1200 210" role="img" aria-label="五线谱预览"></svg>
+  </section>
+</main>
+
+<div id="countdown">
+  <div class="num" id="cdNum">4</div>
+  <div class="hint">准备 · 跟随节拍进入</div>
+</div>
+
+<footer class="controlbar">
+  <div class="progress-row">
+    <span class="time" id="tCur">0:00</span>
+    <div class="progress"><div class="played" id="played"></div></div>
+    <span class="time right">0:42</span>
+  </div>
+  <div class="controls-row">
+    <button class="ctl play" id="btnPlay" title="播放/暂停">❚❚</button>
+    <button class="ctl" id="btnBack" title="回到开头">⏮<span class="txt"> 开头</span></button>
+    <button class="ctl toggled" id="btnMetro" title="节拍器">◍<span class="txt"> 节拍器</span></button>
+    <button class="rec-toggle on" id="btnRec" title="录制演奏"><span class="dot"></span>录音中</button>
+  </div>
+</footer>
+
+<script>
+/* ============ 假曲谱：8 小节 × 4 拍（正式实现为 OSMD 渲染 MusicXML） ============ */
+const NS='http://www.w3.org/2000/svg';
+const svg=document.getElementById('score');
+const PITCHES=[[4,5,6,5],[4,3,2,3],[4,5,7,6],[5,-1,4,-1],[6,7,8,7],[6,5,4,3],[2,3,4,5],[4,-1,2,-1]];
+const TOTAL_M=PITCHES.length,BEATS=4;
+document.getElementById('mTotal').textContent=TOTAL_M;
+const TOP=70,GAP=13;
+const L=(x1,y1,x2,y2,cls)=>{const e=document.createElementNS(NS,'line');
+  e.setAttribute('x1',x1);e.setAttribute('y1',y1);e.setAttribute('x2',x2);e.setAttribute('y2',y2);
+  if(cls)e.setAttribute('class',cls);svg.appendChild(e);return e;};
+const T=(x,y,txt,cls)=>{const e=document.createElementNS(NS,'text');
+  e.setAttribute('x',x);e.setAttribute('y',y);if(cls)e.setAttribute('class',cls);
+  e.textContent=txt;svg.appendChild(e);return e;};
+for(let i=0;i<5;i++)L(40,TOP+i*GAP,1160,TOP+i*GAP,'staff-line');
+T(52,TOP+GAP*3.4,'𝄞','clef');
+T(108,TOP+GAP,'3','timesig');T(108,TOP+GAP*3,'4','timesig');
+const measW=(1160-140)/TOTAL_M,x0=140;
+const noteX=(m,b)=>x0+m*measW+16+b*((measW-32)/BEATS);
+const noteY=p=>TOP+GAP*3-p*(GAP/2);
+const rects=[];
+PITCHES.forEach((ms,m)=>{
+  const mx=x0+m*measW;
+  const r=document.createElementNS(NS,'rect');
+  r.setAttribute('x',mx+2);r.setAttribute('y',TOP-24);r.setAttribute('width',measW-4);
+  r.setAttribute('height',GAP*4+48);r.setAttribute('class','measure-rect');svg.appendChild(r);rects.push(r);
+  if(m>0)L(mx,TOP-24,mx,TOP+GAP*4+24,'staff-line');
+  ms.forEach((p,b)=>{
+    const x=noteX(m,b),y=noteY(p);
+    if(p<0){T(x-4,TOP+GAP*2,'𝄽','lyric');return;}
+    const h=document.createElementNS(NS,'ellipse');
+    h.setAttribute('cx',x);h.setAttribute('cy',y);h.setAttribute('rx',7.2);h.setAttribute('ry',5.2);
+    h.setAttribute('transform',`rotate(-18 ${x} ${y})`);h.setAttribute('class','notehead');svg.appendChild(h);
+    const up=y>TOP+GAP*2;
+    L(x+(up?6.6:-6.6),y,x+(up?6.6:-6.6),y+(up?-44:44),'stem');
+  });
+  T(mx+measW/2,TOP+GAP*4+46,['夜色落下','晨光初现','微风吹过','长笛独鸣','星光渐亮','云影游移','黎明将至','光之终章'][m],'lyric');
+});
+const cursor=L(0,TOP-24,0,TOP+GAP*4+24,'');cursor.id='cursor';
+
+/* ============ 假主时钟（正式实现为 Web Audio 伴奏时钟驱动光标） ============ */
+const SEC_PER_BEAT=60/84,TOTAL_S=TOTAL_M*BEATS*SEC_PER_BEAT;
+let playing=false,t=0,last=performance.now(),lastBeat=-1;
+const $=id=>document.getElementById(id);
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;
+  if(playing){t+=dt;
+    if(t>=TOTAL_S){t=TOTAL_S;playing=false;$('btnPlay').textContent='▶';}
+    const beat=Math.floor(t/SEC_PER_BEAT);
+    if(beat!==lastBeat){lastBeat=beat;
+      const bp=$('beatPulse');bp.style.opacity=beat%4===0?.9:.45;
+      setTimeout(()=>bp.style.opacity=0,130);}
+  }
+  const beatF=t/SEC_PER_BEAT,m=Math.min(TOTAL_M-1,Math.floor(beatF/BEATS)),bIn=beatF-m*BEATS;
+  const x=noteX(m,Math.min(BEATS-1,bIn))+((measW-32)/BEATS)*(bIn/BEATS);
+  cursor.setAttribute('x1',x);cursor.setAttribute('x2',x);
+  rects.forEach((r,i)=>r.setAttribute('class','measure-rect'+(i===m?' active':i<m?' played':'')));
+  $('mNow').textContent=m+1;
+  $('played').style.width=(t/TOTAL_S*100)+'%';
+  $('tCur').textContent=fmt(t);
+  requestAnimationFrame(frame);
+}
+const fmt=s=>`${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+requestAnimationFrame(frame);
+$('btnPlay').onclick=()=>{playing=!playing;$('btnPlay').textContent=playing?'❚❚':'▶';};
+$('btnBack').onclick=()=>{t=0;lastBeat=-1;};
+$('btnMetro').onclick=()=>$('btnMetro').classList.toggle('toggled');
+
+/* 倒数入场：4 拍 */
+const cd=$('countdown'),cdNum=$('cdNum');let cdN=4;
+(function tick(){if(cdN===0){cd.classList.add('hide');playing=true;$('btnPlay').textContent='❚❚';return;}
+  cdNum.textContent=cdN;cdNum.classList.remove('pulse');void cdNum.offsetWidth;
+  cdNum.classList.add('pulse');cdN--;setTimeout(tick,950);})();
+setTimeout(()=>setTimeout(tick,0),600);
+
+/* 沉浸：控件自动隐藏 */
+let idleTimer;
+const wake=()=>{document.body.classList.remove('idle');clearTimeout(idleTimer);
+  idleTimer=setTimeout(()=>{if(playing)document.body.classList.add('idle');},3200);};
+['mousemove','mousedown','keydown','touchstart'].forEach(e=>addEventListener(e,wake));wake();
+
+/* ============ 动态背景占位：晨光渐变 + 微粒 ============ */
+const bg=$('bg'),bx=bg.getContext('2d');let W,H,parts=[];
+function resize(){W=bg.width=innerWidth;H=bg.height=innerHeight;
+  parts=Array.from({length:40},()=>({x:Math.random()*W,y:Math.random()*H,
+    r:Math.random()*2.2+.6,s:Math.random()*.35+.08,o:Math.random()*.4+.15}));}
+resize();addEventListener('resize',resize);
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+(function drawBg(ts){bx.clearRect(0,0,W,H);
+  if(!reduce){
+    const g1=bx.createRadialGradient(W*.7+Math.sin(ts/6000)*W*.1,H*.3+Math.cos(ts/8000)*H*.08,40,W*.7,H*.3,W*.65);
+    g1.addColorStop(0,'rgba(217,164,65,.22)');g1.addColorStop(1,'rgba(217,164,65,0)');
+    bx.fillStyle=g1;bx.fillRect(0,0,W,H);
+    const g2=bx.createRadialGradient(W*.2+Math.cos(ts/7000)*W*.08,H*.75+Math.sin(ts/9000)*H*.06,30,W*.2,H*.75,W*.5);
+    g2.addColorStop(0,'rgba(95,184,168,.16)');g2.addColorStop(1,'rgba(95,184,168,0)');
+    bx.fillStyle=g2;bx.fillRect(0,0,W,H);
+    bx.fillStyle='#e8d9b0';
+    parts.forEach(p=>{p.y-=p.s;if(p.y<-4)p.y=H+4;
+      bx.globalAlpha=p.o*(.6+.4*Math.sin(ts/900+p.x));
+      bx.beginPath();bx.arc(p.x+Math.sin(ts/2400+p.y/40)*6,p.y,p.r,0,7);bx.fill();});
+    bx.globalAlpha=1;}
+  const v=bx.createLinearGradient(0,0,0,H);
+  v.addColorStop(0,'rgba(10,10,14,.35)');v.addColorStop(.5,'rgba(10,10,14,0)');v.addColorStop(1,'rgba(10,10,14,.5)');
+  bx.fillStyle=v;bx.fillRect(0,0,W,H);
+  requestAnimationFrame(drawBg);})(0);
+</script>
+</body>
+</html>

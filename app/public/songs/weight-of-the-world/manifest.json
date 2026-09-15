@@ -1,0 +1,29 @@
+{
+  "id": "weight-of-the-world",
+  "title": "Weight of the World",
+  "composer": "[from NieR: Automata] - Keiichi Okabe / MONACA",
+  "difficulty": 2,
+  "durationLabel": "5:38",
+  "keyLabel": "a 小调（无升降号）",
+  "keyLabelEn": "A minor (no sharps/flats)",
+  "description": "《Weight of the World》，选自游戏《尼尔：机械纪元》（NieR: Automata）原声带，冈部启一（MONACA）作曲，本曲为长笛改编版（a 小调，人声升高八度）。旋律在克制与奔涌之间层层推进，从低回的诉说走向释然的合唱，适合练习长乐句的气息铺排与力度层次的表现力。",
+  "descriptionEn": "\"Weight of the World\", from the soundtrack of NieR: Automata, composed by Keiichi Okabe (MONACA), arranged for flute (A minor, the vocal line taken an octave higher). The melody builds layer by layer between restraint and surge, moving from a low-voiced telling toward a release of chorus — rewarding practice for laying out breath across long phrases and expressive dynamic shaping.",
+  "tags": [
+    "长笛",
+    "游戏音乐",
+    "抒情"
+  ],
+  "tagsEn": [
+    "Flute",
+    "Game Music",
+    "Lyrical"
+  ],
+  "scoreUrl": "/songs/weight-of-the-world/score.musicxml",
+  "pianoScoreUrl": "/songs/weight-of-the-world/piano.musicxml",
+  "accompanimentUrl": "/songs/weight-of-the-world/accompaniment.mp3",
+  "accent": "#c0ad7d",
+  "backgroundTheme": "aurora",
+  "bpm": 74,
+  "anchorOffsetMs": 0,
+  "beatsUrl": "/songs/weight-of-the-world/beats.json"
+}

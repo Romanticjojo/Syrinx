@@ -1,0 +1,36 @@
+{
+  "id": "interstellar",
+  "title": "Interstellar",
+  "composer": "Hans Zimmer（arr. Ariana & Ella）",
+  "composerEn": "Hans Zimmer (arr. Ariana & Ella)",
+  "difficulty": 3,
+  "durationLabel": "3:17",
+  "keyLabel": "C 大调",
+  "keyLabelEn": "C major",
+  "description": "《星际穿越》主题曲的长笛与钢琴改编（Ariana & Ella Piknjač 版）。 misterioso 的长旋律线在绵密的钢琴织体上铺展，广袤而深情，如星空般辽远——适合练习长乐句的气息控制与情绪递进。",
+  "descriptionEn": "The theme from Interstellar, arranged for flute and piano (Ariana & Ella Piknjač version). A misterioso long melodic line unfolds over a dense piano texture — vast and heartfelt, distant as the stars. Fine practice for breath control across long phrases and for building emotional shape.",
+  "tags": [
+    "长笛",
+    "电影音乐",
+    "史诗"
+  ],
+  "tagsEn": [
+    "Flute",
+    "Film Music",
+    "Epic"
+  ],
+  "scoreUrl": "/songs/interstellar/score.musicxml",
+  "accompanimentUrl": "/songs/interstellar/accompaniment.mp3",
+  "beatsUrl": "/songs/interstellar/beats.json",
+  "coverUrl": "/songs/interstellar/cover.jpg",
+  "coverPosition": "50% 80%",
+  "backgroundVideoUrl": "/songs/interstellar/background.mp4",
+  "hoverVideoUrl": "/songs/interstellar/hover-square.mp4",
+  "hoverPlayOnce": true,
+  "playOnce": false,
+  "accent": "#6a8fd8",
+  "backgroundTheme": "aurora",
+  "bpm": 120,
+  "backgroundFit": "cover",
+  "pianoScoreUrl": "/songs/interstellar/piano.musicxml"
+}

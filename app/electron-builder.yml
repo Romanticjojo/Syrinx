@@ -1,0 +1,37 @@
+# electron-builder 配置 — Syrinx Windows 打包
+appId: app.syrinx.desktop
+productName: Syrinx
+copyright: Syrinx
+
+directories:
+  output: release
+  buildResources: electron/build
+
+files:
+  - electron/main.cjs
+  - electron/build/icon.png
+  - dist/**/*
+
+extraMetadata:
+  main: electron/main.cjs
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: electron/build/icon.ico
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: true
+  shortcutName: Syrinx
+
+# dist 由 `npm run build`（web 模式，含精选曲库）产出，作为静态资源打进 asar

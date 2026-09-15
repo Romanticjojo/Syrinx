@@ -1,0 +1,14 @@
+{
+  "id": "lumiere",
+  "title": "Nocturne pour Lumière",
+  "composer": "Lorien Testard",
+  "difficulty": 2,
+  "durationLabel": "0:42",
+  "keyLabel": "C 大调（示例谱）",
+  "description": "一首写给晨光的夜曲。旋律线平缓悠长，长笛在中音区低语，随伴奏渐亮——适合作为长笛学习旅程的第一首完整曲目。当前为占位示例谱（16 小节练习曲式），正式曲谱与伴奏由曲作者授权素材替换。",
+  "tags": ["夜曲", "治愈", "首发曲"],
+  "scoreUrl": "/songs/lumiere/score.musicxml",
+  "accent": "#3ddfae",
+  "backgroundTheme": "lumiere",
+  "bpm": 84
+}

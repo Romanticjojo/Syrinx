@@ -1,0 +1,264 @@
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import { expandRepeats, parseMusicXml, stripForcedBreaks } from './musicxml'
+
+/** 构造最小 MusicXML：divisions=2（八分音符=1）、3/4 拍、tempo=60 */
+const XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>2</divisions><time><beats>3</beats><beat-type>4</beat-type></time></attributes>
+      <direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>60</per-minute></metronome></direction-type></direction>
+      <note><pitch><step>C</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>half</type></note>
+    </measure>
+    <measure number="2">
+      <note><rest/><duration>2</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>A</step><alter>-1</alter><octave>3</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+      <note><pitch><step>B</step><octave>4</octave></pitch><duration>2</duration><voice>1</voice><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>`
+
+/** 多声部 + backup/forward 的最小样例：divisions=1（四分音符=1）、tempo=60 */
+const VOICES_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>60</per-minute></metronome></direction-type></direction>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>2</duration><voice>1</voice><type>half</type></note>
+      <note><rest/><duration>2</duration><voice>1</voice><type>half</type></note>
+      <backup><duration>4</duration></backup>
+      <note><rest/><duration>1</duration><voice>2</voice><type>quarter</type></note>
+      <forward><duration>1</duration><voice>2</voice></forward>
+      <note><pitch><step>E</step><octave>4</octave></pitch><duration>2</duration><voice>2</voice><type>half</type></note>
+    </measure>
+  </part>
+</score-partwise>`
+
+describe('parseMusicXml 多声部（backup/forward + 单声部过滤）', () => {
+  const tl = parseMusicXml(VOICES_XML)
+
+  it('主声部（首个出现的 voice）正常发声', () => {
+    // voice1: C5 @0s(2拍) + rest 2拍
+    expect(tl.notes.find((n) => n.midi === 72)).toMatchObject({ time: 0, measure: 1 })
+  })
+
+  it('单声部保险：其他 voice 只占时不发声（t_d02450b9 假声部双保险）', () => {
+    // backup 后 voice2 的 E4 不产生音符事件
+    expect(tl.notes.find((n) => n.midi === 64)).toBeUndefined()
+  })
+
+  it('过滤不影响游标数学：backup 不推进小节总时长，小节网格仍是 4s', () => {
+    // 单小节 4 拍 @60bpm = 4s；backup/forward 不应使游标溢出到 8 拍
+    expect(tl.measureTimes).toEqual([
+      { measure: 1, time: 0, quarters: 0 },
+      { measure: 2, time: 4, quarters: 4, end: true },
+    ])
+    // durationSec 按发声末音（voice2 过滤后只剩 C5，2s 处收束）
+    expect(tl.durationSec).toBe(2)
+  })
+})
+
+describe('parseMusicXml', () => {
+  const tl = parseMusicXml(XML)
+
+  it('解析 tempo 与 secPerQuarter', () => {
+    expect(tl.tempo).toBe(60)
+    expect(tl.secPerQuarter).toBeCloseTo(1, 5)
+  })
+
+  it('按 divisions 换算时间：quarter=1s，half=2s', () => {
+    expect(tl.notes[0]).toMatchObject({ time: 0, duration: 1, midi: 60, measure: 1 })
+    expect(tl.notes[1]).toMatchObject({ time: 1, duration: 2, midi: 62 })
+  })
+
+  it('休止符占时值但不进 notes；小节时间累积正确', () => {
+    // 第 2 小节从 3s 开始：休止 1s + bA3(56，含 alter=-1) 1s + B4(71) 1s
+    expect(tl.measureTimes).toEqual([
+      { measure: 1, time: 0, quarters: 0 },
+      { measure: 2, time: 3, quarters: 3 },
+      { measure: 3, time: 6, quarters: 6, end: true },
+    ])
+    expect(tl.notes[2]).toMatchObject({ time: 4, midi: 56, measure: 2 })
+    expect(tl.notes[3]).toMatchObject({ time: 5, midi: 71 })
+  })
+
+  it('durationSec 为末音结束时间', () => {
+    expect(tl.durationSec).toBe(6)
+  })
+
+  it('解析真实 lumiere 曲谱（3/4、84bpm、16 小节、divisions=16）', () => {
+    const xml = readFileSync('public/songs/lumiere/score.musicxml', 'utf-8')
+    const t = parseMusicXml(xml)
+    expect(t.tempo).toBe(84)
+    expect(t.measureTimes.filter((m) => !m.end)).toHaveLength(16)
+    expect(t.measureTimes[1]).toMatchObject({ measure: 2, time: 3 * (60 / 84) })
+    expect(t.notes.length).toBeGreaterThan(20)
+    expect(t.durationSec).toBeGreaterThan(30)
+  })
+
+  it('解析 luv-letter Song Pack 曲谱（Soundslice 精校谱，t_76c0cbff）', () => {
+    // happy-dom 不支持单引号属性（浏览器/Electron 原生 DOMParser 无此问题），读取时归一化
+    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8').replace(
+      /^<\?xml[^>]*\?>/,
+      (m) => m.replace(/'/g, '"'),
+    )
+    const t = parseMusicXml(xml)
+    expect(t.notes.length).toBeGreaterThan(0)
+    expect(t.measureTimes.length).toBeGreaterThan(0)
+    expect(t.durationSec).toBeGreaterThan(0)
+  })
+})
+
+describe('expandRepeats 反复展开', () => {
+  /** 两小节段落带 forward@1 / backward@2 反复（每段演奏两遍） */
+  const REPEAT_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <direction><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>60</per-minute></metronome></direction-type></direction>
+      <barline location="right"><repeat direction="forward"/></barline>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+      <barline location="right"><repeat direction="backward"/></barline>
+    </measure>
+    <measure number="3">
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`
+
+  /** m1 带 attributes（divisions）+ forward repeat，m3 backward repeat：
+      第二遍 m1 是克隆 → 不应带 attributes（否则 OSMD 在谱中间行内重画谱号/拍号） */
+  it('克隆小节摘除 attributes，原始 m1 保留（防行内重复谱号/拍号）', () => {
+    const expanded = expandRepeats(REPEAT_XML)
+    // REPEAT_XML 只有 m1 一处 <attributes>；展开后（C D C D E）仍应只剩 1 处
+    expect(expanded.match(/<attributes/g)).toHaveLength(1)
+    const doc = new DOMParser().parseFromString(expanded, 'application/xml')
+    const measures = Array.from(doc.querySelectorAll('measure'))
+    // 原始 m1（演奏序第 1 小节）保留 attributes；克隆 m1（演奏序第 4 小节）摘除
+    expect(measures[0].querySelector('attributes')).not.toBeNull()
+    expect(measures[3].querySelector('attributes')).toBeNull()
+  })
+
+  it('forward→backward 段展开成实体小节并顺序重编号', () => {
+    const expanded = expandRepeats(REPEAT_XML)
+    const tl = parseMusicXml(expanded)
+    // C D C D E：演奏序 5 小节（+终点标记）
+    expect(tl.measureTimes.filter((m) => !m.end).map((m) => m.measure)).toEqual([1, 2, 3, 4, 5])
+    expect(tl.measureTimes[5]).toMatchObject({ end: true })
+    expect(tl.notes.map((n) => n.midi)).toEqual([72, 74, 72, 74, 76])
+    expect(tl.durationSec).toBe(20)
+  })
+
+  it('展开后不含 repeat 标记（语义已物化，OSMD 渲染线性谱）', () => {
+    const expanded = expandRepeats(REPEAT_XML)
+    expect(expanded).not.toContain('<repeat')
+  })
+
+  it('luv-letter 精校谱展开后无 repeat/ending 残留（volta 语义已物化，t_76c0cbff）', () => {
+    // happy-dom 不支持单引号属性（浏览器/Electron 原生 DOMParser 无此问题），读取时归一化
+    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8').replace(
+      /^<\?xml[^>]*\?>/,
+      (m) => m.replace(/'/g, '"'),
+    )
+    const expanded = expandRepeats(xml)
+    expect(expanded).not.toContain('<repeat')
+    expect(expanded).not.toContain('<ending')
+  })
+
+  /** volta 结构：|: C |1 D :|2 E（一房子 m2、二房子 m3），对齐 luv-letter 新谱的 ending 写法 */
+  const VOLTA_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions></attributes>
+      <barline location="left"><repeat direction="forward"/></barline>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <barline location="left"><ending number="1" type="start"/></barline>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+      <barline location="right"><ending number="1" type="stop"/><repeat direction="backward"/></barline>
+    </measure>
+    <measure number="3">
+      <barline location="left"><ending number="2" type="start"/></barline>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+      <barline location="right"><ending number="2" type="stop"/></barline>
+    </measure>
+  </part>
+</score-partwise>`
+
+  it('volta 一房/二房：第二遍跳过一房子直接进二房子（A B A C）', () => {
+    const expanded = expandRepeats(VOLTA_XML)
+    const tl = parseMusicXml(expanded)
+    // C D C E：演奏序 4 小节（+终点标记），一房子 D 只奏一遍
+    expect(tl.measureTimes.filter((m) => !m.end).map((m) => m.measure)).toEqual([1, 2, 3, 4])
+    expect(tl.notes.map((n) => n.midi)).toEqual([72, 74, 72, 76])
+    expect(expanded).not.toContain('<repeat')
+  })
+
+  it('含 D.C. 的谱不支持展开，原样返回', () => {
+    const dcXml = REPEAT_XML.replace(
+      '<note><pitch><step>E</step>',
+      '<direction><direction-type><words>D.C. al Fine</words></direction-type></direction><note><pitch><step>E</step>',
+    )
+    expect(expandRepeats(dcXml)).toBe(dcXml)
+  })
+})
+
+describe('stripForcedBreaks 强制换行剥离（t_c10d648d）', () => {
+  /** 带 new-system / new-page / 其余属性的 print 样例 */
+  const PRINT_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list><score-part id="P1"><part-name>Flute</part-name></score-part></part-list>
+  <part id="P1">
+    <measure number="1">
+      <print new-system="yes"/>
+      <attributes><divisions>1</divisions></attributes>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+    <measure number="2">
+      <print new-page="yes" new-system="yes"/>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><voice>1</voice><type>whole</type></note>
+    </measure>
+  </part>
+</score-partwise>`
+
+  it('删掉 print 上的 new-system/new-page 属性，换行交还容器自适应', () => {
+    const stripped = stripForcedBreaks(PRINT_XML)
+    expect(stripped).not.toContain('new-system')
+    expect(stripped).not.toContain('new-page')
+    // 谱面内容不受影响：音符仍在
+    expect(stripped).toContain('<step>C</step>')
+  })
+
+  it('print 上的无关属性保留（不误伤 staff-spacing 等）', () => {
+    const withOther = PRINT_XML.replace('<print new-system="yes"/>', '<print new-system="yes" staff-spacing="2.4"/>')
+    const stripped = stripForcedBreaks(withOther)
+    expect(stripped).toContain('staff-spacing')
+    expect(stripped).not.toContain('new-system')
+  })
+
+  it('无 print 的谱原样返回引用（零开销快路径）', () => {
+    expect(stripForcedBreaks(XML)).toBe(XML)
+  })
+
+  it('luv-letter 精校谱：剥离后不再含 new-system（源文件 23 处）', () => {
+    // happy-dom 不支持单引号属性（浏览器/Electron 原生 DOMParser 无此问题），读取时归一化
+    const xml = readFileSync('public/songs/luv-letter/score.musicxml', 'utf-8').replace(
+      /^<\?xml[^>]*\?>/,
+      (m) => m.replace(/'/g, '"'),
+    )
+    expect(stripForcedBreaks(xml)).not.toContain('new-system')
+  })
+})

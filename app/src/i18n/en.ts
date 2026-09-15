@@ -1,0 +1,240 @@
+import type { TKey } from './zh'
+
+/**
+ * 英文文案字典。类型约束为「与 zh 完全相同的 key 集合」——zh 增删 key 而
+ * en 未同步时编译期报错。文案要求：短、准、UI 惯用语。
+ */
+export const en: Record<TKey, string> = {
+  // ---- common ----
+  'common.loading': 'Opening…',
+  'common.close': 'Close',
+  'common.gotIt': 'Got it',
+  'common.startPlaying': 'Start playing',
+  'common.backToLibrary': 'Back to library',
+
+  // ---- intro ----
+  'intro.dialogLabel': 'Syrinx intro',
+  'intro.enter': 'Enter ›',
+
+  // ---- home ----
+  'home.navLibrary': 'Library',
+  'home.navAbout': 'About',
+  'home.catalogTabsLabel': 'Score categories',
+  'home.tabFeatured': 'Featured Scores',
+  'home.tabPersonal': 'Personal Library',
+  'home.devBadge': 'Coming soon',
+  'home.personalLoading': 'Opening personal library…',
+  'home.featured': 'Featured for You',
+  'home.emptyTitle': 'No songs available yet',
+  'home.emptyBody':
+    'This build does not include the selected songs yet. Check the song configuration or try again later.',
+  'home.personalDialogTitle': 'Personal Library',
+  'home.personalDialogP1':
+    'Import your own MusicXML scores, edit titles, composers and covers, and organize songs into folders. Scores stay on your device — no sign-up, and they work offline.',
+  'home.personalDialogP2':
+    'The personal library is still in development and will ship with the desktop app. The web edition does not support importing yet — for now, pick a song from the featured scores and enjoy playing.',
+
+  // ---- hero carousel ----
+  'hero.regionLabel': 'Featured carousel — now {title}, piece {index} of {total}',
+  'hero.startPreview': 'Preview {title}',
+  'hero.prev': 'Previous',
+  'hero.next': 'Next',
+  'hero.goTo': 'Go to {title}',
+
+  // ---- about ----
+  'about.dialogLabel': 'About Syrinx',
+  'about.tagline': 'Score following · Synced accompaniment',
+  'about.story1':
+    "Fleeing the ardent pursuit of the god Pan, the water nymph Syrinx vanished by the riverside, transformed into a bed of reeds. When Pan arrived, the maiden was gone — only the reeds swaying gently in the wind. As a breeze slipped through the hollow stems, they breathed a soft, plaintive sigh. In sorrow, Pan cut the reeds into tubes of varying length, bound them with wax, and made the pan pipes. He named the instrument Syrinx, after the nymph. Every note it sings is her breath, never quite faded.",
+  'about.story2':
+    'In 1913, Debussy wrote his unaccompanied solo "Syrinx" for the modern flute. Its airy, wistful tone echoes this ancient, melancholy legend — and forever tied the name Syrinx to the flute.',
+
+  // ---- preview ----
+  'preview.coverAlt': '{title} cover',
+  'preview.spec.key': 'Key',
+  'preview.spec.tempo': 'Tempo',
+  'preview.spec.audio': 'Audio',
+  'preview.spec.technique': 'Technique',
+  'preview.spec.audioPiano': 'Piano accompaniment',
+  'preview.spec.audioSynth': 'Synthesized accompaniment',
+  'preview.spec.techniqueBasic': 'Basic breath & fingering',
+  'preview.spec.techniqueAdvanced': 'Legato breath · middle register · upbeats',
+  'preview.spec.difficultyBadge': 'Level {level}',
+  'preview.accReady': 'Accompaniment ready — you can start playing',
+  'preview.accSynth': 'Original accompaniment unavailable — synthesized backup ready',
+  'preview.accPreparing': 'Preloading accompaniment…',
+  'preview.accError': 'Accompaniment preload failed — it will retry when you start playing',
+  'preview.retry': 'Retry',
+  'preview.favAdded': '✓ Saved',
+  'preview.favAdd': '＋ Save',
+  'preview.accHint': 'Preview accompaniment plays automatically on the perform page',
+  'preview.infoLabel': 'Song info',
+  'preview.scoreSection': 'Score preview',
+  'preview.scoreSwitchLabel': 'Score version',
+  'preview.fluteScore': 'Flute score',
+  'preview.pianoScore': 'Piano accompaniment',
+  'preview.scoreLoadError': 'Failed to load score: {error}',
+  'preview.scoreLoading': 'Loading score…',
+  'preview.moreSongs': 'More songs',
+  'preview.continueBrowsing': 'Keep browsing',
+
+  // ---- perform ----
+  'perform.hudMeasure': 'Measure',
+  'perform.hudTime': 'Time',
+  'perform.practiceHintLabel': 'Practice tips',
+  'perform.practiceHintMeasure': 'Tap a measure to set your start',
+  'perform.practiceHintBpm': 'Tap BPM to adjust tempo',
+  'perform.synthAccOriginal': 'Original accompaniment unavailable — synthesized backup ready.',
+  'perform.synthAcc': 'Synthesized accompaniment ready.',
+  'perform.progressAria': 'Performance progress',
+  'perform.preparingAria': 'Preparing',
+  'perform.preparingTitle': 'Preparing accompaniment…',
+  'perform.preparingSub': 'Getting the score and accompaniment ready…',
+  'perform.errorTitle': "Couldn't set up the performance",
+  'perform.backToPreview': 'Back to preview',
+  'perform.countLabel': 'Follow the beat',
+  'perform.endedTitle': 'Performance complete ♪',
+  'perform.endedSub': 'Opening replay…',
+  'perform.noSegments': 'No replayable recording segments in this performance.',
+  'perform.toast.seek': 'Positioned — playback resumes from here',
+  'perform.toast.recUnavailable': 'Recording unavailable: {error}',
+  'perform.toast.waitingMic': 'Waiting for microphone permission — not recording yet',
+  'perform.toast.micCancelled': 'Microphone request cancelled',
+  'perform.toast.recOn': '🎙️ Recording on — review it in the replay afterwards',
+  'perform.toast.silent': 'Warning: this segment is nearly silent — check your microphone input',
+  'perform.toast.sealFailed': 'Failed to save recording segment: {error}',
+  'perform.toast.sealFailedNoReplay': 'Failed to save the recording — nothing to replay this time.',
+  'perform.toast.lastSegFailed': 'The last segment failed to save; earlier takes are kept.',
+  'perform.toast.saveFailedKept': 'Failed to save recording: {error}; earlier takes are kept.',
+  'perform.toast.saveFailed': 'Failed to save recording: {error}',
+  'perform.toast.audioStartFailed': 'Audio failed to start — try again',
+  'perform.toast.accompStartFailed': 'Accompaniment failed to start — try again',
+  'perform.toast.recStartFailed': 'Recording failed to start: {error}',
+  'perform.toast.recResumeFailed': 'Recording failed to resume: {error}',
+  'perform.toast.recPauseFailed': 'Recording failed to pause: {error}',
+  'perform.toast.rateUnsupported':
+    "This browser can't do pitch-preserving tempo change — try again or restore the recommended tempo",
+  'perform.toast.cannotContinue': "Couldn't continue: {error}",
+  'perform.toast.recOffKept': 'Recording off — this segment is saved',
+  'perform.toast.recOffLost': "Recording off, but this segment couldn't be saved",
+  'perform.toast.micUnavailable': "Microphone unavailable — can't record",
+
+  // ---- control bar ----
+  'control.toolbar': 'Performance controls',
+  'control.play': 'Play',
+  'control.pause': 'Pause',
+  'control.playTitle': 'Play (Space)',
+  'control.pauseTitle': 'Pause (Space)',
+  'control.recOn': 'Turn recording on',
+  'control.recOff': 'Turn recording off',
+  'control.recUnavailable': 'Recording unavailable',
+  'control.recWaiting': 'Waiting for microphone permission',
+  'control.recPreparing': 'Preparing recording',
+  'control.recAriaCombo': '{status}, {action}',
+  'control.recTitleWaiting': '{status} — nothing recorded yet; {action}',
+  'control.recTitleRecording': 'Recording — turning it off keeps this segment',
+  'control.recTitleOn': 'Recording is on — capture resumes on play',
+  'control.recTitleOff': 'Turn on recording to capture a new segment from here',
+  'control.restart': 'Back to start',
+  'control.stop': 'Stop performance',
+  'control.stopTitle': 'Stop and go to replay',
+  'control.volume': 'Accompaniment volume',
+  'control.exitPlaying': 'Stop, save & go to replay',
+  'control.exit': 'Exit performance',
+
+  // ---- tempo ----
+  'tempo.triggerAria': 'Adjust tempo',
+  'tempo.preparing': 'Preparing',
+  'tempo.dialogTitle': 'Tempo',
+  'tempo.lower': 'Decrease BPM',
+  'tempo.higher': 'Increase BPM',
+  'tempo.bpmInput': 'Performance BPM',
+  'tempo.rangeAria': 'Tempo range',
+  'tempo.reset': 'Reset to recommended · {bpm} BPM',
+  'tempo.note':
+    'The accompaniment keeps its original key, and the score’s tempo changes are scaled proportionally. Applied mid-performance: a count-in follows, and recording continues as a new segment.',
+  'tempo.rangeError': 'Enter a whole-number BPM between {min} and {max}.',
+  'tempo.apply': 'Apply tempo',
+
+  // ---- pitch meter / chart ----
+  'pitchMeter.label': 'Live intonation',
+  'pitchChart.noData': 'No pitch data to compare',
+
+  // ---- score sheet ----
+  'scoreSheet.renderError': 'Score failed to render: {error}',
+
+  // ---- playback deck ----
+  'pdeck.playRec': 'Play recording',
+  'pdeck.pauseRec': 'Pause recording',
+  'pdeck.progress': 'Recording progress',
+  'pdeck.rec': 'Recording',
+  'pdeck.recVol': 'Recording volume',
+  'pdeck.recVolTitle': 'Recording volume (gain-compensated)',
+  'pdeck.acc': 'Accompaniment',
+  'pdeck.accVol': 'Accompaniment volume',
+  'pdeck.accVolTitle': 'Accompaniment volume (active during A/B playback)',
+
+  // ---- result page ----
+  'result.measure': 'Measure {m}',
+  'result.measureRange': 'Measures {a}–{b}',
+  'result.emptyNoRecording': 'No recording this time',
+  'result.emptyFailed': 'Recording failed to save',
+  'result.emptySaving': 'Saving recording',
+  'result.emptyNoSession': 'No performance yet',
+  'result.emptySavingHint': 'Replay and pitch analysis will appear once saving finishes.',
+  'result.emptyHint': 'Finish a performance, then come back for replay and pitch analysis.',
+  'result.goLibrary': 'Browse the library',
+  'result.replayKicker': 'Performance Replay',
+  'result.recDuration': 'Recording {time}',
+  'result.captureRange': 'Captured {range}',
+  'result.tempoPct': '{pct}% tempo',
+  'result.segments': 'Segments',
+  'result.segmentSelect': 'Select recording segment',
+  'result.segmentOption': 'Segment {n} · {range} · {dur}',
+  'result.segmentsTotal': '{n} segments total',
+  'result.playbackCard': 'Recording replay',
+  'result.syncTitle': 'Recording and accompaniment start at the same moment for A/B listening',
+  'result.syncStop': '❚❚ Stop A/B',
+  'result.syncPlay': '♫ Play with accompaniment',
+  'result.downloadTitle': 'Download this segment (32 kHz mono WAV)',
+  'result.downloading': 'Downloading…',
+  'result.downloadRec': '⤓ Download recording',
+  'result.mixUnavailableTitle': 'Accompaniment unavailable for this song — mixing disabled',
+  'result.mixTitle': 'Recording + accompaniment mix (WAV)',
+  'result.mixing': 'Mixing…',
+  'result.downloadMix': '⤓ Download mix',
+  'result.statsCard': 'Intonation stats',
+  'result.readingRec': 'Reading recording…',
+  'result.analyzing': 'Pitch analysis {pct}%',
+  'result.analysisProgress': 'Pitch analysis progress',
+  'result.analysisBg': 'You can replay the recording now — analysis finishes in the background.',
+  'result.unsupported': 'This browser does not support pitch analysis yet ({message}). Replay is unaffected.',
+  'result.analysisError': 'Analysis failed: {message}',
+  'result.statInTune': 'In-tune rate of measured notes (±50 cents)',
+  'result.statAvgDev': 'Average deviation (cents)',
+  'result.statMiss': '{n} missed',
+  'result.statNoMiss': 'none missed',
+  'result.statCoverage': 'Note coverage ({measured} / {total} measured)',
+  'result.statDuration': 'Recording length',
+  'result.chartAria': 'Pitch comparison chart',
+  'result.legendHit': 'In tune (within ±50 cents)',
+  'result.legendOff': 'Off-pitch (beyond ±50 cents)',
+  'result.legendMiss': 'Missed',
+  'result.chartPending': 'The pitch trace appears once analysis completes',
+  'result.chartUnavailable': 'Pitch chart unavailable',
+  'result.replay': '↺ Play again',
+
+  // ---- language switch ----
+  'langSwitch.label': 'Language',
+  'langSwitch.zh': '中',
+  'langSwitch.en': 'EN',
+
+  // ---- difficulty ----
+  'difficulty.1': '●○○ Beginner',
+  'difficulty.2': '●●○ Intermediate',
+  'difficulty.3': '●●● Advanced',
+
+  // ---- document meta ----
+  'meta.description':
+    'Syrinx · A flute practice companion — score following, synced accompaniment, live backgrounds & recording playback',
+}
