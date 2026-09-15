@@ -6,11 +6,27 @@ const path = require('path')
 const url = require('url')
 
 const DEV_URL = process.env.SYRINX_DEV_URL || 'http://localhost:5173'
+const scheme = 'app'
 
-// app:// 的 mime 表（covers musicxml/json/media）
-const MIME: Record<string, string> = {
+// 必须在 app ready 之前注册为 privileged：standard 让相对路径/同源成立，
+// supportFetchAPI/stream 让 fetch 与媒体 Range 请求可用。
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+    },
+  },
+])
+
+// app:// 的 mime 表（covers musicxml/json/media；缺省由 net.fetch 按扩展名判断）
+const MIME = {
   '.html': 'text/html',
   '.js': 'text/javascript',
+  '.mjs': 'text/javascript',
   '.css': 'text/css',
   '.json': 'application/json',
   '.xml': 'application/xml',
@@ -29,7 +45,6 @@ const MIME: Record<string, string> = {
 
 // 安全边界：把 URL 收敛到 dist/ 目录内（防目录穿越）
 const DIST_ROOT = path.join(__dirname, '..', 'dist')
-const scheme = 'app'
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -51,25 +66,25 @@ function createWindow() {
 
   // 应用内链接一律交给系统浏览器（外链安全默认）
   win.webContents.setWindowOpenHandler(({ url: target }) => {
-    if (!target.startsWith('app://') && !target.startsWith('http://localhost')) {
-      shell.openExternal(target)
-      return { action: 'deny' }
+    if (target.startsWith(`${scheme}://`) || target.startsWith('http://localhost')) {
+      return { action: 'allow' }
     }
-    return { action: 'allow' }
+    shell.openExternal(target)
+    return { action: 'deny' }
   })
 
   if (app.isPackaged || process.env.SYRINX_PROD) {
-    win.loadURL('app://./index.html')
+    // standard scheme 下 host 随意取一个固定名，路径映射 dist/
+    win.loadURL(`${scheme}://bundle/index.html`)
   } else {
     win.loadURL(DEV_URL)
   }
 }
 
 app.whenReady().then(() => {
-  // registerSchemesAsPrivileged 需在 ready 前调用；这里 stream 协议 + 支持 fetch
   protocol.handle(scheme, (request) => {
     const parsed = url.parse(request.url)
-    // app://./index.html → pathname '/index.html'
+    // app://bundle/index.html → pathname '/index.html'（host 恒为 bundle）
     let rel = decodeURIComponent(parsed.pathname || '/index.html')
     rel = rel.replace(/^\/+/, '')
     if (!rel) rel = 'index.html'
@@ -79,9 +94,13 @@ app.whenReady().then(() => {
     }
     const ext = path.extname(abs).toLowerCase()
     const mime = MIME[ext] || 'application/octet-stream'
-    return net.fetch(url.pathToFileURL(abs).toString(), {
-      headers: { 'content-type': mime },
-    })
+    return net.fetch(url.pathToFileURL(abs).toString()).then(
+      (res) =>
+        new Response(res.body, {
+          status: res.status,
+          headers: { 'content-type': mime },
+        }),
+    )
   })
 
   createWindow()
