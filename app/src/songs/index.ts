@@ -77,9 +77,3 @@ export async function loadSong(
   if (manifest.anchorOffsetMs) timeline = applyAnchorOffset(timeline, manifest.anchorOffsetMs / 1000)
   return { xml, timeline, cursorMode }
 }
-
-export const DIFFICULTY_LABEL: Record<1 | 2 | 3, string> = {
-  1: '●○○ 入门',
-  2: '●●○ 进阶',
-  3: '●●● 演奏级',
-}

@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { tr } from './i18n'
 import type { PerformanceSegment, PerformanceSession, PerformanceStatus, PitchPoint, Take, TuneStats } from './types'
 
 /** 四个视图：曲库 → 预览 → 演奏 → 回放 */
@@ -141,7 +142,7 @@ export const useAppStore = create<AppState>((set) => ({
             ...session,
             status: 'no-recording',
             take: null,
-            message: message ?? '本次演奏没有可回放的录音段。',
+            message: message ?? tr('perform.noSegments'),
           },
         }
       }

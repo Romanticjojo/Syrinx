@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import { OSMDScore } from '../score/OSMDScore'
 import { bindMeasureTap } from '../score/measure-tap'
 import type { Timeline } from '../types'
+import { useT } from '../i18n'
 import './ScoreSheet.css'
 
 /** [t_1d124051] fit 模式固定虚拟渲染宽：与页面 CSS .sheet-container 的
@@ -56,6 +57,7 @@ export default function ScoreSheet({
   autoScroll = true,
   autoShowCursor = false,
 }: Props) {
+  const t = useT()
   const divRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -186,7 +188,7 @@ export default function ScoreSheet({
 
   return (
     <div className="score-sheet" ref={rootRef}>
-      {error && <div className="sheet-error">曲谱渲染失败：{error}</div>}
+      {error && <div className="sheet-error">{t('scoreSheet.renderError', { error })}</div>}
       {/* key 分枝防「容器复用 + 命令式清空」互踩：跨模式切换时两分支外层同为
           .sheet-container（div），React 默认复用 DOM 节点——而 OSMDScore.dispose
           与 OSMD autoResize 的滞后 render 都会对旧实例容器 innerHTML='' 重建，

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import ScoreSheet from '../components/ScoreSheet'
+import LangSwitch from '../components/LangSwitch'
 import { cancelPendingAccompaniment, preloadAccompaniment } from '../audio/accompaniment'
-import { DIFFICULTY_LABEL, getSong, loadSong, SONGS } from '../songs'
+import { getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
 import { expandRepeats, stripForcedBreaks } from '../score/musicxml'
+import { pickSongText, useLangStore, useT } from '../i18n'
 import { useAppStore } from '../store'
 import type { SongManifest, Timeline } from '../types'
 import './PreviewPage.css'
@@ -27,6 +29,8 @@ const positionOf = (s: SongManifest): React.CSSProperties =>
 type ScoreKind = 'flute' | 'piano'
 
 export default function PreviewPage() {
+  const t = useT()
+  const lang = useLangStore((s) => s.lang)
   const songId = useAppStore((s) => s.currentSongId)
   const go = useAppStore((s) => s.go)
   const toggleFavorite = useAppStore((s) => s.toggleFavorite)
@@ -144,11 +148,12 @@ export default function PreviewPage() {
   const activeXml = scoreKind === 'flute' ? xml : pianoXml
   const activeError = scoreKind === 'flute' ? loadError : pianoError
 
-  // 规格条数据：签名的结构化形态（调性/速度/伴奏/技巧），难度徽章复用曲库 ●●● 标记
+  // 规格条数据：签名的结构化形态（调性/速度/伴奏/技巧），难度徽章复用曲库 ●●● 标记。
+  // 英文眉标（KEY/TEMPO…）只在中文态显示——英文态标签本身已是英文，重复无意义
   const specs: { label: string; en: string; value: ReactNode; valueClass?: string; badge?: string }[] = [
-    { label: '调性', en: 'KEY', value: song.keyLabel },
+    { label: t('preview.spec.key'), en: 'KEY', value: pickSongText(song, 'keyLabel') },
     {
-      label: '速度',
+      label: t('preview.spec.tempo'),
       en: 'TEMPO',
       value: (
         <>
@@ -158,12 +163,12 @@ export default function PreviewPage() {
       ),
       valueClass: 'spec-value-tempo',
     },
-    { label: '伴奏', en: 'AUDIO', value: song.accompanimentUrl ? '钢琴伴奏' : '程序化合成伴奏' },
+    { label: t('preview.spec.audio'), en: 'AUDIO', value: song.accompanimentUrl ? t('preview.spec.audioPiano') : t('preview.spec.audioSynth') },
     {
-      label: '技巧要求',
+      label: t('preview.spec.technique'),
       en: 'TECHNIQUE',
-      value: song.difficulty === 1 ? '基础气息与指法' : '连奏气息 · 中音区 · 弱起处理',
-      badge: `难度 ${DIFFICULTY_LABEL[song.difficulty]}`,
+      value: song.difficulty === 1 ? t('preview.spec.techniqueBasic') : t('preview.spec.techniqueAdvanced'),
+      badge: t('preview.spec.difficultyBadge', { level: t(`difficulty.${song.difficulty}`) }),
     },
   ]
 
@@ -196,7 +201,7 @@ export default function PreviewPage() {
 
       <header className="preview-topbar">
         <div className="topbar-left">
-          <button className="back-ghost" onClick={() => go('home')} aria-label="返回曲库">
+          <button className="back-ghost" onClick={() => go('home')} aria-label={t('common.backToLibrary')}>
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
               <path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -205,6 +210,9 @@ export default function PreviewPage() {
             <img src={assetUrl("/brand/syrinx-logo-white.jpg")} alt="" aria-hidden="true" />
             Syrinx
           </div>
+        </div>
+        <div className="topbar-right">
+          <LangSwitch />
         </div>
       </header>
 
@@ -217,21 +225,21 @@ export default function PreviewPage() {
             <img
               className="cover-img"
               src={assetUrl(song.coverUrl ?? '/brand/flute.jpg')}
-              alt={`${song.title} 封面`}
+              alt={t('preview.coverAlt', { title: pickSongText(song, 'title') })}
               style={song.coverUrl ? positionOf(song) : undefined}
             />
           </div>
           <div className="album-info">
-            <div className="kicker">{song.tags.join(' · ')}</div>
-            <h1>{song.title}</h1>
+            <div className="kicker">{pickSongText(song, 'tags').join(' · ')}</div>
+            <h1>{pickSongText(song, 'title')}</h1>
             <div className="album-meta">
-              <b>{song.composer}</b>
+              <b>{pickSongText(song, 'composer')}</b>
               <span className="dot-sep">•</span>
-              {DIFFICULTY_LABEL[song.difficulty]}
+              {t(`difficulty.${song.difficulty}`)}
               <span className="dot-sep">•</span>
               {song.durationLabel}
             </div>
-            <p className="album-desc">{song.description}</p>
+            <p className="album-desc">{pickSongText(song, 'description')}</p>
             <div className="action-row">
               <button
                 className="btn-play-big"
@@ -240,18 +248,18 @@ export default function PreviewPage() {
                   handoffToPerformRef.current = true
                   go('perform', song.id)
                 }}
-                aria-label="开始演奏"
-                title="开始演奏"
+                aria-label={t('common.startPlaying')}
+                title={t('common.startPlaying')}
               >
                 ▶
               </button>
               <span className={`accompaniment-state ${accompanimentState}`} role="status">
-                {accompanimentState === 'ready' && '伴奏已准备，可以开始演奏'}
-                {accompanimentState === 'synthesized' && '真实伴奏不可用，已准备合成伴奏'}
-                {(accompanimentState === 'waiting' || accompanimentState === 'loading') && '正在提前准备伴奏…'}
+                {accompanimentState === 'ready' && t('preview.accReady')}
+                {accompanimentState === 'synthesized' && t('preview.accSynth')}
+                {(accompanimentState === 'waiting' || accompanimentState === 'loading') && t('preview.accPreparing')}
                 {accompanimentState === 'error' && (
                   <>
-                    伴奏预载失败，开始演奏时仍会重试
+                    {t('preview.accError')}
                     <button
                       type="button"
                       onClick={() => {
@@ -259,7 +267,7 @@ export default function PreviewPage() {
                         setPreloadAttempt((value) => value + 1)
                       }}
                     >
-                      重试
+                      {t('preview.retry')}
                     </button>
                   </>
                 )}
@@ -268,9 +276,9 @@ export default function PreviewPage() {
               {false && (
                 <>
                   <button className={`btn-pill${fav ? ' added' : ''}`} onClick={() => toggleFavorite(song.id)}>
-                    {fav ? '✓ 已收藏' : '＋ 收藏'}
+                    {fav ? t('preview.favAdded') : t('preview.favAdd')}
                   </button>
-                  <span className="listen-state">预览伴奏将在演奏页自动播放</span>
+                  <span className="listen-state">{t('preview.accHint')}</span>
                 </>
               )}
             </div>
@@ -278,13 +286,13 @@ export default function PreviewPage() {
         </div>
       </section>
 
-      <section className="info-list" aria-label="曲目信息">
+      <section className="info-list" aria-label={t('preview.infoLabel')}>
         <div className="spec-grid">
           {specs.map(({ label, en, value, valueClass, badge }) => (
             <div className="spec" key={label}>
               <span className="spec-eyebrow">
                 <span className="spec-cn">{label}</span>
-                <span className="spec-en">{en}</span>
+                {lang === 'zh' && <span className="spec-en">{en}</span>}
               </span>
               <span className={`spec-value${valueClass ? ` ${valueClass}` : ''}`}>{value}</span>
               {badge && (
@@ -299,48 +307,48 @@ export default function PreviewPage() {
 
       {/* 曲谱预览：静态渲染 + 缩放（M2 起接入伴奏时钟跟随）；声明了 pianoScoreUrl
           的曲可切「钢琴伴奏谱」大谱表（interstellar 拼谱修复 t_7518c69e），其余曲零变化 */}
-      <section className="score-section" aria-label="曲谱预览">
+      <section className="score-section" aria-label={t('preview.scoreSection')}>
         <h3 className="score-section-title">
-          曲谱预览
+          {t('preview.scoreSection')}
           {song.pianoScoreUrl && (
-            <div className="score-switch" role="group" aria-label="曲谱版本">
+            <div className="score-switch" role="group" aria-label={t('preview.scoreSwitchLabel')}>
               <button
                 className={`seg${scoreKind === 'flute' ? ' on' : ''}`}
                 aria-pressed={scoreKind === 'flute'}
                 onClick={() => setScoreKind('flute')}
               >
-                长笛谱
+                {t('preview.fluteScore')}
               </button>
               <button
                 className={`seg${scoreKind === 'piano' ? ' on' : ''}`}
                 aria-pressed={scoreKind === 'piano'}
                 onClick={() => setScoreKind('piano')}
               >
-                钢琴伴奏谱
+                {t('preview.pianoScore')}
               </button>
             </div>
           )}
         </h3>
-        {activeError && <div className="score-load-error">曲谱加载失败：{activeError}</div>}
-        {!activeXml && !activeError && <div className="score-load-error">曲谱加载中…</div>}
+        {activeError && <div className="score-load-error">{t('preview.scoreLoadError', { error: activeError })}</div>}
+        {!activeXml && !activeError && <div className="score-load-error">{t('preview.scoreLoading')}</div>}
         {activeXml && timeline && (
           <ScoreSheet xml={activeXml} timeline={timeline} accent={song.accent} zoom={0.85} />
         )}
       </section>
 
       {/* 更多曲目：详情页 ↔ 目录页双向打通 */}
-      <section className="more-songs" aria-label="更多曲目">
-        <h3 className="score-section-title">继续浏览</h3>
+      <section className="more-songs" aria-label={t('preview.moreSongs')}>
+        <h3 className="score-section-title">{t('preview.continueBrowsing')}</h3>
         <div className="more-strip">
           {SONGS.filter((x) => x.id !== song.id).map((x) => (
-            <button key={x.id} className="more-card" onClick={() => go('preview', x.id)} title={x.title}>
+            <button key={x.id} className="more-card" onClick={() => go('preview', x.id)} title={pickSongText(x, 'title')}>
               <div className="more-art" style={x.coverUrl ? undefined : placeholderStyle(x.accent)}>
                 {x.coverUrl && <img src={assetUrl(x.coverUrl)} alt="" loading="lazy" style={positionOf(x)} />}
                 <span className="more-veil" aria-hidden="true" />
               </div>
-              <div className="more-name">{x.title}</div>
+              <div className="more-name">{pickSongText(x, 'title')}</div>
               <div className="more-meta">
-                {x.composer} · {x.durationLabel}
+                {pickSongText(x, 'composer')} · {x.durationLabel}
               </div>
             </button>
           ))}

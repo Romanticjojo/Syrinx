@@ -115,6 +115,12 @@ export interface SongManifest {
   keyLabel: string
   description: string
   tags: string[]
+  /** 双语展示字段（可选）：英文态展示时经 pickSongText 取值，存在才用、缺省回落原字段 */
+  titleEn?: string
+  composerEn?: string
+  descriptionEn?: string
+  keyLabelEn?: string
+  tagsEn?: string[]
   /** MusicXML 地址（必选） */
   scoreUrl: string
   /** 钢琴伴奏谱地址（可选，interstellar 拼谱修复 t_7518c69e）：大谱表 MusicXML，

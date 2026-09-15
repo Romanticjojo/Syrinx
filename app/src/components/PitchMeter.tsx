@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { midiToNoteName, type LiveFeedback } from '../pitch/live'
+import { useT } from '../i18n'
 import './PitchMeter.css'
 
 /** 演奏页 rAF 直写 DOM 的句柄（高频更新不进 React/不进 store） */
@@ -26,6 +27,7 @@ function needlePct(cents: number): number {
  * 准（±50 内）用点缀色，偏（超 ±50）用警示红，与回放页配色语义一致。
  */
 export default function PitchMeter({ handleRef }: Props) {
+  const t = useT()
   const rootRef = useRef<HTMLDivElement>(null)
   const noteEl = useRef<HTMLSpanElement>(null)
   const needleEl = useRef<HTMLSpanElement>(null)
@@ -71,7 +73,7 @@ export default function PitchMeter({ handleRef }: Props) {
   }, [handleRef])
 
   return (
-    <div className="pitch-meter" ref={rootRef} role="status" aria-label="实时音准">
+    <div className="pitch-meter" ref={rootRef} role="status" aria-label={t('pitchMeter.label')}>
       <span className="pm-note" ref={noteEl}>
         --
       </span>

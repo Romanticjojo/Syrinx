@@ -12,6 +12,7 @@ import ScoreSheet from '../components/ScoreSheet'
 import type { OSMDScore } from '../score/OSMDScore'
 import { getSong, loadSong, SONGS } from '../songs'
 import { assetUrl } from '../lib/assetUrl'
+import { pickSongText, tr, useT } from '../i18n'
 import { useAppStore } from '../store'
 import type { PerformanceSegment, Timeline } from '../types'
 import './PerformPage.css'
@@ -24,7 +25,6 @@ type Phase = 'loading' | 'ready' | 'countdown' | 'performing' | 'ended' | 'error
 
 const IDLE_MS = 3200
 const COUNT_BEATS = 4
-const SEEK_TOAST = '已定位，播放时从这里继续'
 const TAIL_GRACE = 0.6 // 末音后留给混响的余韵再收
 const LIVE_EVERY = 3 // 实时音高检测隔帧跑（≈20Hz），YIN O(W²) 控制开销
 
@@ -60,6 +60,7 @@ function tempoAtTime(timeline: Timeline, time: number): number {
 }
 
 export default function PerformPage() {
+  const t = useT()
   const songId = useAppStore((s) => s.currentSongId)
   const go = useAppStore((s) => s.go)
   const beginPerformance = useAppStore((s) => s.beginPerformance)
@@ -179,7 +180,7 @@ export default function PerformPage() {
   const reportCaptureError = useCallback((error: unknown) => {
     if (!mountedRef.current || finishedRef.current) return
     setCaptureIndicator('error')
-    showToast(`录音不可用：${error instanceof Error ? error.message : String(error)}`)
+    showToast(tr('perform.toast.recUnavailable', { error: error instanceof Error ? error.message : String(error) }))
   }, [showToast])
 
   /** 确保麦克风会话存在（只开一次；实时音准反馈不受录音开关影响） */
@@ -187,13 +188,13 @@ export default function PerformPage() {
     if (micRef.current) return Promise.resolve(micRef.current)
     if (!micOpeningRef.current) {
       setCaptureIndicator('waiting')
-      showToast('等待麦克风授权，暂未录音')
+      showToast(tr('perform.toast.waitingMic'))
       micOpeningRef.current = openMic(audioEngine.audioCtx)
         .then((mic) => {
           if (!mountedRef.current || finishedRef.current) {
             mic.release()
             micOpeningRef.current = null
-            throw new Error('麦克风请求已取消')
+            throw new Error(tr('perform.toast.micCancelled'))
           }
           micRef.current = mic
           micOpeningRef.current = null
@@ -306,7 +307,7 @@ export default function PerformPage() {
         URL.revokeObjectURL(recording.url)
         return false
       }
-      if (recording.silent) showToast('警告：本段录音电平接近 0，请检查麦克风输入')
+      if (recording.silent) showToast(tr('perform.toast.silent'))
       const segment: PerformanceSegment = {
         id: `${sessionId}-segment-${++segmentSeqRef.current}`,
         sessionId,
@@ -385,7 +386,7 @@ export default function PerformPage() {
           else await sealQueueRef.current
         } catch (error) {
           sealed = false
-          if (mountedRef.current) showToast(`录音分段保存失败：${error instanceof Error ? error.message : String(error)}`)
+          if (mountedRef.current) showToast(tr('perform.toast.sealFailed', { error: error instanceof Error ? error.message : String(error) }))
         }
         const trailing = mic ? await mic.stop() : null
         if (micRef.current === mic) micRef.current = null
@@ -395,16 +396,16 @@ export default function PerformPage() {
         }
         const hasSegments = (useAppStore.getState().performanceSession?.segments.length ?? 0) > 0
         if (!sealed && !hasSegments) {
-          if (setPerformanceStatus(sessionId, 'failed', '录音分段保存失败，本次没有可回放录音。')) go('result')
-        } else if (finishPerformance(sessionId, sealed ? undefined : '最后一段保存失败，已保留此前录音。')) {
+          if (setPerformanceStatus(sessionId, 'failed', tr('perform.toast.sealFailedNoReplay'))) go('result')
+        } else if (finishPerformance(sessionId, sealed ? undefined : tr('perform.toast.lastSegFailed'))) {
           go('result')
         }
       } catch (e: unknown) {
         if (!mountedRef.current) return
         const message = e instanceof Error ? e.message : String(e)
         const hasSegments = (useAppStore.getState().performanceSession?.segments.length ?? 0) > 0
-        if (hasSegments && finishPerformance(sessionId, `录音保存失败：${message}；已保留此前录音。`)) go('result')
-        else if (setPerformanceStatus(sessionId, 'failed', `录音保存失败：${message}`)) go('result')
+        if (hasSegments && finishPerformance(sessionId, tr('perform.toast.saveFailedKept', { error: message }))) go('result')
+        else if (setPerformanceStatus(sessionId, 'failed', tr('perform.toast.saveFailed', { error: message }))) go('result')
       }
     })()
   }, [cancelCountIn, finishPerformance, go, sealCurrentCapture, setPerformanceStatus, showToast])
@@ -566,7 +567,7 @@ export default function PerformPage() {
       await audioEngine.resume()
     } catch {
       startPendingRef.current = false
-      if (mountedRef.current) showToast('音频无法启动，请重试')
+      if (mountedRef.current) showToast(tr('perform.toast.audioStartFailed'))
       return
     }
     if (!mountedRef.current || phaseRef.current !== 'ready' || generation !== transitionGenerationRef.current || tempoPendingRef.current) {
@@ -611,7 +612,7 @@ export default function PerformPage() {
             playIntentRef.current = false
             phaseRef.current = initial ? 'ready' : 'performing'
             setPhase(initial ? 'ready' : 'performing')
-            showToast('伴奏无法开始，请重试')
+            showToast(tr('perform.toast.accompStartFailed'))
             return
           }
           if (recOnRef.current && micRef.current && !recStartedRef.current) {
@@ -630,7 +631,7 @@ export default function PerformPage() {
               }
               recOnRef.current = false
               setRecOn(false)
-              showToast(`录音无法开始：${error instanceof Error ? error.message : String(error)}`)
+              showToast(tr('perform.toast.recStartFailed', { error: error instanceof Error ? error.message : String(error) }))
             }
           } else if (recOnRef.current && micRef.current && recStartedRef.current) {
             // [countdown-semantic] 暂停后续播：采集仅被 gate 暂停（recStarted 仍在），
@@ -650,7 +651,7 @@ export default function PerformPage() {
               }
               recOnRef.current = false
               setRecOn(false)
-              showToast(`录音无法继续：${error instanceof Error ? error.message : String(error)}`)
+              showToast(tr('perform.toast.recResumeFailed', { error: error instanceof Error ? error.message : String(error) }))
             }
           }
           if (
@@ -670,8 +671,7 @@ export default function PerformPage() {
           setPlaying(true)
           setPhase('performing')
           // 默认开录；麦克风没就绪时等它就绪后补开。
-          const REC_ON_TOAST = '🎙️ 录音已开启，结束后可在回放页查看'
-          if (recStartedRef.current) showToast(REC_ON_TOAST)
+          if (recStartedRef.current) showToast(tr('perform.toast.recOn'))
           else void ensureMic().then((mic) => {
             if (
               mountedRef.current &&
@@ -681,7 +681,7 @@ export default function PerformPage() {
               !recStartedRef.current
             )
               void startCapture(!playingRef.current).then((capturing) => {
-                if (capturing) showToast(REC_ON_TOAST)
+                if (capturing) showToast(tr('perform.toast.recOn'))
               }).catch(() => {})
           }).catch(() => {})
         })()
@@ -747,7 +747,7 @@ export default function PerformPage() {
       resumePendingRef.current = false
       audioEngine.pause()
       void micRef.current?.pauseCapture().catch((error: unknown) => {
-        if (mountedRef.current) showToast(`录音暂停失败：${error instanceof Error ? error.message : String(error)}`)
+        if (mountedRef.current) showToast(tr('perform.toast.recPauseFailed', { error: error instanceof Error ? error.message : String(error) }))
       })
       playingRef.current = false
       setPlaying(false)
@@ -842,7 +842,7 @@ export default function PerformPage() {
           if (prepareRate) {
             const changed = await audioEngine.setRate(desiredRate)
             if (!mountedRef.current || finishedRef.current || generation !== transitionGenerationRef.current) return
-            if (!changed) throw new Error('当前浏览器无法完成保调变速，请重试或还原推荐速度')
+            if (!changed) throw new Error(tr('perform.toast.rateUnsupported'))
             setTempoRatio(audioEngine.rate)
             tempoPendingRef.current = false
             setTempoPending(false)
@@ -859,7 +859,7 @@ export default function PerformPage() {
             const stoppedPhase = currentPhase === 'ready' ? 'ready' : 'performing'
             phaseRef.current = stoppedPhase
             setPhase(stoppedPhase)
-            showToast(`未能继续：${error instanceof Error ? error.message : String(error)}`)
+            showToast(tr('perform.toast.cannotContinue', { error: error instanceof Error ? error.message : String(error) }))
           }
           return
         }
@@ -880,11 +880,11 @@ export default function PerformPage() {
           if (countdownInitial) {
             phaseRef.current = 'ready'
             setPhase('ready')
-            showToast(SEEK_TOAST)
+            showToast(tr('perform.toast.seek'))
           } else {
             phaseRef.current = 'performing'
             setPhase('performing')
-            showToast(SEEK_TOAST)
+            showToast(tr('perform.toast.seek'))
           }
         } else if (currentPhase === 'countdown') {
           // 非谱面点击的倒数中跳转（重启按钮/进度轨键盘）：保持既有「自动重排倒数」
@@ -895,7 +895,7 @@ export default function PerformPage() {
           transitionShouldResumeRef.current = false
           phaseRef.current = 'performing'
           setPhase('performing')
-          showToast(SEEK_TOAST)
+          showToast(tr('perform.toast.seek'))
         }
         wake()
       })()
@@ -987,11 +987,11 @@ export default function PerformPage() {
     if (!next) {
       void sealCurrentCapture(audioEngine.time).then((retained) => {
         if (mountedRef.current && captureGenerationRef.current === captureGeneration) {
-          showToast(retained ? '录音已关闭，当前段已保留' : '录音已关闭，但当前段未能保存')
+          showToast(retained ? tr('perform.toast.recOffKept') : tr('perform.toast.recOffLost'))
         }
       }).catch((error: unknown) => {
         if (mountedRef.current && captureGenerationRef.current === captureGeneration) {
-          showToast(`录音分段保存失败：${error instanceof Error ? error.message : String(error)}`)
+          showToast(tr('perform.toast.sealFailed', { error: error instanceof Error ? error.message : String(error) }))
         }
       })
     } else {
@@ -1002,7 +1002,7 @@ export default function PerformPage() {
           || !recOnRef.current
           || captureGenerationRef.current !== captureGeneration
         ) return
-        showToast('麦克风不可用，无法录音')
+        showToast(tr('perform.toast.micUnavailable'))
         recOnRef.current = false
         setRecOn(false)
       }).catch((error: unknown) => {
@@ -1011,7 +1011,7 @@ export default function PerformPage() {
           || !recOnRef.current
           || captureGenerationRef.current !== captureGeneration
         ) return
-        showToast(`录音无法开始：${error instanceof Error ? error.message : String(error)}`)
+        showToast(tr('perform.toast.recStartFailed', { error: error instanceof Error ? error.message : String(error) }))
         recOnRef.current = false
         setRecOn(false)
       })
@@ -1088,25 +1088,25 @@ export default function PerformPage() {
       />
       <header className="perform-hud hud-top">
         <div className="hud-song">
-          <button className="back-ghost" onClick={exit} aria-label="返回曲库">
+          <button className="back-ghost" onClick={exit} aria-label={t('common.backToLibrary')}>
             <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
               <path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
           <div className="hud-song-text">
-            <b>{song.title}</b>
-            <span>{song.composer}</span>
+            <b>{pickSongText(song, 'title')}</b>
+            <span>{pickSongText(song, 'composer')}</span>
           </div>
         </div>
         <div className="hud-stats">
           <div className="hud-stat">
-            <span>小节</span>
+            <span>{t('perform.hudMeasure')}</span>
             <span className="num" ref={measureEl}>
               -- / --
             </span>
           </div>
           <div className="hud-stat">
-            <span>时间</span>
+            <span>{t('perform.hudTime')}</span>
             <span className="num" ref={timeEl}>
               0:00 / 0:00
             </span>
@@ -1116,17 +1116,17 @@ export default function PerformPage() {
 
       {phase === 'ready' && (
         <div className="perform-ready">
-          {practiceHint && <aside className="practice-hint" aria-label="演奏小提示">
+          {practiceHint && <aside className="practice-hint" aria-label={t('perform.practiceHintLabel')}>
             <div className="practice-hint-steps">
-              <span><svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><rect x="2" y="3" width="16" height="14" rx="3" /><path d="M6 7h8M6 10h8M6 13h8M9 3v14" /></svg>点小节选起点</span>
-              <span><span className="practice-hint-bpm" aria-hidden="true">BPM</span>点 BPM 调速度</span>
+              <span><svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" aria-hidden="true"><rect x="2" y="3" width="16" height="14" rx="3" /><path d="M6 7h8M6 10h8M6 13h8M9 3v14" /></svg>{t('perform.practiceHintMeasure')}</span>
+              <span><span className="practice-hint-bpm" aria-hidden="true">BPM</span>{t('perform.practiceHintBpm')}</span>
             </div>
-            <button type="button" onClick={dismissPracticeHint}>知道了</button>
+            <button type="button" onClick={dismissPracticeHint}>{t('common.gotIt')}</button>
           </aside>}
           {synthesizedAccompaniment && <small role="status">
-            {song.accompanimentUrl ? '原始伴奏暂不可用，已准备合成伴奏。' : '已准备合成伴奏。'}
+            {song.accompanimentUrl ? t('perform.synthAccOriginal') : t('perform.synthAcc')}
           </small>}
-          <button className="ov-start" onClick={() => void start()}>▶ 开始演奏</button>
+          <button className="ov-start" onClick={() => void start()}>▶ {t('common.startPlaying')}</button>
         </div>
       )}
       <div className="perform-stage">
@@ -1149,7 +1149,7 @@ export default function PerformPage() {
         className="progress-rail"
         ref={railRef}
         role="slider"
-        aria-label="演奏进度"
+        aria-label={t('perform.progressAria')}
         aria-valuemin={0}
         aria-valuemax={timeline?.durationSec ?? 0}
         aria-valuenow={Math.max(0, Math.min(audioEngine.time, timeline?.durationSec ?? 0))}
@@ -1186,11 +1186,11 @@ export default function PerformPage() {
       </div>
 
       {phase === 'loading' && (
-        <div className="perform-overlay" role="status" aria-label="正在准备">
+        <div className="perform-overlay" role="status" aria-label={t('perform.preparingAria')}>
           <div className="ov-card">
             <div className="ov-glyph">𝄞</div>
-            <div className="ov-title">正在准备伴奏…</div>
-            <div className="ov-sub">正在准备曲谱与伴奏，请稍候</div>
+            <div className="ov-title">{t('perform.preparingTitle')}</div>
+            <div className="ov-sub">{t('perform.preparingSub')}</div>
             <div className="ov-bar">
               <i />
             </div>
@@ -1201,10 +1201,10 @@ export default function PerformPage() {
       {phase === 'error' && (
         <div className="perform-overlay" role="alert">
           <div className="ov-card">
-            <div className="ov-title">演奏准备失败</div>
+            <div className="ov-title">{t('perform.errorTitle')}</div>
             <div className="ov-sub err">{errorMsg}</div>
             <button className="ov-btn" onClick={exit}>
-              返回预览
+              {t('perform.backToPreview')}
             </button>
           </div>
         </div>
@@ -1215,15 +1215,15 @@ export default function PerformPage() {
           <div className="count-num" ref={countEl}>
             {COUNT_BEATS}
           </div>
-          <div className="count-label">跟上节拍</div>
+          <div className="count-label">{t('perform.countLabel')}</div>
         </div>
       )}
 
       {phase === 'ended' && (
         <div className="perform-overlay">
           <div className="ov-card">
-            <div className="ov-title big">演奏完成 ♪</div>
-            <div className="ov-sub">正在前往回放…</div>
+            <div className="ov-title big">{t('perform.endedTitle')}</div>
+            <div className="ov-sub">{t('perform.endedSub')}</div>
           </div>
         </div>
       )}

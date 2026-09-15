@@ -79,6 +79,12 @@
   align-items: center;
   gap: 14px;
 }
+/* 顶栏右侧（语言切换）：relative 抬到可读性 scrim 之上 */
+.topbar-right {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
 .back-ghost {
   flex: none;
   width: 32px;
