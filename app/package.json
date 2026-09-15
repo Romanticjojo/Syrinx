@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "electron:dev": "vite",
     "dist": "node scripts/patch-nsis.mjs && npm run build:desktop && electron-builder --win",
-    "dist:portable": "node scripts/patch-nsis.mjs && npm run build:desktop && electron-builder --win portable"
+    "dist:portable": "node scripts/patch-nsis.mjs && npm run build:desktop && electron-builder --win portable",
+    "dist:mac": "npm run build:desktop && electron-builder --mac"
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.1",

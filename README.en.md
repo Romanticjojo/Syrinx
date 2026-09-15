@@ -26,6 +26,12 @@ Personal score library · Digital sheet-music reading · Flute practice with acc
 
 The installer ships with all five featured songs (scores, sampled-piano accompaniments, covers and animated background videos) — **everything works offline after install**. Unsigned installers may trigger a SmartScreen prompt: choose "More info → Run anyway".
 
+**macOS users (Apple Silicon)** — for M-series Macs (M1 / M2 / M3 / M4):
+
+> 📦 **[Download Syrinx-0.3.0-mac-arm64.dmg](https://github.com/Romanticjojo/Syrinx/releases/latest)** · drag into Applications · ships with all five songs, **works offline**
+
+This is an arm64 build for Apple Silicon only; Intel Macs should run from source. The unsigned app may be blocked by Gatekeeper on first launch: in Finder → Applications, **right-click Syrinx → Open**, then click "Open" (only needed once).
+
 **Other platforms / from source** — see [Quick start](#quick-start) below, or try [romanticjojo.com](https://romanticjojo.com) first.
 
 Asset provenance and copyright notes live in [NOTICE.md](NOTICE.md).
@@ -128,6 +134,7 @@ npm run dev:web      # featured-library mode (same shape as the installer)
 npm test             # unit and component tests
 npm run build        # build → app/dist
 npm run dist         # package the Windows installer (electron-builder)
+npm run dist:mac     # package the macOS dmg/zip, Apple Silicon (M-series)
 ```
 
 The repository bundles every featured song's assets (`app/public/songs/`) plus two importable original études (`docs/examples/`) — a fresh clone works out of the box.

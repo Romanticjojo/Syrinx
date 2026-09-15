@@ -36,4 +36,15 @@ nsis:
   shortcutName: Syrinx
   uninstallDisplayName: Syrinx
 
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  category: public.app-category.music
+  icon: electron/build/icon.png
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  identity: null
+
 # dist-desktop 由 `npm run build:desktop`（desktop 模式：精选曲库 + 个人仓库）产出，打进 asar

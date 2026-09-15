@@ -24,6 +24,12 @@
 
 安装包内置全部五首精选曲目（乐谱、采样钢琴伴奏、封面与动态背景视频），**安装后离线即用**。未签名安装包可能触发 SmartScreen 提示，选「更多信息 → 仍要运行」即可。
 
+**macOS 用户（Apple Silicon）** —— M1 / M2 / M3 / M4 等 M 系列芯片 Mac 专用：
+
+> 📦 **[下载 Syrinx-0.3.0-mac-arm64.dmg](https://github.com/Romanticjojo/Syrinx/releases/latest)** · 拖入「应用程序」即装好 · 同样内置五首曲目，**离线即用**
+
+M 系列芯片（arm64）专用包，Intel 芯片的 Mac 请从源码运行。未签名应用首次打开可能被 Gatekeeper 拦截：在「访达 → 应用程序」中**右键 Syrinx → 打开**，再点「打开」即可（仅需一次）。
+
 **其他平台 / 从源码运行** —— 见下方[快速开始](#快速开始)；也可先到 [romanticjojo.com](https://romanticjojo.com) 在线体验。
 
 曲目素材的来源与版权说明见 [NOTICE.md](NOTICE.md)。
@@ -126,6 +132,7 @@ npm run dev:web      # 精选曲库模式（安装包同款形态）
 npm test             # 单元与组件测试
 npm run build        # 构建 → app/dist
 npm run dist         # 打包 Windows 安装包（electron-builder）
+npm run dist:mac     # 打包 macOS dmg/zip，Apple Silicon（M 系列芯片）
 ```
 
 仓库自带全部精选曲目素材（`app/public/songs/`）与两份可导入的原创小练习（`docs/examples/`），克隆后开箱即用。
