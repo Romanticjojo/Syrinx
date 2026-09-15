@@ -49,7 +49,6 @@ describe('buildSongCatalog', () => {
       'expedition-33',
       'alicia',
       'interstellar',
-      'weight-of-the-world',
     ])
   })
 

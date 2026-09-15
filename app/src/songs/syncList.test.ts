@@ -29,7 +29,7 @@ describe('syncSongList', () => {
     }
   })
 
-  it('同步曲库遵循六首精选曲与当前发布允许清单', () => {
+  it('同步曲库遵循五首精选曲与当前发布允许清单', () => {
     const allowlist = import.meta.env.VITE_SONG_IDS as string | undefined
     const allowed = allowlist === undefined ? null : new Set(allowlist.split(',').map((id) => id.trim()))
     expect([...list.map((s) => s.id)].sort()).toEqual(
@@ -39,7 +39,6 @@ describe('syncSongList', () => {
         'flower-dance',
         'interstellar',
         'luv-letter',
-        'weight-of-the-world',
       ].filter((id) => allowed === null || allowed.has(id)).sort(),
     )
   })

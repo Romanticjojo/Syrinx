@@ -12,11 +12,11 @@ Syrinx 仓库以 Apache-2.0 许可开源其**程序代码**。仓库内 `app/pub
 | Lumière（Expedition 33） | 同上 | 同上 | 同上 |
 | Alicia（Expedition 33） | 同上 | 同上 | 同上 |
 | Interstellar | 同上 | 原版钢琴录音剪辑 | 同上 |
-| Weight of the World（NieR:Automata） | 同上 | 采样钢琴离线渲染改编伴奏 | 同上 |
+| Weight of the World（NieR:Automata）* | 同上 | 采样钢琴离线渲染改编伴奏 | 同上 |
 | 鸟之诗（AIR）* | 同上 | 采样钢琴离线渲染改编伴奏 | 同上 |
 | River Flows in You * | 同 MuseScore 社区转录 | 采样钢琴离线渲染改编伴奏 | 同上 |
 
-带 * 的曲目目前为隐藏曲目（未在曲库列表展示）。
+带 * 的曲目目前为隐藏曲目（未在曲库列表展示，仅保留作开发测试用途）。
 
 ## 版权口径
 

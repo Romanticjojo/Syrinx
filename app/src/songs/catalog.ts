@@ -6,14 +6,13 @@ export const PRIVATE_SONG_ORDER = [
   'expedition-33',
   'alicia',
   'interstellar',
-  'weight-of-the-world',
 ] as const
 
 type ManifestModule = { default?: unknown } | unknown
 
 // Keep old local packs from reappearing through glob discovery or deployment lists.
 // Personal-library imports are independent of this built-in catalog.
-const RETIRED_SONG_IDS = new Set(['lumiere', 'aurora-scale', 'birds-poem', 'river-flows-in-you'])
+const RETIRED_SONG_IDS = new Set(['lumiere', 'aurora-scale', 'birds-poem', 'river-flows-in-you', 'weight-of-the-world'])
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
