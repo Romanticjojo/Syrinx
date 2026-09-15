@@ -43,8 +43,8 @@ const MIME = {
   '.woff2': 'font/woff2',
 }
 
-// 安全边界：把 URL 收敛到 dist/ 目录内（防目录穿越）
-const DIST_ROOT = path.join(__dirname, '..', 'dist')
+// 安全边界：把 URL 收敛到 dist-desktop/ 目录内（防目录穿越）；dev 联调时回落 dist/
+const DIST_ROOT = process.env.SYRINX_DIST_ROOT || path.join(__dirname, '..', 'dist-desktop')
 
 function createWindow() {
   const win = new BrowserWindow({

@@ -37,13 +37,37 @@ Asset provenance and copyright notes live in [NOTICE.md](NOTICE.md).
 
 ## What it does
 
-**Collect and organize.** Import MusicXML, XML or MXL; curate titles, composers, tags and covers. Folders, favorites, search and pagination, in both card and list views.
+**A library of your own.** Import MusicXML, XML or MXL; curate titles, composers, tags and covers with folders, favorites, search and pagination — all data stays on your device. See [Personal score library](#personal-score-library).
 
-**Read instantly.** Read scores at desktop, tablet and phone widths, with paging and zoom. Flute-only scores open as a digital reader; editing preserves the original engraving.
+**Ready to practice.** Flute-only scores open directly for reading; scores with a piano part can synthesize the accompaniment locally — four-beat count-in, tap-to-position, 0.5–1.5× pitch-preserved tempo, then review your take with per-note pitch analysis.
 
-**Practice at your own tempo.** When the source score has a piano part, Syrinx can synthesize it locally as your accompanist. Follow the on-score cursor with a four-beat count-in, tap a measure to reposition, practice at 0.5–1.5× pitch-preserved tempo, then review your take with per-note pitch analysis.
+**A featured library, ready out of the box.** Five piano-accompanied pieces (Luv Letter, Flower Dance, Lumière, Alicia, Interstellar) ship with the repository and installer — no imports required. See [The immersive featured-song flow](#the-immersive-featured-song-flow).
 
-**A featured library, ready out of the box.** Five piano-accompanied pieces (Luv Letter, Flower Dance, Lumière, Alicia, Interstellar) ship with the repository and installer: animated covers, looping background videos and precisely aligned sampled-piano accompaniments — no imports required.
+## Personal score library
+
+Import your own MusicXML / XML / MXL and get a shelf that travels with you — everything stored on your own device.
+
+<p align="center">
+  <img src="docs/img/readme/library-desktop.png" alt="Personal library shelf: two imported scores, search and view toggles" width="100%" />
+  <br /><sub>Personal library · import and organize, card and list views</sub>
+</p>
+
+**Collect and organize.** Importing auto-detects the title, parts and time signature; afterwards edit details, set PNG / JPEG / WebP covers, group into folders, favorite often-practiced pieces, and search by title or composer.
+
+**Open and practice.** Flute-only scores read page by page; scores with a piano part offer locally synthesized "original-score piano" — audition it, then hit "开始演奏" (start performing) with count-in, tap-to-position and 0.5–1.5× pitch-preserved tempo control.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/img/readme/library-list.png" alt="Personal library list view: titles, composers and score info" width="100%" /></td>
+    <td width="50%"><img src="docs/img/readme/practice-tempo.png" alt="Morning Light score page: piano accompaniment setup and start performing" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>List view, for quick lookup</sub></td>
+    <td align="center"><sub>Scores with a piano part: audition, then perform</sub></td>
+  </tr>
+</table>
+
+Two original études ship with the repository (`docs/examples/`: Morning Light and Breath Study) to import and try; export a backup anytime from the library menu.
 
 ## The immersive featured-song flow
 
@@ -84,14 +108,6 @@ When the take ends, the playback page opens with independent recording/accompani
 <p align="center">
   <img src="docs/img/readme/song-result.png" alt="Result page: pitch comparison chart, legend and dual-volume deck" width="88%" />
   <br /><sub>Playback: dual volume sliders, pitch chart aligned note by note against the score</sub>
-</p>
-
-### Equally immersive on mobile
-
-The same flow adapts to touch layouts: floating pitch meter, line-following score and background video identical to desktop.
-
-<p align="center">
-  <img src="docs/img/readme/song-perform-mobile.png" alt="Mobile perform page: touch layout and background video" width="32%" />
 </p>
 
 ## Quick start

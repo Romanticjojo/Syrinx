@@ -10,7 +10,7 @@ directories:
 files:
   - electron/main.cjs
   - electron/build/icon.png
-  - dist/**/*
+  - dist-desktop/**/*
 
 extraMetadata:
   main: electron/main.cjs
@@ -34,4 +34,4 @@ nsis:
   createDesktopShortcut: true
   shortcutName: Syrinx
 
-# dist 由 `npm run build`（web 模式，含精选曲库）产出，作为静态资源打进 asar
+# dist-desktop 由 `npm run build:desktop`（desktop 模式：精选曲库 + 个人仓库）产出，打进 asar
