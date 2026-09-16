@@ -22,7 +22,7 @@ export const en: Record<TKey, string> = {
   'home.catalogTabsLabel': 'Score categories',
   'home.tabFeatured': 'Featured Scores',
   'home.tabPersonal': 'Personal Library',
-  'home.devBadge': 'Coming soon',
+  'home.devBadge': 'Offline app',
   'home.personalLoading': 'Opening personal library…',
   'home.featured': 'Featured for You',
   'home.emptyTitle': 'No songs available yet',
@@ -30,9 +30,9 @@ export const en: Record<TKey, string> = {
     'This build does not include the selected songs yet. Check the song configuration or try again later.',
   'home.personalDialogTitle': 'Personal Library',
   'home.personalDialogP1':
-    'Import your own MusicXML scores, edit titles, composers and covers, and organize songs into folders. Scores stay on your device — no sign-up, and they work offline.',
+    'This online edition stores no personal data. Importing your own MusicXML scores, folders, and take recordings all live in the offline desktop app — your library stays on your own device.',
   'home.personalDialogP2':
-    'The personal library is still in development and will ship with the desktop app. The web edition does not support importing yet — for now, pick a song from the featured scores and enjoy playing.',
+    'Download the free, open-source Windows / macOS app for the full personal library: github.com/Romanticjojo/Syrinx/releases. The web edition covers the featured-song playing experience.',
 
   // ---- hero carousel ----
   'hero.regionLabel': 'Featured carousel — now {title}, piece {index} of {total}',

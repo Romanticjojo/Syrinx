@@ -21,16 +21,16 @@ export const zh = {
   'home.catalogTabsLabel': '乐谱分类',
   'home.tabFeatured': '精选乐谱',
   'home.tabPersonal': '个人仓库',
-  'home.devBadge': '开发中',
+  'home.devBadge': '离线版',
   'home.personalLoading': '正在打开个人仓库…',
   'home.featured': '为你精选',
   'home.emptyTitle': '当前没有可用曲目',
   'home.emptyBody': '这个版本尚未包含所选曲目，请检查曲目配置或稍后重试。',
   'home.personalDialogTitle': '个人仓库',
   'home.personalDialogP1':
-    '导入自己的 MusicXML 乐谱，编辑曲名、作者和封面，再用文件夹整理曲目。乐谱保存在设备本地，无需注册，离线也能查看和练习。',
+    '云端体验不存储个人数据——导入自己的 MusicXML 乐谱、文件夹整理、录音回放这些个人功能，都在离线客户端里，曲目信息保存在你自己的设备上。',
   'home.personalDialogP2':
-    '个人仓库仍在开发中，将随本地应用一同提供。网页体验版暂不开放导入，您可以先在精选乐谱中选择曲目，体验演奏功能。',
+    '下载 Windows / macOS 桌面版即可使用完整的个人仓库（免费开源）：github.com/Romanticjojo/Syrinx/releases。网页版可直接体验精选曲目的演奏流程。',
 
   // ---- 英雄位轮播 ----
   'hero.regionLabel': '轮播推荐，当前 {title}，第 {index} / {total} 曲',
