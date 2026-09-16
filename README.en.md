@@ -20,19 +20,16 @@ Personal score library · Digital sheet-music reading · Flute practice with acc
 
 ## Download & run
 
-**Windows users** — grab the installer and you are done:
+| Platform | File | Download |
+|---|---|---|
+| **Windows** | `Syrinx-0.3.0-x64-setup.exe` one-click install | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) · [Quark Drive](https://pan.quark.cn/s/36f12925b1cd) (fast in mainland China) |
+| **Windows** | `Syrinx-0.3.0-portable.exe` portable build | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) |
+| **macOS** (Apple Silicon) | `Syrinx-0.3.0-mac-arm64.dmg` | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) |
+| Try online | no download | [romanticjojo.com](https://romanticjojo.com) |
 
-> 📦 **[Download Syrinx v0.3.0](https://github.com/Romanticjojo/Syrinx/releases/latest)** · `Syrinx-0.3.0-x64-setup.exe` one-click install · [Syrinx-0.3.0-portable.exe](https://github.com/Romanticjojo/Syrinx/releases/latest) portable build
+The installers ship with all five featured songs (scores, sampled-piano accompaniments, covers and animated background videos) — **everything works offline after install**. Unsigned installers may trigger a SmartScreen prompt: choose "More info → Run anyway". On macOS, Gatekeeper may block the first launch: in Finder → Applications, **right-click Syrinx → Open**, then click "Open" (only needed once). Intel Macs should run from source.
 
-The installer ships with all five featured songs (scores, sampled-piano accompaniments, covers and animated background videos) — **everything works offline after install**. Unsigned installers may trigger a SmartScreen prompt: choose "More info → Run anyway".
-
-**macOS users (Apple Silicon)** — for M-series Macs (M1 / M2 / M3 / M4):
-
-> 📦 **[Download Syrinx-0.3.0-mac-arm64.dmg](https://github.com/Romanticjojo/Syrinx/releases/latest)** · drag into Applications · ships with all five songs, **works offline**
-
-This is an arm64 build for Apple Silicon only; Intel Macs should run from source. The unsigned app may be blocked by Gatekeeper on first launch: in Finder → Applications, **right-click Syrinx → Open**, then click "Open" (only needed once).
-
-**Other platforms / from source** — see [Quick start](#quick-start) below, or try [romanticjojo.com](https://romanticjojo.com) first.
+**Other platforms / from source** — see [Quick start](#quick-start) below.
 
 Asset provenance and copyright notes live in [NOTICE.md](NOTICE.md).
 
