@@ -20,13 +20,15 @@ afterEach(async () => {
 })
 
 describe('web edition library entry', () => {
-  it('keeps curated browsing available and opens an in-development notice instead of file input', async () => {
+  it('keeps curated browsing available and opens an offline-app notice instead of file input', async () => {
     await act(async () => root.render(createElement(HomePage)))
     const tab = [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((el) => el.textContent?.includes('个人仓库'))
     expect(tab).toBeDefined()
     tab!.focus()
     await act(async () => tab!.click())
-    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('开发中')
+    expect(tab!.textContent).toContain('离线版')
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('不存储个人数据')
+    expect(host.querySelector('[role="dialog"]')?.textContent).toContain('Syrinx/releases')
     expect(host.querySelector('input[type="file"]')).toBeNull()
     expect(host.querySelector('.song-grid')).not.toBeNull()
     await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
