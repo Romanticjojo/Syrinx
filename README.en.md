@@ -24,7 +24,7 @@ Personal score library · Digital sheet-music reading · Flute practice with acc
 |---|---|---|
 | **Windows** | `Syrinx-0.3.0-x64-setup.exe` one-click install | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) · [Quark Drive](https://pan.quark.cn/s/36f12925b1cd) (fast in mainland China) |
 | **Windows** | `Syrinx-0.3.0-portable.exe` portable build | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) |
-| **macOS** (Apple Silicon) | `Syrinx-0.3.0-mac-arm64.dmg` | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) |
+| **macOS** (Apple Silicon) | `Syrinx-0.3.0-mac-arm64.dmg` | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) · [Quark Drive](https://pan.quark.cn/s/85ed33fc5a67) |
 | Try online | no download | [romanticjojo.com](https://romanticjojo.com) |
 
 The installers ship with all five featured songs (scores, sampled-piano accompaniments, covers and animated background videos) — **everything works offline after install**. Unsigned installers may trigger a SmartScreen prompt: choose "More info → Run anyway". On macOS, Gatekeeper may block the first launch: in Finder → Applications, **right-click Syrinx → Open**, then click "Open" (only needed once). Intel Macs should run from source.

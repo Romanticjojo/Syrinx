@@ -22,7 +22,7 @@
 |---|---|---|
 | **Windows** | `Syrinx-0.3.0-x64-setup.exe` 一键安装 | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) · [夸克网盘](https://pan.quark.cn/s/36f12925b1cd)（国内高速） |
 | **Windows** | `Syrinx-0.3.0-portable.exe` 免安装版 | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) |
-| **macOS**（Apple Silicon） | `Syrinx-0.3.0-mac-arm64.dmg` | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) · 夸克网盘（上传中） |
+| **macOS**（Apple Silicon） | `Syrinx-0.3.0-mac-arm64.dmg` | [GitHub Release](https://github.com/Romanticjojo/Syrinx/releases/latest) · [夸克网盘](https://pan.quark.cn/s/85ed33fc5a67) |
 | 在线体验 | 无需下载 | [romanticjojo.com](https://romanticjojo.com) |
 
 安装包内置全部五首精选曲目（乐谱、采样钢琴伴奏、封面与动态背景视频），**安装后离线即用**。未签名安装包可能触发 SmartScreen 提示，选「更多信息 → 仍要运行」即可；macOS 首次打开若被 Gatekeeper 拦截，在「访达 → 应用程序」中**右键 Syrinx → 打开**再点「打开」（仅需一次）。Intel 芯片 Mac 请从源码运行。
